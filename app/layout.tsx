@@ -10,14 +10,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = incoming.get("x-forwarded-host") ?? incoming.get("host") ?? "pocket-play-arcade.kfuture.chatgpt.site";
   const protocol = incoming.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const baseUrl = new URL(`${protocol}://${host}`);
-  const title = "Pocket Play — ポケットゲーム";
-  const description = "A red, white, and black pocket arcade of quick logic, number, and memory games.";
+  const title = "Pocket Play";
+  const description = "Play Codebreaker, Number Hunt, and Memory Flip.";
 
   return {
     metadataBase: baseUrl,
     title,
     description,
-    openGraph: { title, description, type: "website", images: [{ url: "/og.png", width: 1659, height: 948, alt: "Pocket Play pocket arcade" }] },
+    openGraph: { title, description, type: "website", images: [{ url: "/og.png", width: 1672, height: 941, alt: "Pocket Play games" }] },
     twitter: { card: "summary_large_image", title, description, images: ["/og.png"] },
   };
 }

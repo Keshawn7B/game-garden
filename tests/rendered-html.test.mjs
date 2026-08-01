@@ -13,8 +13,8 @@ test("server-renders the Pocket Play game hub", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /Pocket Play/);
-  assert.match(html, /POCKET ARCADE/);
-  assert.match(html, /Choose a game/);
+  assert.match(html, /Games/);
+  assert.doesNotMatch(html, /POCKET ARCADE|SMALL GAMES|HOW TO PLAY|ポケットアーケード/);
   assert.match(html, /Codebreaker/);
   assert.match(html, /Number Hunt/);
   assert.match(html, /Memory Flip/);
