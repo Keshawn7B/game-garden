@@ -277,43 +277,50 @@ function MemoryGame({ onBack }: { onBack: () => void }) {
 
 function Hub({ onSelect }: { onSelect: (game: GameId) => void }) {
   const games = [
-    { id: "codebreaker" as const, number: "01", name: "Codebreaker", blurb: "Crack the hidden color sequence.", meta: "1 PLAYER · LOGIC", color: "coral", glyph: "••••" },
-    { id: "number" as const, number: "02", name: "Number Hunt", blurb: "Zero in with higher and lower clues.", meta: "1 PLAYER · QUICK", color: "blue", glyph: "42" },
-    { id: "memory" as const, number: "03", name: "Memory Flip", blurb: "Find every matching pair.", meta: "1 PLAYER · MEMORY", color: "violet", glyph: "✦" },
+    { id: "codebreaker" as const, number: "01", name: "Codebreaker", blurb: "Crack the hidden color sequence in eight guesses.", meta: "LOGIC", color: "coral", glyph: "••••" },
+    { id: "number" as const, number: "02", name: "Number Hunt", blurb: "Chase the secret number with higher and lower clues.", meta: "QUICK PLAY", color: "blue", glyph: "42" },
+    { id: "memory" as const, number: "03", name: "Memory Flip", blurb: "Flip the tiles and find every matching pair.", meta: "MEMORY", color: "violet", glyph: "✦" },
   ];
 
   return (
     <main className="hub-shell">
       <nav className="hub-nav">
         <div className="wordmark"><span className="brand-dot" /> POCKET PLAY</div>
-        <span className="nav-note">A TINY ARCADE FOR CURIOUS MINDS</span>
+        <div className="nav-links"><a href="#games">Games</a><a href="#how">How to play</a></div>
+        <button className="nav-play" onClick={() => onSelect("codebreaker")}>Play now</button>
       </nav>
 
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">THREE GAMES. ZERO DOWNLOADS.</p>
-          <h1>Small games.<br /><em>Big “aha!”</em></h1>
-          <p className="hero-text">A cozy collection of clever little games for your next break, brain stretch, or friendly challenge.</p>
-          <button className="primary-button hero-button" onClick={() => onSelect("codebreaker")}>Play today’s pick <span>→</span></button>
+          <div className="hero-kicker"><span /> INSTANT PLAY · NO SIGN-UP</div>
+          <h1>Play.<br /><em>Think.</em> Win.</h1>
+          <p className="hero-text">Your new home for fast, clever games. Pick a challenge, jump right in, and chase your next win.</p>
+          <div className="hero-actions"><button className="primary-button hero-button" onClick={() => onSelect("codebreaker")}>Start playing <span>→</span></button><a href="#games">Explore games</a></div>
         </div>
         <div className="hero-art" aria-hidden="true">
-          <div className="orbit orbit-one" />
-          <div className="orbit orbit-two" />
-          <div className="floating-card card-left"><span>✿</span></div>
-          <div className="floating-card card-main"><span className="art-pegs"><i /><i /><i /><i /></span><b>CRACK<br />THE CODE</b></div>
-          <div className="floating-card card-right"><span>42</span></div>
-          <div className="spark spark-one">✦</div><div className="spark spark-two">✦</div>
+          <div className="hero-glow" />
+          <div className="floating-card card-left"><span>✦</span><b>MATCH</b></div>
+          <div className="floating-card card-main"><small>FEATURED GAME</small><span className="art-pegs"><i /><i /><i /><i /></span><b>CODE<br />BREAKER</b><strong>PLAY →</strong></div>
+          <div className="floating-card card-right"><small>QUICK</small><span>42</span><b>NUMBER HUNT</b></div>
+          <div className="spark spark-one">✦</div><div className="spark spark-two">●</div>
         </div>
       </section>
 
-      <section className="collection">
+      <section className="quick-stats" aria-label="Pocket Play features">
+        <div><strong>3</strong><span>games ready now</span></div><i />
+        <div><strong>0</strong><span>downloads needed</span></div><i />
+        <div><strong>∞</strong><span>chances to win</span></div>
+      </section>
+
+      <section className="collection" id="games">
         <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2>Pick a game</h2></div><p>Fast to learn. Surprisingly hard to put down.</p></div>
         <div className="game-grid">
           {games.map((game) => (
             <button className={`game-card theme-${game.color}`} key={game.id} onClick={() => onSelect(game.id)}>
               <span className="game-number">{game.number}</span>
+              <span className="ready-badge"><i /> READY</span>
               <div className="game-glyph">{game.glyph}</div>
-              <p>{game.meta}</p>
+              <p>{game.meta} · 1 PLAYER</p>
               <h3>{game.name}</h3>
               <span className="game-blurb">{game.blurb}</span>
               <span className="play-link">PLAY NOW <b>↗</b></span>
@@ -327,7 +334,12 @@ function Hub({ onSelect }: { onSelect: (game: GameId) => void }) {
         </div>
       </section>
 
-      <footer><div className="wordmark"><span className="brand-dot" /> POCKET PLAY</div><p>Built for tiny breaks and bright ideas.</p><span>© 2026</span></footer>
+      <section className="how-section" id="how">
+        <div><p className="eyebrow">HOW IT WORKS</p><h2>One click from your next game.</h2></div>
+        <ol><li><span>01</span><div><strong>Choose a challenge</strong><p>Pick the game that matches your mood.</p></div></li><li><span>02</span><div><strong>Learn as you play</strong><p>Simple rules get you moving right away.</p></div></li><li><span>03</span><div><strong>Run it back</strong><p>Every round is a fresh chance to win.</p></div></li></ol>
+      </section>
+
+      <footer><div className="wordmark"><span className="brand-dot" /> POCKET PLAY</div><p>Play. Think. Win. Repeat.</p><span>© 2026 Pocket Play</span></footer>
     </main>
   );
 }
