@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -21,4 +22,14 @@ test("server-renders the Pocket Play game hub", async () => {
   assert.match(html, /Number Hunt/);
   assert.match(html, /Memory Flip/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
+});
+
+test("routes every game through a start menu", async () => {
+  const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(source, /codebreaker-menu/);
+  assert.match(source, /number-menu/);
+  assert.match(source, /memory-menu/);
+  assert.match(source, /function GameMenu/);
+  assert.match(source, /Start Game/);
+  assert.match(source, /How to play/);
 });

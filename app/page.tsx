@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type GameId = "hub" | "codebreaker" | "number" | "memory";
+type PlayableGameId = "codebreaker" | "number" | "memory";
+type GameId = "hub" | PlayableGameId | `${PlayableGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
@@ -85,7 +86,7 @@ function Codebreaker({ onBack }: { onBack: () => void }) {
   return (
     <main className="game-shell codebreaker-shell">
       <header className="game-topbar">
-        <button className="back-button" onClick={onBack}>← All games</button>
+        <button className="back-button" onClick={onBack}>← Game menu</button>
         <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
         <button className="icon-button" onClick={reset} aria-label="Start a new code">↻</button>
       </header>
@@ -187,7 +188,7 @@ function NumberHunt({ onBack }: { onBack: () => void }) {
   return (
     <main className="game-shell number-shell">
       <header className="game-topbar">
-        <button className="back-button" onClick={onBack}>← All games</button>
+        <button className="back-button" onClick={onBack}>← Game menu</button>
         <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
         <button className="icon-button" onClick={reset} aria-label="Start a new number game">↻</button>
       </header>
@@ -247,7 +248,7 @@ function MemoryGame({ onBack }: { onBack: () => void }) {
   return (
     <main className="game-shell memory-shell">
       <header className="game-topbar">
-        <button className="back-button" onClick={onBack}>← All games</button>
+        <button className="back-button" onClick={onBack}>← Game menu</button>
         <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
         <button className="icon-button" onClick={reset} aria-label="Shuffle and restart">↻</button>
       </header>
@@ -275,7 +276,80 @@ function MemoryGame({ onBack }: { onBack: () => void }) {
   );
 }
 
-function Hub({ onSelect }: { onSelect: (game: GameId) => void }) {
+const GAME_MENUS: Record<PlayableGameId, {
+  title: string;
+  japanese: string;
+  category: string;
+  glyph: string;
+  color: string;
+  rules: string[];
+}> = {
+  codebreaker: {
+    title: "Codebreaker",
+    japanese: "コードブレイカー",
+    category: "Logic",
+    glyph: "••••",
+    color: "coral",
+    rules: [
+      "Choose four colors. Colors can repeat.",
+      "Use the exact and close clues after each guess.",
+      "Crack the hidden code within eight guesses.",
+    ],
+  },
+  number: {
+    title: "Number Hunt",
+    japanese: "ナンバーハント",
+    category: "Quick play",
+    glyph: "42",
+    color: "blue",
+    rules: [
+      "Pick a number from 1 to 100.",
+      "Use the higher or lower clue after each guess.",
+      "Find the secret number within seven guesses.",
+    ],
+  },
+  memory: {
+    title: "Memory Flip",
+    japanese: "メモリーフリップ",
+    category: "Memory",
+    glyph: "✦",
+    color: "violet",
+    rules: [
+      "Flip two cards at a time.",
+      "Matching cards stay open; other cards flip back.",
+      "Clear every pair in as few moves as possible.",
+    ],
+  },
+};
+
+function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () => void; onBack: () => void }) {
+  const details = GAME_MENUS[game];
+
+  return (
+    <main className="game-menu-shell">
+      <header className="game-topbar menu-topbar">
+        <button className="back-button" onClick={onBack}>← Games</button>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
+        <span className="menu-header-jp">ゲームメニュー</span>
+      </header>
+      <section className="game-menu">
+        <div className="menu-card">
+          <span className={`app-icon menu-game-icon theme-${details.color}`}><i>{details.glyph}</i></span>
+          <p className="menu-japanese">{details.japanese}</p>
+          <h1>{details.title}</h1>
+          <div className="menu-meta"><span>1 Player</span><span>{details.category}</span></div>
+          <div className="menu-rules">
+            <h2>How to play <span>遊び方</span></h2>
+            <ol>{details.rules.map((rule, index) => <li key={rule}><b>{index + 1}</b><span>{rule}</span></li>)}</ol>
+          </div>
+          <button className="primary-button menu-start" onClick={onPlay}>Start Game <span>→</span></button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function Hub({ onSelect }: { onSelect: (game: PlayableGameId) => void }) {
   const games = [
     { id: "codebreaker" as const, number: "01", name: "Codebreaker", blurb: "Crack the hidden color sequence in eight guesses.", meta: "LOGIC", color: "coral", glyph: "••••" },
     { id: "number" as const, number: "02", name: "Number Hunt", blurb: "Chase the secret number with higher and lower clues.", meta: "QUICK PLAY", color: "blue", glyph: "42" },
@@ -321,10 +395,13 @@ export default function Home() {
   };
 
   const view = useMemo(() => {
-    if (game === "codebreaker") return <Codebreaker onBack={() => selectGame("hub")} />;
-    if (game === "number") return <NumberHunt onBack={() => selectGame("hub")} />;
-    if (game === "memory") return <MemoryGame onBack={() => selectGame("hub")} />;
-    return <Hub onSelect={selectGame} />;
+    if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={() => selectGame("codebreaker")} onBack={() => selectGame("hub")} />;
+    if (game === "number-menu") return <GameMenu game="number" onPlay={() => selectGame("number")} onBack={() => selectGame("hub")} />;
+    if (game === "memory-menu") return <GameMenu game="memory" onPlay={() => selectGame("memory")} onBack={() => selectGame("hub")} />;
+    if (game === "codebreaker") return <Codebreaker onBack={() => selectGame("codebreaker-menu")} />;
+    if (game === "number") return <NumberHunt onBack={() => selectGame("number-menu")} />;
+    if (game === "memory") return <MemoryGame onBack={() => selectGame("memory-menu")} />;
+    return <Hub onSelect={(selected) => selectGame(`${selected}-menu`)} />;
   }, [game]);
 
   return view;
