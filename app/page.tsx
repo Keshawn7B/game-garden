@@ -285,11 +285,12 @@ function Hub({ onSelect }: { onSelect: (game: GameId) => void }) {
   return (
     <main className="hub-shell">
       <nav className="hub-nav">
-        <div className="wordmark"><span className="brand-dot">P</span><span>POCKET PLAY</span></div>
+        <div className="wordmark"><span className="brand-dot">P</span><span><b>POCKET PLAY</b><small>ポケットプレイ</small></span></div>
+        <span className="header-jp">ゲーム</span>
       </nav>
 
       <section className="collection library-only">
-        <div className="section-heading"><h1>Games</h1></div>
+        <div className="section-heading"><h1>Games <span>ゲーム</span></h1></div>
         <div className="app-shelf">
           {games.map((game) => (
             <button className="app-item" key={game.id} onClick={() => onSelect(game.id)}>
