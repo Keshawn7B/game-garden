@@ -1,28 +1,27 @@
 import type { Metadata } from "next";
-import { Manrope, Rubik } from "next/font/google";
+import { Noto_Sans_JP } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 
-const display = Rubik({ variable: "--font-display", subsets: ["latin"] });
-const body = Manrope({ variable: "--font-body", subsets: ["latin"] });
+const japanese = Noto_Sans_JP({ variable: "--font-japanese", subsets: ["latin"], weight: ["400", "500", "700", "900"] });
 
 export async function generateMetadata(): Promise<Metadata> {
   const incoming = await headers();
   const host = incoming.get("x-forwarded-host") ?? incoming.get("host") ?? "pocket-play-arcade.kfuture.chatgpt.site";
   const protocol = incoming.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const baseUrl = new URL(`${protocol}://${host}`);
-  const title = "Pocket Play — Play. Think. Win.";
-  const description = "Jump into quick logic, number, and memory games from one vibrant online game hub.";
+  const title = "Pocket Play — ポケットゲーム";
+  const description = "A red, white, and black pocket arcade of quick logic, number, and memory games.";
 
   return {
     metadataBase: baseUrl,
     title,
     description,
-    openGraph: { title, description, type: "website", images: [{ url: "/og.png", width: 1536, height: 1024, alt: "Pocket Play game hub" }] },
+    openGraph: { title, description, type: "website", images: [{ url: "/og.png", width: 1659, height: 948, alt: "Pocket Play pocket arcade" }] },
     twitter: { card: "summary_large_image", title, description, images: ["/og.png"] },
   };
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={`${display.variable} ${body.variable}`}>{children}</body></html>;
+  return <html lang="en"><body className={japanese.variable}>{children}</body></html>;
 }

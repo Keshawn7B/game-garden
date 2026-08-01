@@ -285,61 +285,60 @@ function Hub({ onSelect }: { onSelect: (game: GameId) => void }) {
   return (
     <main className="hub-shell">
       <nav className="hub-nav">
-        <div className="wordmark"><span className="brand-dot" /> POCKET PLAY</div>
-        <div className="nav-links"><a href="#games">Games</a><a href="#how">How to play</a></div>
-        <button className="nav-play" onClick={() => onSelect("codebreaker")}>Play now</button>
+        <div className="wordmark"><span className="brand-dot">P</span><span>POCKET PLAY<small>ポケットプレイ</small></span></div>
+        <div className="nav-links"><a href="#games">ゲーム</a><a href="#how">遊び方</a></div>
+        <button className="nav-play" onClick={() => onSelect("codebreaker")}>PLAY</button>
       </nav>
 
       <section className="hero">
         <div className="hero-copy">
-          <div className="hero-kicker"><span /> INSTANT PLAY · NO SIGN-UP</div>
-          <h1>Play.<br /><em>Think.</em> Win.</h1>
-          <p className="hero-text">Your new home for fast, clever games. Pick a challenge, jump right in, and chase your next win.</p>
-          <div className="hero-actions"><button className="primary-button hero-button" onClick={() => onSelect("codebreaker")}>Start playing <span>→</span></button><a href="#games">Explore games</a></div>
+          <div className="hero-kicker">POCKET ARCADE · ポケットアーケード</div>
+          <h1><span>小さなゲーム。</span>Big fun,<br /><em>one tap away.</em></h1>
+          <p className="hero-text">A tiny arcade built for quick breaks. Choose an icon, tap to open, and start playing instantly.</p>
+          <div className="hero-actions"><button className="primary-button hero-button" onClick={() => onSelect("codebreaker")}>START GAME <span>→</span></button><a href="#games">VIEW ALL</a></div>
         </div>
         <div className="hero-art" aria-hidden="true">
-          <div className="hero-glow" />
-          <div className="floating-card card-left"><span>✦</span><b>MATCH</b></div>
-          <div className="floating-card card-main"><small>FEATURED GAME</small><span className="art-pegs"><i /><i /><i /><i /></span><b>CODE<br />BREAKER</b><strong>PLAY →</strong></div>
-          <div className="floating-card card-right"><small>QUICK</small><span>42</span><b>NUMBER HUNT</b></div>
-          <div className="spark spark-one">✦</div><div className="spark spark-two">●</div>
+          <div className="sun-disc" />
+          <div className="phone-frame">
+            <div className="phone-status"><span>9:41</span><i /></div>
+            <p>ゲーム</p>
+            <div className="mini-apps"><span className="mini-code">●●<small>CODE</small></span><span className="mini-number">42<small>NUMBER</small></span><span className="mini-memory">★<small>MEMORY</small></span><span className="mini-more">＋<small>MORE</small></span></div>
+            <div className="phone-dock"><i /><i /><i /></div>
+          </div>
+          <div className="japanese-stamp">遊<br />ぶ</div>
         </div>
       </section>
 
       <section className="quick-stats" aria-label="Pocket Play features">
-        <div><strong>3</strong><span>games ready now</span></div><i />
-        <div><strong>0</strong><span>downloads needed</span></div><i />
-        <div><strong>∞</strong><span>chances to win</span></div>
+        <div><strong>01</strong><span>CHOOSE<br />選ぶ</span></div><i />
+        <div><strong>02</strong><span>TAP<br />タップ</span></div><i />
+        <div><strong>03</strong><span>PLAY<br />遊ぶ</span></div>
       </section>
 
       <section className="collection" id="games">
-        <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2>Pick a game</h2></div><p>Fast to learn. Surprisingly hard to put down.</p></div>
-        <div className="game-grid">
+        <div className="section-heading"><div><p className="eyebrow">GAME LIBRARY · ゲームライブラリ</p><h2>Choose a game</h2></div><p>Tap an app to start playing.</p></div>
+        <div className="app-shelf">
           {games.map((game) => (
-            <button className={`game-card theme-${game.color}`} key={game.id} onClick={() => onSelect(game.id)}>
-              <span className="game-number">{game.number}</span>
-              <span className="ready-badge"><i /> READY</span>
-              <div className="game-glyph">{game.glyph}</div>
-              <p>{game.meta} · 1 PLAYER</p>
-              <h3>{game.name}</h3>
-              <span className="game-blurb">{game.blurb}</span>
-              <span className="play-link">PLAY NOW <b>↗</b></span>
+            <button className="app-item" key={game.id} onClick={() => onSelect(game.id)}>
+              <span className={`app-icon theme-${game.color}`}><i>{game.glyph}</i><b>{game.number}</b></span>
+              <strong>{game.name}</strong>
+              <small>{game.meta}</small>
             </button>
           ))}
-          <div className="game-card coming-card">
-            <span className="game-number">04</span>
-            <div className="coming-plus">+</div>
-            <p>NEXT UP</p><h3>Your next favorite</h3><span className="game-blurb">More pocket-sized games are on the way.</span><span className="play-link">COMING SOON</span>
+          <div className="app-item coming-item">
+            <span className="app-icon coming-icon"><i>＋</i><b>04</b></span>
+            <strong>More soon</strong>
+            <small>COMING SOON</small>
           </div>
         </div>
       </section>
 
       <section className="how-section" id="how">
-        <div><p className="eyebrow">HOW IT WORKS</p><h2>One click from your next game.</h2></div>
-        <ol><li><span>01</span><div><strong>Choose a challenge</strong><p>Pick the game that matches your mood.</p></div></li><li><span>02</span><div><strong>Learn as you play</strong><p>Simple rules get you moving right away.</p></div></li><li><span>03</span><div><strong>Run it back</strong><p>Every round is a fresh chance to win.</p></div></li></ol>
+        <div><p className="eyebrow">HOW TO PLAY · 遊び方</p><h2>Simple as opening an app.</h2></div>
+        <ol><li><span>一</span><div><strong>Choose your icon</strong><p>Pick a game from your Pocket Play screen.</p></div></li><li><span>二</span><div><strong>Tap to open</strong><p>No download and no setup required.</p></div></li><li><span>三</span><div><strong>Play again</strong><p>Every round starts fresh in one tap.</p></div></li></ol>
       </section>
 
-      <footer><div className="wordmark"><span className="brand-dot" /> POCKET PLAY</div><p>Play. Think. Win. Repeat.</p><span>© 2026 Pocket Play</span></footer>
+      <footer><div className="wordmark"><span className="brand-dot">P</span><span>POCKET PLAY<small>ポケットプレイ</small></span></div><p>SMALL GAMES · BIG FUN</p><span>© 2026</span></footer>
     </main>
   );
 }
