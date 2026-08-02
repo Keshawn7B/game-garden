@@ -94,6 +94,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.bottom-nav/);
   assert.match(styles, /\.theme-toggle[^}]*box-shadow:none/);
   assert.match(styles, /\.theme-toggle[^}]*linear-gradient\(135deg,#ff001e/);
+  assert.match(styles, /\.theme-toggle\[aria-pressed="true"\][^}]*linear-gradient\(#0d0d0d,#0d0d0d\) padding-box/);
   assert.match(styles, /\.friend-link-actions/);
   assert.match(styles, /\.friends-panel \.app-title h1[^}]*color:var\(--red\)/);
   assert.match(styles, /\.invite-center-heading[^}]*color:var\(--red\)/);
