@@ -497,7 +497,7 @@ function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: () =>
       <section className="game-menu">
         <div className="menu-card">
           <button className="menu-close" onClick={onBack} aria-label="Close game menu">×</button>
-          <span className={`game-cover menu-game-cover art-${game}`}><i>{details.glyph}</i></span>
+          <span className={`game-cover menu-game-cover art-${game}`}><i>{details.glyph}</i>{game === "deducktion" && <b className="deducktion-cover-title">DEDUCKTION</b>}</span>
           <p className="menu-japanese">{details.japanese}</p>
           <h1>{details.title}</h1>
           <div className="menu-meta"><span>{details.players}</span><span>{details.category}</span></div>
@@ -584,7 +584,7 @@ function AppHome({
             <div className="game-app-grid">
               {GAMES.map((game) => (
                 <button className="game-app-card" key={game.id} onClick={() => onSelect(game.id)}>
-                  <span className={`game-cover art-${game.id}`}><i>{game.number}</i></span>
+                  <span className={`game-cover art-${game.id}`}><i>{game.number}</i>{game.id === "deducktion" && <b className="deducktion-cover-title">DEDUCKTION</b>}</span>
                   <span className="game-card-copy">
                     <strong>{game.name}</strong>
                     <small>{game.japanese}</small>

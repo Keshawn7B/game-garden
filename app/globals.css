@@ -69,6 +69,8 @@ footer { min-height:95px; padding:25px clamp(24px,6vw,90px); display:flex;justif
 .art-codebreaker { background-position:0 0; }.art-order { background-position:100% 0; }.art-number { background-position:0 100%; }.art-memory { background-position:100% 100%; }
 .art-meducktion { background-image:url('/meducktion-icon.webp');background-size:cover;background-position:center; }
 .art-deducktion { background-image:linear-gradient(rgba(0,0,0,.04),rgba(0,0,0,.04)),url('/deducktion-icon.webp');background-size:cover;background-position:center; }
+.deducktion-cover-title { position:absolute;left:50%;top:50%;z-index:2;width:94%;padding:5px 2px;transform:translate(-50%,-50%);background:rgba(5,14,32,.5);color:white;font-family:var(--font-japanese),sans-serif;font-size:clamp(13px,2.2vw,22px);font-weight:900;line-height:1;text-align:center;letter-spacing:-.07em;text-shadow:2px 2px 0 #20cce8,4px 4px 0 rgba(0,0,0,.65);-webkit-text-stroke:1px rgba(255,255,255,.45); }
+.menu-game-cover .deducktion-cover-title { font-size:15px; }
 .game-card-copy { display:block;padding:14px 3px 0; }
 .game-card-copy strong { display:block;font-size:14px;font-weight:900;line-height:1.1; }
 .game-card-copy small { display:block;margin-top:4px;color:var(--red);font-size:7px;font-weight:900;letter-spacing:.09em; }
