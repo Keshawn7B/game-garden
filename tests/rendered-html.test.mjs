@@ -80,6 +80,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.global-rank-list/);
   assert.match(styles, /data-theme="sakura"/);
   assert.match(styles, /content:"桜"/);
+  assert.doesNotMatch(styles, /data-theme="sakura"[^}]*\.bottom-nav[^}]*position:relative/);
   assert.match(firebaseSource, /game-garden-658de/);
   assert.match(firestoreRules, /request\.auth\.uid == userId/);
   assert.match(firestoreRules, /'sakura'.*'dragon'.*'sun'/);

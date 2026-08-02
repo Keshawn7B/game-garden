@@ -70,7 +70,7 @@ footer { min-height:95px; padding:25px clamp(24px,6vw,90px); display:flex;justif
 .player-avatar[class*="avatar-style-"] b { background:rgba(0,0,0,.48); }
 :root[data-theme="sakura"] .app-shell,:root[data-theme="sakura"] .game-menu-shell,:root[data-theme="sakura"] .game-shell { background-image:radial-gradient(ellipse at 18% 12%,rgba(255,142,178,.15) 0 2px,transparent 3px),radial-gradient(ellipse at 76% 31%,rgba(228,49,107,.11) 0 3px,transparent 4px),linear-gradient(90deg,rgba(104,22,52,.025) 1px,transparent 1px),linear-gradient(rgba(104,22,52,.025) 1px,transparent 1px);background-size:57px 57px,83px 83px,30px 30px,30px 30px;background-color:var(--paper); }
 :root[data-theme="sakura"] .app-shell::before { content:"桜";position:fixed;right:-22px;top:92px;z-index:0;color:rgba(228,49,107,.055);font-family:var(--font-japanese),sans-serif;font-size:190px;font-weight:900;line-height:1;pointer-events:none; }
-:root[data-theme="sakura"] .app-content,:root[data-theme="sakura"] .bottom-nav { position:relative;z-index:1; }
+:root[data-theme="sakura"] .app-content { position:relative;z-index:1; }
 :root[data-theme="sakura"] .active-attempt,:root[data-theme="sakura"] .order-status { background:#fff0f6; }
 :root[data-theme="sakura"] .picker-panel { background:#f8e9ef; }
 :root[data-theme="sakura"] .result-panel { background:#ffe2ec; }
