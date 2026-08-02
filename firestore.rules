@@ -29,6 +29,7 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 18
         && request.resource.data.friendCode is string
         && request.resource.data.friendCode.size() == 8
+        && request.resource.data.highScores is map
         && validAvatar(request.resource.data.avatarId);
       allow delete: if request.auth != null && request.auth.uid == userId;
     }

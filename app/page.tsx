@@ -16,7 +16,7 @@ type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" 
 type HighScores = Partial<Record<PlayableGameId, number>>;
 type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
-type FriendEntry = { uid: string; name: string; avatarId: AvatarId };
+type FriendEntry = { uid: string; name: string; avatarId: AvatarId; highScores?: HighScores };
 
 const AVATARS: { id: AvatarId; glyph: string; label: string }[] = [
   { id: "play", glyph: "遊", label: "Play" },
@@ -44,12 +44,13 @@ function friendCodeFor(uid: string) {
   return uid.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase();
 }
 
-async function syncPublicProfile(user: User, name: string, avatarId: AvatarId) {
+async function syncPublicProfile(user: User, name: string, avatarId: AvatarId, highScores: HighScores) {
   await setDoc(doc(db, "publicProfiles", user.uid), {
     uid: user.uid,
     name: name.trim() || user.displayName || "Player One",
     avatarId,
     friendCode: friendCodeFor(user.uid),
+    highScores,
     updatedAt: serverTimestamp(),
   }, { merge: true });
 }
@@ -605,6 +606,7 @@ function friendlyAuthError(error: unknown) {
 async function saveCloudScore(user: User, gameId: PlayableGameId, score: number, profileName: string, avatarId: AvatarId) {
   const entryRef = doc(db, "leaderboards", gameId, "entries", user.uid);
   const profileRef = doc(db, "users", user.uid);
+  const publicProfileRef = doc(db, "publicProfiles", user.uid);
   await runTransaction(db, async (transaction) => {
     const current = await transaction.get(entryRef);
     const previousScore = current.exists() ? Number(current.data().score) : Number.POSITIVE_INFINITY;
@@ -618,6 +620,14 @@ async function saveCloudScore(user: User, gameId: PlayableGameId, score: number,
       updatedAt: serverTimestamp(),
     }, { merge: true });
     transaction.set(profileRef, { highScores: { [gameId]: bestScore }, avatarId, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(publicProfileRef, {
+      uid: user.uid,
+      name: profileName.trim() || user.displayName || "Player One",
+      avatarId,
+      friendCode: friendCodeFor(user.uid),
+      highScores: { [gameId]: bestScore },
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
   });
 }
 
@@ -838,9 +848,19 @@ function AppHome({
                 <div className="friend-list-heading"><span>Friend list</span><span>フレンド</span></div>
                 {friends.length ? friends.map((friend) => (
                   <div className="friend-row" key={friend.uid}>
-                    <AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" />
-                    <strong>{friend.name}</strong>
-                    <button onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button>
+                    <div className="friend-row-head">
+                      <AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" />
+                      <strong>{friend.name}</strong>
+                      <button onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button>
+                    </div>
+                    <div className="friend-score-grid" aria-label={`${friend.name} high scores`}>
+                      {scoredGames.map((game) => (
+                        <div key={game.id}>
+                          <span>{game.name}</span>
+                          <b>{formatScore(game.scoreGame, friend.highScores?.[game.scoreGame])}</b>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )) : <p className="empty-friends">No friends added yet.</p>}
               </div>
@@ -870,6 +890,7 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
   const [leaderboards, setLeaderboards] = useState<Leaderboards>({});
   const [friends, setFriends] = useState<FriendEntry[]>([]);
+  const [friendProfiles, setFriendProfiles] = useState<Record<string, FriendEntry>>({});
 
   useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
@@ -932,7 +953,7 @@ export default function Home() {
           updatedAt: serverTimestamp(),
           ...(profile.exists() ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
-        await syncPublicProfile(user, cloudName, cloudAvatar);
+        await syncPublicProfile(user, cloudName, cloudAvatar, mergedScores);
       } catch (error) {
         setAuthError(error instanceof Error ? error.message : "Could not load the cloud profile.");
       }
@@ -948,6 +969,25 @@ export default function Home() {
       setFriends(snapshot.docs.map((friend) => friend.data() as FriendEntry).sort((a, b) => a.name.localeCompare(b.name)));
     }, () => setAuthError("Could not load the friend list."));
   }, [firebaseUser]);
+
+  useEffect(() => {
+    setFriendProfiles({});
+    if (!friends.length) return;
+    const unsubscribers = friends.map((friend) => onSnapshot(doc(db, "publicProfiles", friend.uid), (snapshot) => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      setFriendProfiles((previous) => ({
+        ...previous,
+        [friend.uid]: {
+          uid: friend.uid,
+          name: typeof data.name === "string" ? data.name : friend.name,
+          avatarId: isAvatarId(data.avatarId) ? data.avatarId : friend.avatarId,
+          highScores: data.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {},
+        },
+      }));
+    }));
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [friends]);
 
   useEffect(() => {
     const games: PlayableGameId[] = ["codebreaker", "order", "number", "memory"];
@@ -1008,7 +1048,7 @@ export default function Home() {
         avatarId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      await syncPublicProfile(firebaseUser, displayName, avatarId);
+      await syncPublicProfile(firebaseUser, displayName, avatarId, highScores);
       await updateProfile(firebaseUser, { displayName });
       const batch = writeBatch(db);
       for (const [gameId, score] of Object.entries(highScores) as [PlayableGameId, number][]) {
@@ -1070,7 +1110,7 @@ export default function Home() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      await syncPublicProfile(credential.user, displayName, avatarId);
+      await syncPublicProfile(credential.user, displayName, avatarId, {});
       setProfileName(displayName);
     } catch (error) {
       setAuthError(friendlyAuthError(error));
@@ -1112,6 +1152,12 @@ export default function Home() {
     void deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid)).catch(() => setAuthError("Could not remove that friend."));
   }, [firebaseUser]);
 
+  const visibleFriends = useMemo(() => friends.map((friend) => ({
+    ...friend,
+    ...friendProfiles[friend.uid],
+    uid: friend.uid,
+  })), [friends, friendProfiles]);
+
   const view = useMemo(() => {
     if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={() => selectGame("codebreaker")} onBack={() => selectGame("games")} />;
     if (game === "order-menu") return <GameMenu game="order" onPlay={() => selectGame("order")} onBack={() => selectGame("games")} />;
@@ -1126,8 +1172,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={friends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} onAddFriend={addFriend} onRemoveFriend={removeFriend} />;
-  }, [game, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, friends, addFriend, removeFriend]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} onAddFriend={addFriend} onRemoveFriend={removeFriend} />;
+  }, [game, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, addFriend, removeFriend]);
 
   return view;
 }
