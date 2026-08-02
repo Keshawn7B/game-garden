@@ -93,6 +93,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /game-covers\.png/);
   assert.match(styles, /\.bottom-nav/);
   assert.match(styles, /\.friend-link-actions/);
+  assert.match(styles, /\.friends-panel \.app-title h1[^}]*color:var\(--red\)/);
   assert.match(styles, /\.global-rank-list/);
   assert.match(styles, /\.friend-list/);
   assert.match(styles, /\.friend-score-grid/);
