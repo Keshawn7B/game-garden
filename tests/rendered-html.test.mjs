@@ -77,7 +77,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /signInWithEmailAndPassword/);
   assert.match(source, /createUserWithEmailAndPassword/);
   assert.match(source, /Choose a profile picture/);
-  assert.match(source, /Toggle Sakura Mode/);
+  assert.match(source, /aria-label="Change color mode"[^>]*><span>MODE<\/span><\/button>/);
   assert.match(source, /game-garden-theme/);
   assert.match(source, /avatar-style-/);
   const avatarOptions = source.match(/const AVATARS[\s\S]*?\n\];/)?.[0] ?? "";
@@ -92,6 +92,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /name: "Deducktion"[\s\S]*?meta: "CARD GAME"/);
   assert.match(styles, /game-covers\.png/);
   assert.match(styles, /\.bottom-nav/);
+  assert.match(styles, /\.theme-toggle[^}]*box-shadow:none/);
   assert.match(styles, /\.friend-link-actions/);
   assert.match(styles, /\.friends-panel \.app-title h1[^}]*color:var\(--red\)/);
   assert.match(styles, /\.invite-center-heading[^}]*color:var\(--red\)/);

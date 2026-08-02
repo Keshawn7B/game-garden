@@ -897,7 +897,7 @@ function AppHome({
         <div className="header-actions">
           {firebaseUser && <span className="header-online"><i />ONLINE</span>}
           {liveIncoming.length > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${liveIncoming.length} pending game invites`}><b>招</b><span>{liveIncoming.length}</span></button>}
-          <button className="theme-toggle" onClick={onThemeToggle} aria-label="Toggle Sakura Mode" aria-pressed={theme === "sakura"}><b>桜</b><span>MODE</span></button>
+          <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
             <PlayerAvatar small avatarId={avatarId} />
             <i className={firebaseUser ? "is-online" : ""} />
