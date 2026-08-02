@@ -34,4 +34,5 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /How to play/);
   assert.match(source, /aria-label="Close game menu"/);
   assert.match(source, /className="menu-close"/);
+  assert.match(source, /<div className="menu-card">\s*<button className="menu-close"/);
 });

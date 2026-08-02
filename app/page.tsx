@@ -330,10 +330,11 @@ function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () =
       <header className="game-topbar menu-topbar">
         <button className="back-button" onClick={onBack}>← Games</button>
         <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
-        <button className="menu-close" onClick={onBack} aria-label="Close game menu">×</button>
+        <span className="menu-header-spacer" aria-hidden="true" />
       </header>
       <section className="game-menu">
         <div className="menu-card">
+          <button className="menu-close" onClick={onBack} aria-label="Close game menu">×</button>
           <span className={`app-icon menu-game-icon theme-${details.color}`}><i>{details.glyph}</i></span>
           <p className="menu-japanese">{details.japanese}</p>
           <h1>{details.title}</h1>
