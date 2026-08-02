@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, create, update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /leaderboards/{gameId}/entries/{userId} {
+      allow read: if true;
+      allow create: if validScore(gameId, userId);
+      allow update: if validScore(gameId, userId)
+        && request.resource.data.score <= resource.data.score;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    function validScore(gameId, userId) {
+      return request.auth != null
+        && request.auth.uid == userId
+        && gameId in ['codebreaker', 'order', 'number', 'memory']
+        && request.resource.data.uid == userId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 18
+        && request.resource.data.score is int
+        && request.resource.data.score >= 1
+        && request.resource.data.score <= 10000;
+    }
+  }
+}

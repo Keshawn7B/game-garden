@@ -35,6 +35,8 @@ test("server-renders the Game Garden hub", async () => {
 test("routes every game through a start menu", async () => {
   const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const firebaseSource = await readFile(new URL("../app/firebase.ts", import.meta.url), "utf8");
+  const firestoreRules = await readFile(new URL("../firestore.rules", import.meta.url), "utf8");
   assert.match(source, /codebreaker-menu/);
   assert.match(source, /order-menu/);
   assert.match(source, /number-menu/);
@@ -55,6 +57,10 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function PlayerAvatar/);
   assert.match(source, /activeTab === "leaderboard"/);
   assert.match(source, /activeTab === "profile"/);
+  assert.match(source, /Continue with Google/);
+  assert.match(source, /onAuthStateChanged/);
+  assert.match(source, /saveCloudScore/);
+  assert.match(source, /<p>GLOBAL<\/p><h1>Leaderboard/);
   assert.match(source, /function EmbeddedGame/);
   assert.match(source, /keshawn7b\.github\.io\/Meducktion/);
   assert.match(source, /keshawn7b\.github\.io\/deduction-game/);
@@ -62,4 +68,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /name: "Deducktion"[\s\S]*?meta: "CARD GAME"/);
   assert.match(styles, /game-covers\.png/);
   assert.match(styles, /\.bottom-nav/);
+  assert.match(styles, /\.global-rank-list/);
+  assert.match(firebaseSource, /game-garden-658de/);
+  assert.match(firestoreRules, /request\.auth\.uid == userId/);
 });

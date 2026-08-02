@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, type User } from "firebase/auth";
+import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
+import { auth, db, googleProvider } from "./firebase";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory";
 type ExternalGameId = "meducktion" | "deducktion";
@@ -9,6 +12,8 @@ type AppTab = "games" | "leaderboard" | "profile";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
 type HighScores = Partial<Record<PlayableGameId, number>>;
+type LeaderboardEntry = { uid: string; name: string; photoURL: string; score: number };
+type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
   { id: "coral", label: "Coral", hex: "#ff6b4a" },
@@ -546,8 +551,28 @@ function formatScore(game: PlayableGameId, score?: number) {
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
-function PlayerAvatar({ small = false }: { small?: boolean }) {
-  return <span className={`player-avatar ${small ? "avatar-small" : ""}`} aria-hidden="true"><b>遊</b></span>;
+async function saveCloudScore(user: User, gameId: PlayableGameId, score: number, profileName: string) {
+  const entryRef = doc(db, "leaderboards", gameId, "entries", user.uid);
+  const profileRef = doc(db, "users", user.uid);
+  await runTransaction(db, async (transaction) => {
+    const current = await transaction.get(entryRef);
+    const previousScore = current.exists() ? Number(current.data().score) : Number.POSITIVE_INFINITY;
+    const bestScore = Math.min(previousScore, score);
+    if (bestScore < previousScore) {
+      transaction.set(entryRef, {
+        uid: user.uid,
+        name: profileName.trim() || user.displayName || "Player One",
+        photoURL: user.photoURL || "",
+        score: bestScore,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    transaction.set(profileRef, { highScores: { [gameId]: bestScore }, updatedAt: serverTimestamp() }, { merge: true });
+  });
+}
+
+function PlayerAvatar({ small = false, user }: { small?: boolean; user?: User | null }) {
+  return <span className={`player-avatar ${small ? "avatar-small" : ""}`} aria-hidden="true">{user?.photoURL ? <img src={user.photoURL} alt="" referrerPolicy="no-referrer" /> : <b>遊</b>}</span>;
 }
 
 function AppHome({
@@ -557,6 +582,13 @@ function AppHome({
   highScores,
   profileName,
   onProfileNameChange,
+  onProfileSave,
+  firebaseUser,
+  authLoading,
+  authError,
+  onSignIn,
+  onSignOut,
+  leaderboards,
 }: {
   activeTab: AppTab;
   onTabChange: (tab: AppTab) => void;
@@ -564,16 +596,25 @@ function AppHome({
   highScores: HighScores;
   profileName: string;
   onProfileNameChange: (name: string) => void;
+  onProfileSave: () => void;
+  firebaseUser: User | null;
+  authLoading: boolean;
+  authError: string;
+  onSignIn: () => void;
+  onSignOut: () => void;
+  leaderboards: Leaderboards;
 }) {
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
+  const [rankGame, setRankGame] = useState<PlayableGameId>("codebreaker");
+  const activeRanks = leaderboards[rankGame] ?? [];
 
   return (
     <main className="app-shell">
       <header className="app-header">
         <div className="wordmark"><span className="brand-dot">G</span><span><b>GAME GARDEN</b><small>ゲームガーデン</small></span></div>
         <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
-          <PlayerAvatar small />
+          <PlayerAvatar small user={firebaseUser} />
         </button>
       </header>
 
@@ -598,14 +639,27 @@ function AppHome({
 
         {activeTab === "leaderboard" && (
           <section className="app-panel rank-panel">
-            <div className="app-title"><div><p>LOCAL</p><h1>Leaderboard <span>ランキング</span></h1></div></div>
+            <div className="app-title"><div><p>GLOBAL</p><h1>Leaderboard <span>ランキング</span></h1></div></div>
             <div className="player-rank-card">
-              <span className="rank-number">01</span><PlayerAvatar />
-              <div><strong>{profileName || "Player One"}</strong><small>THIS DEVICE</small></div>
+              <span className="rank-number">YOU</span><PlayerAvatar user={firebaseUser} />
+              <div><strong>{profileName || "Player One"}</strong><small>{firebaseUser ? "CLOUD PROFILE" : "GUEST PLAYER"}</small></div>
               <b>{completedGames}<small>BESTS</small></b>
             </div>
+            <div className="rank-game-tabs" aria-label="Choose leaderboard game">
+              {scoredGames.map((game) => <button key={game.id} className={rankGame === game.scoreGame ? "active" : ""} onClick={() => setRankGame(game.scoreGame)}>{game.name}</button>)}
+            </div>
+            <div className="global-rank-list">
+              {activeRanks.length ? activeRanks.map((entry, index) => (
+                <div className="global-rank-row" key={entry.uid}>
+                  <strong>{String(index + 1).padStart(2, "0")}</strong>
+                  <span className="rank-avatar">{entry.photoURL ? <img src={entry.photoURL} alt="" referrerPolicy="no-referrer" /> : "遊"}</span>
+                  <span>{entry.name}</span>
+                  <b>{formatScore(rankGame, entry.score)}</b>
+                </div>
+              )) : <p className="empty-ranks">No scores yet. Set the first one.</p>}
+            </div>
             <div className="score-list">
-              <div className="score-list-heading"><span>High scores</span><span>ハイスコア</span></div>
+              <div className="score-list-heading"><span>Your high scores</span><span>ハイスコア</span></div>
               {scoredGames.map((game) => (
                 <div className="score-row" key={game.id}>
                   <span className={`score-art art-${game.id}`} />
@@ -620,7 +674,7 @@ function AppHome({
         {activeTab === "profile" && (
           <section className="app-panel profile-panel">
             <div className="profile-card">
-              <PlayerAvatar />
+              <PlayerAvatar user={firebaseUser} />
               <p>PLAYER PROFILE <span>プロフィール</span></p>
               <input
                 value={profileName}
@@ -629,7 +683,12 @@ function AppHome({
                 aria-label="Player name"
                 placeholder="Player One"
               />
-              <span className="local-badge">LOCAL PLAYER</span>
+              {firebaseUser?.email && <small className="profile-email">{firebaseUser.email}</small>}
+              <span className="local-badge">{firebaseUser ? "CLOUD PROFILE" : "GUEST PROFILE"}</span>
+              {authError && <p className="auth-error" role="alert">{authError}</p>}
+              <div className="profile-actions">
+                {firebaseUser ? <><button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button></> : <button className="primary-button google-button" onClick={onSignIn} disabled={authLoading}>{authLoading ? "Connecting…" : "Continue with Google"}</button>}
+              </div>
             </div>
             <div className="profile-stats">
               <div><strong>{completedGames}</strong><span>HIGH SCORES</span></div>
@@ -656,6 +715,10 @@ export default function Home() {
   const [game, setGame] = useState<GameId>("games");
   const [highScores, setHighScores] = useState<HighScores>({});
   const [profileName, setProfileName] = useState("Player One");
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  const [leaderboards, setLeaderboards] = useState<Leaderboards>({});
 
   useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
@@ -668,6 +731,58 @@ export default function Home() {
     } catch { /* Device storage may be unavailable. */ }
     window.addEventListener("hashchange", onPopState);
     return () => window.removeEventListener("hashchange", onPopState);
+  }, []);
+
+  useEffect(() => {
+    void getRedirectResult(auth).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not finish sign in."));
+    return onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      setAuthLoading(false);
+      setAuthError("");
+      if (!user) return;
+
+      try {
+        const profileRef = doc(db, "users", user.uid);
+        const profile = await getDoc(profileRef);
+        const data = profile.data();
+        const cloudName = typeof data?.displayName === "string" ? data.displayName : user.displayName || "Player One";
+        const cloudScores = data?.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {};
+        const savedScores = window.localStorage.getItem("pocket-play-scores");
+        const localScores = savedScores ? JSON.parse(savedScores) as HighScores : {};
+        const mergedScores = { ...cloudScores };
+        for (const gameId of ["codebreaker", "order", "number", "memory"] as PlayableGameId[]) {
+          const local = localScores[gameId];
+          const cloud = cloudScores[gameId];
+          if (local != null && (cloud == null || local < cloud)) {
+            mergedScores[gameId] = local;
+            await saveCloudScore(user, gameId, local, cloudName);
+          }
+        }
+        setProfileName(cloudName);
+        setHighScores(mergedScores);
+        window.localStorage.setItem("pocket-play-name", cloudName);
+        window.localStorage.setItem("pocket-play-scores", JSON.stringify(mergedScores));
+        await setDoc(profileRef, {
+          uid: user.uid,
+          displayName: cloudName,
+          photoURL: user.photoURL || "",
+          updatedAt: serverTimestamp(),
+          ...(profile.exists() ? {} : { createdAt: serverTimestamp() }),
+        }, { merge: true });
+      } catch (error) {
+        setAuthError(error instanceof Error ? error.message : "Could not load the cloud profile.");
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    const games: PlayableGameId[] = ["codebreaker", "order", "number", "memory"];
+    const unsubscribers = games.map((gameId) => onSnapshot(
+      query(collection(db, "leaderboards", gameId, "entries"), orderBy("score", "asc"), limit(10)),
+      (snapshot) => setLeaderboards((previous) => ({ ...previous, [gameId]: snapshot.docs.map((entry) => entry.data() as LeaderboardEntry) })),
+      () => undefined,
+    ));
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, []);
 
   const selectGame = (next: GameId) => {
@@ -683,11 +798,59 @@ export default function Home() {
       try { window.localStorage.setItem("pocket-play-scores", JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
       return next;
     });
-  }, []);
+    if (firebaseUser) void saveCloudScore(firebaseUser, gameId, score, profileName).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
+  }, [firebaseUser, profileName]);
 
   const updateProfileName = useCallback((name: string) => {
     setProfileName(name);
     try { window.localStorage.setItem("pocket-play-name", name); } catch { /* Device storage may be unavailable. */ }
+  }, []);
+
+  const saveProfile = useCallback(async () => {
+    if (!firebaseUser) return;
+    const displayName = profileName.trim() || firebaseUser.displayName || "Player One";
+    setProfileName(displayName);
+    setAuthError("");
+    try {
+      await setDoc(doc(db, "users", firebaseUser.uid), {
+        uid: firebaseUser.uid,
+        displayName,
+        photoURL: firebaseUser.photoURL || "",
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      const batch = writeBatch(db);
+      for (const [gameId, score] of Object.entries(highScores) as [PlayableGameId, number][]) {
+        batch.set(doc(db, "leaderboards", gameId, "entries", firebaseUser.uid), {
+          uid: firebaseUser.uid,
+          name: displayName,
+          photoURL: firebaseUser.photoURL || "",
+          score,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+      await batch.commit();
+      window.localStorage.setItem("pocket-play-name", displayName);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not save the profile.");
+    }
+  }, [firebaseUser, highScores, profileName]);
+
+  const signIn = useCallback(async () => {
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: unknown) {
+      const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+      if (code === "auth/popup-blocked") await signInWithRedirect(auth, googleProvider);
+      else setAuthError(error instanceof Error ? error.message : "Could not sign in with Google.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  const signOutProfile = useCallback(() => {
+    void signOut(auth).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not sign out."));
   }, []);
 
   const view = useMemo(() => {
@@ -704,8 +867,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} onProfileNameChange={updateProfileName} />;
-  }, [game, highScores, profileName, recordScore, updateProfileName]);
+    return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} onProfileNameChange={updateProfileName} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onSignOut={signOutProfile} leaderboards={leaderboards} />;
+  }, [game, highScores, profileName, recordScore, updateProfileName, saveProfile, firebaseUser, authLoading, authError, signIn, signOutProfile, leaderboards]);
 
   return view;
 }
