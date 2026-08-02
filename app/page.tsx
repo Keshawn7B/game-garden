@@ -663,7 +663,7 @@ function AppHome({
       <header className="app-header">
         <div className="wordmark"><span className="brand-dot">G</span><span><b>GAME GARDEN</b><small>ゲームガーデン</small></span></div>
         <div className="header-actions">
-          <button className="theme-toggle" onClick={onThemeToggle} aria-label="Toggle Sakura Mode" aria-pressed={theme === "sakura"}><b>桜</b><span>{theme === "sakura" ? "PINK" : "MODE"}</span></button>
+          <button className="theme-toggle" onClick={onThemeToggle} aria-label="Toggle Sakura Mode" aria-pressed={theme === "sakura"}><b>桜</b><span>MODE</span></button>
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
             <PlayerAvatar small avatarId={avatarId} />
           </button>
