@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
-import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory";
 type ExternalGameId = "meducktion" | "deducktion";
 type LibraryGameId = PlayableGameId | ExternalGameId;
-type AppTab = "games" | "leaderboard" | "profile";
+type AppTab = "games" | "leaderboard" | "friends" | "profile";
 type ThemeMode = "classic" | "sakura";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
@@ -16,6 +16,7 @@ type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" 
 type HighScores = Partial<Record<PlayableGameId, number>>;
 type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
+type FriendEntry = { uid: string; name: string; avatarId: AvatarId };
 
 const AVATARS: { id: AvatarId; glyph: string; label: string }[] = [
   { id: "play", glyph: "遊", label: "Play" },
@@ -37,6 +38,20 @@ const AVATARS: { id: AvatarId; glyph: string; label: string }[] = [
 
 function isAvatarId(value: unknown): value is AvatarId {
   return typeof value === "string" && AVATARS.some((avatar) => avatar.id === value);
+}
+
+function friendCodeFor(uid: string) {
+  return uid.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase();
+}
+
+async function syncPublicProfile(user: User, name: string, avatarId: AvatarId) {
+  await setDoc(doc(db, "publicProfiles", user.uid), {
+    uid: user.uid,
+    name: name.trim() || user.displayName || "Player One",
+    avatarId,
+    friendCode: friendCodeFor(user.uid),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 }
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
@@ -635,6 +650,10 @@ function AppHome({
   onEmailCreate,
   onSignOut,
   leaderboards,
+  friends,
+  friendCode,
+  onAddFriend,
+  onRemoveFriend,
 }: {
   activeTab: AppTab;
   theme: ThemeMode;
@@ -655,13 +674,32 @@ function AppHome({
   onEmailCreate: (email: string, password: string) => void;
   onSignOut: () => void;
   leaderboards: Leaderboards;
+  friends: FriendEntry[];
+  friendCode: string;
+  onAddFriend: (code: string) => Promise<string>;
+  onRemoveFriend: (uid: string) => void;
 }) {
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
   const [rankGame, setRankGame] = useState<PlayableGameId>("codebreaker");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [friendInput, setFriendInput] = useState("");
+  const [friendMessage, setFriendMessage] = useState("");
+  const [friendBusy, setFriendBusy] = useState(false);
   const activeRanks = leaderboards[rankGame] ?? [];
+
+  const submitFriend = async () => {
+    setFriendBusy(true);
+    setFriendMessage("");
+    try {
+      const message = await onAddFriend(friendInput);
+      setFriendMessage(message);
+      setFriendInput("");
+    } finally {
+      setFriendBusy(false);
+    }
+  };
 
   return (
     <main className="app-shell">
@@ -775,11 +813,46 @@ function AppHome({
             </div>
           </section>
         )}
+
+        {activeTab === "friends" && (
+          <section className="app-panel friends-panel">
+            <div className="app-title"><div><p>SOCIAL</p><h1>Friends <span>友達</span></h1></div><strong>{friends.length}<small>FRIENDS</small></strong></div>
+            {!firebaseUser ? (
+              <div className="friends-signin-card">
+                <AvatarGlyph avatarId="pink-blossom" className="friend-hero-avatar" />
+                <h2>Sign in to add friends.</h2>
+                <button className="primary-button" onClick={() => onTabChange("profile")}>Open profile</button>
+              </div>
+            ) : <>
+              <div className="friend-code-card">
+                <span>YOUR FRIEND CODE</span>
+                <strong>{friendCode}</strong>
+                <small>Share this code with another player.</small>
+              </div>
+              <div className="friend-add-card">
+                <label htmlFor="friend-code">ADD A FRIEND <span>友達を追加</span></label>
+                <div><input id="friend-code" value={friendInput} maxLength={8} onChange={(event) => setFriendInput(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="FRIEND CODE" /><button className="primary-button" onClick={submitFriend} disabled={friendBusy || friendInput.length !== 8}>{friendBusy ? "Adding…" : "Add"}</button></div>
+                {friendMessage && <p role="status">{friendMessage}</p>}
+              </div>
+              <div className="friend-list">
+                <div className="friend-list-heading"><span>Friend list</span><span>フレンド</span></div>
+                {friends.length ? friends.map((friend) => (
+                  <div className="friend-row" key={friend.uid}>
+                    <AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" />
+                    <strong>{friend.name}</strong>
+                    <button onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button>
+                  </div>
+                )) : <p className="empty-friends">No friends added yet.</p>}
+              </div>
+            </>}
+          </section>
+        )}
       </div>
 
       <nav className="bottom-nav" aria-label="App navigation">
         <button className={activeTab === "games" ? "active" : ""} onClick={() => onTabChange("games")}><b>遊</b><span>Games</span></button>
         <button className={activeTab === "leaderboard" ? "active" : ""} onClick={() => onTabChange("leaderboard")}><b>冠</b><span>Ranks</span></button>
+        <button className={activeTab === "friends" ? "active" : ""} onClick={() => onTabChange("friends")}><b>友</b><span>Friends</span></button>
         <button className={activeTab === "profile" ? "active" : ""} onClick={() => onTabChange("profile")}><b>人</b><span>Profile</span></button>
       </nav>
     </main>
@@ -796,6 +869,7 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [leaderboards, setLeaderboards] = useState<Leaderboards>({});
+  const [friends, setFriends] = useState<FriendEntry[]>([]);
 
   useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
@@ -858,11 +932,22 @@ export default function Home() {
           updatedAt: serverTimestamp(),
           ...(profile.exists() ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
+        await syncPublicProfile(user, cloudName, cloudAvatar);
       } catch (error) {
         setAuthError(error instanceof Error ? error.message : "Could not load the cloud profile.");
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!firebaseUser) {
+      setFriends([]);
+      return;
+    }
+    return onSnapshot(collection(db, "users", firebaseUser.uid, "friends"), (snapshot) => {
+      setFriends(snapshot.docs.map((friend) => friend.data() as FriendEntry).sort((a, b) => a.name.localeCompare(b.name)));
+    }, () => setAuthError("Could not load the friend list."));
+  }, [firebaseUser]);
 
   useEffect(() => {
     const games: PlayableGameId[] = ["codebreaker", "order", "number", "memory"];
@@ -923,6 +1008,7 @@ export default function Home() {
         avatarId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
+      await syncPublicProfile(firebaseUser, displayName, avatarId);
       await updateProfile(firebaseUser, { displayName });
       const batch = writeBatch(db);
       for (const [gameId, score] of Object.entries(highScores) as [PlayableGameId, number][]) {
@@ -984,6 +1070,7 @@ export default function Home() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
+      await syncPublicProfile(credential.user, displayName, avatarId);
       setProfileName(displayName);
     } catch (error) {
       setAuthError(friendlyAuthError(error));
@@ -995,6 +1082,35 @@ export default function Home() {
   const signOutProfile = useCallback(() => {
     void signOut(auth).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not sign out."));
   }, []);
+
+  const addFriend = useCallback(async (rawCode: string) => {
+    if (!firebaseUser) return "Sign in before adding friends.";
+    const code = rawCode.trim().toUpperCase();
+    if (code === friendCodeFor(firebaseUser.uid)) return "That is your own friend code.";
+    try {
+      const matches = await getDocs(query(collection(db, "publicProfiles"), where("friendCode", "==", code), limit(1)));
+      if (matches.empty) return "No player was found with that code.";
+      const profile = matches.docs[0].data();
+      const friendUid = String(profile.uid || matches.docs[0].id);
+      const friendName = typeof profile.name === "string" ? profile.name : "Player";
+      const friendAvatar: AvatarId = isAvatarId(profile.avatarId) ? profile.avatarId : "play";
+      await setDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid), {
+        uid: friendUid,
+        name: friendName,
+        avatarId: friendAvatar,
+        addedAt: serverTimestamp(),
+      });
+      return `${friendName} was added.`;
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not add that friend.");
+      return "Could not add that friend.";
+    }
+  }, [firebaseUser]);
+
+  const removeFriend = useCallback((friendUid: string) => {
+    if (!firebaseUser) return;
+    void deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid)).catch(() => setAuthError("Could not remove that friend."));
+  }, [firebaseUser]);
 
   const view = useMemo(() => {
     if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={() => selectGame("codebreaker")} onBack={() => selectGame("games")} />;
@@ -1009,9 +1125,9 @@ export default function Home() {
     if (game === "memory") return <MemoryGame onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
-    const activeTab: AppTab = game === "leaderboard" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} />;
-  }, [game, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards]);
+    const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={friends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} onAddFriend={addFriend} onRemoveFriend={removeFriend} />;
+  }, [game, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, friends, addFriend, removeFriend]);
 
   return view;
 }

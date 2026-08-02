@@ -57,6 +57,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function PlayerAvatar/);
   assert.match(source, /activeTab === "leaderboard"/);
   assert.match(source, /activeTab === "profile"/);
+  assert.match(source, /activeTab === "friends"/);
+  assert.match(source, /YOUR FRIEND CODE/);
+  assert.match(source, /friendCodeFor/);
+  assert.match(source, /publicProfiles/);
+  assert.match(source, /onAddFriend/);
   assert.match(source, /Continue with Google/);
   assert.match(source, /Create account/);
   assert.match(source, /signInWithEmailAndPassword/);
@@ -78,10 +83,13 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /game-covers\.png/);
   assert.match(styles, /\.bottom-nav/);
   assert.match(styles, /\.global-rank-list/);
+  assert.match(styles, /\.friend-list/);
   assert.match(styles, /data-theme="sakura"/);
   assert.match(styles, /content:"桜"/);
   assert.doesNotMatch(styles, /data-theme="sakura"[^}]*\.bottom-nav[^}]*position:relative/);
   assert.match(firebaseSource, /game-garden-658de/);
   assert.match(firestoreRules, /request\.auth\.uid == userId/);
+  assert.match(firestoreRules, /publicProfiles/);
+  assert.match(firestoreRules, /users\/\{userId\}\/friends/);
   assert.match(firestoreRules, /'sakura'.*'dragon'.*'pink-blossom'.*'pink-peach'/);
 });
