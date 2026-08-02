@@ -19,6 +19,7 @@ test("server-renders the Pocket Play game hub", async () => {
   assert.match(html, /ゲーム/);
   assert.doesNotMatch(html, /POCKET ARCADE|SMALL GAMES|HOW TO PLAY|ポケットアーケード/);
   assert.match(html, /Codebreaker/);
+  assert.match(html, /Order Match/);
   assert.match(html, /Number Hunt/);
   assert.match(html, /Memory Flip/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
@@ -27,6 +28,7 @@ test("server-renders the Pocket Play game hub", async () => {
 test("routes every game through a start menu", async () => {
   const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(source, /codebreaker-menu/);
+  assert.match(source, /order-menu/);
   assert.match(source, /number-menu/);
   assert.match(source, /memory-menu/);
   assert.match(source, /function GameMenu/);
@@ -35,4 +37,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /aria-label="Close game menu"/);
   assert.match(source, /className="menu-close"/);
   assert.match(source, /<div className="menu-card">\s*<button className="menu-close"/);
+  assert.match(source, /function OrderMatch/);
+  assert.match(source, /switchObject/);
+  assert.match(source, /Check order/);
 });

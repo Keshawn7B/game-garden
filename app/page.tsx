@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type PlayableGameId = "codebreaker" | "number" | "memory";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory";
 type GameId = "hub" | PlayableGameId | `${PlayableGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
 
@@ -28,6 +28,15 @@ function shuffle<T>(items: T[]): T[] {
 
 function makeSecret(): ColorId[] {
   return Array.from({ length: 4 }, () => COLORS[Math.floor(Math.random() * COLORS.length)].id);
+}
+
+const ORDER_COLORS: ColorId[] = ["coral", "gold", "mint", "blue"];
+
+function makeOrderRound() {
+  const target = shuffle(ORDER_COLORS);
+  let objects = shuffle(ORDER_COLORS);
+  while (objects.every((color, index) => color === target[index])) objects = shuffle(ORDER_COLORS);
+  return { target, objects };
 }
 
 function scoreGuess(guess: ColorId[], secret: ColorId[]) {
@@ -165,6 +174,103 @@ function Codebreaker({ onBack }: { onBack: () => void }) {
   );
 }
 
+function OrderMatch({ onBack }: { onBack: () => void }) {
+  const [round, setRound] = useState(makeOrderRound);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [checks, setChecks] = useState<number[]>([]);
+  const exact = checks.at(-1) ?? 0;
+  const won = exact === 4;
+  const lost = checks.length >= 8 && !won;
+
+  const reset = () => {
+    setRound(makeOrderRound());
+    setSelected(null);
+    setChecks([]);
+  };
+
+  const switchObject = (index: number) => {
+    if (won || lost) return;
+    if (selected == null) {
+      setSelected(index);
+      return;
+    }
+    if (selected === index) {
+      setSelected(null);
+      return;
+    }
+    setRound((currentRound) => {
+      const objects = [...currentRound.objects];
+      [objects[selected], objects[index]] = [objects[index], objects[selected]];
+      return { ...currentRound, objects };
+    });
+    setSelected(null);
+  };
+
+  const checkOrder = () => {
+    if (won || lost) return;
+    const matches = round.objects.filter((color, index) => color === round.target[index]).length;
+    setChecks((previous) => [...previous, matches]);
+  };
+
+  return (
+    <main className="game-shell order-shell">
+      <header className="game-topbar">
+        <button className="back-button" onClick={onBack}>← Game menu</button>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
+        <button className="icon-button" onClick={reset} aria-label="Start a new order">↻</button>
+      </header>
+
+      <section className="order-game">
+        <p className="eyebrow">LOGIC · 1 PLAYER</p>
+        <h1>Match the hidden order.</h1>
+        <p>Tap two objects to switch their places, then check your row.</p>
+
+        <div className="order-board">
+          <div className="order-secret">
+            <span>HIDDEN ORDER</span>
+            <div className="order-row" aria-label={won || lost ? "Revealed correct order" : "Hidden correct order"}>
+              {round.target.map((color, index) => <Peg key={index} color={color} hidden={!won && !lost} />)}
+            </div>
+          </div>
+
+          <div className="order-status" aria-live="polite">
+            <strong>{checks.length ? `${exact} / 4` : "— / 4"}</strong>
+            <span>{won ? "ORDER MATCHED" : lost ? "ORDER REVEALED" : checks.length ? "IN THE CORRECT PLACE" : "CHECK WHEN READY"}</span>
+          </div>
+
+          <div className="order-play-area">
+            <p>YOUR ORDER <span>{selected == null ? "SELECT AN OBJECT" : "SELECT ITS NEW PLACE"}</span></p>
+            <div className="order-row player-order">
+              {round.objects.map((color, index) => {
+                const colorData = COLORS.find((item) => item.id === color)!;
+                return (
+                  <button
+                    key={color}
+                    className={`order-object ${selected === index ? "is-selected" : ""}`}
+                    style={{ backgroundColor: colorData.hex }}
+                    onClick={() => switchObject(index)}
+                    aria-label={`${colorData.label} object in position ${index + 1}${selected === index ? ", selected" : ""}`}
+                    disabled={won || lost}
+                  >{index + 1}</button>
+                );
+              })}
+            </div>
+
+            <div className="order-actions">
+              <div className="check-history" aria-label={`${checks.length} of 8 checks used`}>
+                {Array.from({ length: 8 }, (_, index) => <i key={index} className={index < checks.length ? "used" : ""} />)}
+              </div>
+              <button className="primary-button" onClick={won || lost ? reset : checkOrder}>
+                {won || lost ? "Play again" : "Check order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function NumberHunt({ onBack }: { onBack: () => void }) {
   const [target, setTarget] = useState(() => Math.floor(Math.random() * 100) + 1);
   const [value, setValue] = useState(50);
@@ -296,6 +402,18 @@ const GAME_MENUS: Record<PlayableGameId, {
       "Crack the hidden code within eight guesses.",
     ],
   },
+  order: {
+    title: "Order Match",
+    japanese: "並べ替え",
+    category: "Logic",
+    glyph: "↔",
+    color: "order",
+    rules: [
+      "A hidden row uses the same four colored objects.",
+      "Tap any two objects to switch their positions.",
+      "Check your row and match all four places within eight checks.",
+    ],
+  },
   number: {
     title: "Number Hunt",
     japanese: "ナンバーハント",
@@ -353,8 +471,9 @@ function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () =
 function Hub({ onSelect }: { onSelect: (game: PlayableGameId) => void }) {
   const games = [
     { id: "codebreaker" as const, number: "01", name: "Codebreaker", blurb: "Crack the hidden color sequence in eight guesses.", meta: "LOGIC", color: "coral", glyph: "••••" },
-    { id: "number" as const, number: "02", name: "Number Hunt", blurb: "Chase the secret number with higher and lower clues.", meta: "QUICK PLAY", color: "blue", glyph: "42" },
-    { id: "memory" as const, number: "03", name: "Memory Flip", blurb: "Flip the tiles and find every matching pair.", meta: "MEMORY", color: "violet", glyph: "✦" },
+    { id: "order" as const, number: "02", name: "Order Match", blurb: "Switch colored objects into the hidden correct order.", meta: "LOGIC", color: "order", glyph: "↔" },
+    { id: "number" as const, number: "03", name: "Number Hunt", blurb: "Chase the secret number with higher and lower clues.", meta: "QUICK PLAY", color: "blue", glyph: "42" },
+    { id: "memory" as const, number: "04", name: "Memory Flip", blurb: "Flip the tiles and find every matching pair.", meta: "MEMORY", color: "violet", glyph: "✦" },
   ];
 
   return (
@@ -397,9 +516,11 @@ export default function Home() {
 
   const view = useMemo(() => {
     if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={() => selectGame("codebreaker")} onBack={() => selectGame("hub")} />;
+    if (game === "order-menu") return <GameMenu game="order" onPlay={() => selectGame("order")} onBack={() => selectGame("hub")} />;
     if (game === "number-menu") return <GameMenu game="number" onPlay={() => selectGame("number")} onBack={() => selectGame("hub")} />;
     if (game === "memory-menu") return <GameMenu game="memory" onPlay={() => selectGame("memory")} onBack={() => selectGame("hub")} />;
     if (game === "codebreaker") return <Codebreaker onBack={() => selectGame("codebreaker-menu")} />;
+    if (game === "order") return <OrderMatch onBack={() => selectGame("order-menu")} />;
     if (game === "number") return <NumberHunt onBack={() => selectGame("number-menu")} />;
     if (game === "memory") return <MemoryGame onBack={() => selectGame("memory-menu")} />;
     return <Hub onSelect={(selected) => selectGame(`${selected}-menu`)} />;
