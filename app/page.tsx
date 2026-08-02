@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory";
+type ExternalGameId = "meducktion" | "deducktion";
+type LibraryGameId = PlayableGameId | ExternalGameId;
 type AppTab = "games" | "leaderboard" | "profile";
-type GameId = AppTab | PlayableGameId | `${PlayableGameId}-menu`;
+type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
 type HighScores = Partial<Record<PlayableGameId, number>>;
 
@@ -393,12 +395,13 @@ function MemoryGame({ onBack, onScore }: { onBack: () => void; onScore: (score: 
   );
 }
 
-const GAME_MENUS: Record<PlayableGameId, {
+const GAME_MENUS: Record<LibraryGameId, {
   title: string;
   japanese: string;
   category: string;
   glyph: string;
   color: string;
+  players: string;
   rules: string[];
 }> = {
   codebreaker: {
@@ -407,6 +410,7 @@ const GAME_MENUS: Record<PlayableGameId, {
     category: "Logic",
     glyph: "••••",
     color: "coral",
+    players: "1 Player",
     rules: [
       "Choose four colors. Colors can repeat.",
       "Use the exact and close clues after each guess.",
@@ -419,6 +423,7 @@ const GAME_MENUS: Record<PlayableGameId, {
     category: "Logic",
     glyph: "↔",
     color: "order",
+    players: "1 Player",
     rules: [
       "A hidden row uses the same four colored objects.",
       "Tap any two objects to switch their positions.",
@@ -431,6 +436,7 @@ const GAME_MENUS: Record<PlayableGameId, {
     category: "Quick play",
     glyph: "42",
     color: "blue",
+    players: "1 Player",
     rules: [
       "Pick a number from 1 to 100.",
       "Use the higher or lower clue after each guess.",
@@ -443,15 +449,42 @@ const GAME_MENUS: Record<PlayableGameId, {
     category: "Memory",
     glyph: "✦",
     color: "violet",
+    players: "1 Player",
     rules: [
       "Flip two cards at a time.",
       "Matching cards stay open; other cards flip back.",
       "Clear every pair in as few moves as possible.",
     ],
   },
+  meducktion: {
+    title: "Meducktion",
+    japanese: "医学推理",
+    category: "Card game",
+    glyph: "診",
+    color: "meducktion",
+    players: "1–4 Players",
+    rules: [
+      "Choose one Ask, Check, or Test question each round.",
+      "Use the YES and NO clues to narrow eight conditions.",
+      "Diagnose the fictional case before your opponents.",
+    ],
+  },
+  deducktion: {
+    title: "Deducktion",
+    japanese: "正体推理",
+    category: "Online",
+    glyph: "探",
+    color: "deducktion",
+    players: "Multiplayer",
+    rules: [
+      "Create a room or join friends with a four-letter code.",
+      "Reveal clues about your hidden animal, accessory, and background.",
+      "Be the first player to correctly guess your full identity.",
+    ],
+  },
 };
 
-function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () => void; onBack: () => void }) {
+function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: () => void; onBack: () => void }) {
   const details = GAME_MENUS[game];
 
   return (
@@ -467,7 +500,7 @@ function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () =
           <span className={`game-cover menu-game-cover art-${game}`}><i>{details.glyph}</i></span>
           <p className="menu-japanese">{details.japanese}</p>
           <h1>{details.title}</h1>
-          <div className="menu-meta"><span>1 Player</span><span>{details.category}</span></div>
+          <div className="menu-meta"><span>{details.players}</span><span>{details.category}</span></div>
           <div className="menu-rules">
             <h2>How to play <span>遊び方</span></h2>
             <ol>{details.rules.map((rule, index) => <li key={rule}><b>{index + 1}</b><span>{rule}</span></li>)}</ol>
@@ -479,11 +512,32 @@ function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () =
   );
 }
 
-const GAMES: { id: PlayableGameId; number: string; name: string; japanese: string; meta: string }[] = [
-  { id: "codebreaker", number: "01", name: "Codebreaker", japanese: "コードブレイカー", meta: "LOGIC" },
-  { id: "order", number: "02", name: "Order Match", japanese: "並べ替え", meta: "LOGIC" },
-  { id: "number", number: "03", name: "Number Hunt", japanese: "数字探し", meta: "QUICK" },
-  { id: "memory", number: "04", name: "Memory Flip", japanese: "記憶", meta: "MEMORY" },
+const EXTERNAL_GAMES: Record<ExternalGameId, { title: string; url: string }> = {
+  meducktion: { title: "Meducktion", url: "https://keshawn7b.github.io/Meducktion/" },
+  deducktion: { title: "Deducktion", url: "https://keshawn7b.github.io/deduction-game/" },
+};
+
+function EmbeddedGame({ game, onBack }: { game: ExternalGameId; onBack: () => void }) {
+  const details = EXTERNAL_GAMES[game];
+  return (
+    <main className="embedded-game-shell">
+      <header className="game-topbar embedded-topbar">
+        <button className="back-button" onClick={onBack}>← Game menu</button>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> {details.title.toUpperCase()}</div>
+        <a className="icon-button embedded-open" href={details.url} target="_blank" rel="noreferrer" aria-label={`Open ${details.title} in a new tab`}>↗</a>
+      </header>
+      <iframe className="embedded-game" src={details.url} title={details.title} allow="fullscreen" />
+    </main>
+  );
+}
+
+const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string; meta: string; scoreGame?: PlayableGameId }[] = [
+  { id: "codebreaker", number: "01", name: "Codebreaker", japanese: "コードブレイカー", meta: "LOGIC", scoreGame: "codebreaker" },
+  { id: "order", number: "02", name: "Order Match", japanese: "並べ替え", meta: "LOGIC", scoreGame: "order" },
+  { id: "number", number: "03", name: "Number Hunt", japanese: "数字探し", meta: "QUICK", scoreGame: "number" },
+  { id: "memory", number: "04", name: "Memory Flip", japanese: "記憶", meta: "MEMORY", scoreGame: "memory" },
+  { id: "meducktion", number: "05", name: "Meducktion", japanese: "医学推理", meta: "CARD GAME" },
+  { id: "deducktion", number: "06", name: "Deducktion", japanese: "正体推理", meta: "ONLINE" },
 ];
 
 function formatScore(game: PlayableGameId, score?: number) {
@@ -506,12 +560,13 @@ function AppHome({
 }: {
   activeTab: AppTab;
   onTabChange: (tab: AppTab) => void;
-  onSelect: (game: PlayableGameId) => void;
+  onSelect: (game: LibraryGameId) => void;
   highScores: HighScores;
   profileName: string;
   onProfileNameChange: (name: string) => void;
 }) {
   const completedGames = Object.keys(highScores).length;
+  const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
 
   return (
     <main className="app-shell">
@@ -533,7 +588,7 @@ function AppHome({
                   <span className="game-card-copy">
                     <strong>{game.name}</strong>
                     <small>{game.japanese}</small>
-                    <em>{highScores[game.id] == null ? game.meta : `BEST · ${formatScore(game.id, highScores[game.id])}`}</em>
+                    <em>{game.scoreGame && highScores[game.scoreGame] != null ? `BEST · ${formatScore(game.scoreGame, highScores[game.scoreGame])}` : game.meta}</em>
                   </span>
                 </button>
               ))}
@@ -551,11 +606,11 @@ function AppHome({
             </div>
             <div className="score-list">
               <div className="score-list-heading"><span>High scores</span><span>ハイスコア</span></div>
-              {GAMES.map((game) => (
+              {scoredGames.map((game) => (
                 <div className="score-row" key={game.id}>
                   <span className={`score-art art-${game.id}`} />
                   <div><strong>{game.name}</strong><small>{game.meta}</small></div>
-                  <b className={highScores[game.id] == null ? "no-score" : ""}>{formatScore(game.id, highScores[game.id])}</b>
+                  <b className={highScores[game.scoreGame] == null ? "no-score" : ""}>{formatScore(game.scoreGame, highScores[game.scoreGame])}</b>
                 </div>
               ))}
             </div>
@@ -582,7 +637,7 @@ function AppHome({
             </div>
             <div className="profile-scores">
               <h2>Your best <span>自己ベスト</span></h2>
-              {GAMES.map((game) => <p key={game.id}><span>{game.name}</span><strong>{formatScore(game.id, highScores[game.id])}</strong></p>)}
+              {scoredGames.map((game) => <p key={game.id}><span>{game.name}</span><strong>{formatScore(game.scoreGame, highScores[game.scoreGame])}</strong></p>)}
             </div>
           </section>
         )}
@@ -640,10 +695,14 @@ export default function Home() {
     if (game === "order-menu") return <GameMenu game="order" onPlay={() => selectGame("order")} onBack={() => selectGame("games")} />;
     if (game === "number-menu") return <GameMenu game="number" onPlay={() => selectGame("number")} onBack={() => selectGame("games")} />;
     if (game === "memory-menu") return <GameMenu game="memory" onPlay={() => selectGame("memory")} onBack={() => selectGame("games")} />;
+    if (game === "meducktion-menu") return <GameMenu game="meducktion" onPlay={() => selectGame("meducktion")} onBack={() => selectGame("games")} />;
+    if (game === "deducktion-menu") return <GameMenu game="deducktion" onPlay={() => selectGame("deducktion")} onBack={() => selectGame("games")} />;
     if (game === "codebreaker") return <Codebreaker onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
     if (game === "number") return <NumberHunt onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
     if (game === "memory") return <MemoryGame onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
+    if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
+    if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "profile" ? game : "games";
     return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} onProfileNameChange={updateProfileName} />;
   }, [game, highScores, profileName, recordScore, updateProfileName]);

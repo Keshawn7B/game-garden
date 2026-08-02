@@ -22,6 +22,8 @@ test("server-renders the Pocket Play game hub", async () => {
   assert.match(html, /Order Match/);
   assert.match(html, /Number Hunt/);
   assert.match(html, /Memory Flip/);
+  assert.match(html, /Meducktion/);
+  assert.match(html, /Deducktion/);
   assert.match(html, /App navigation/);
   assert.match(html, /Ranks/);
   assert.match(html, /Profile/);
@@ -36,6 +38,8 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /order-menu/);
   assert.match(source, /number-menu/);
   assert.match(source, /memory-menu/);
+  assert.match(source, /meducktion-menu/);
+  assert.match(source, /deducktion-menu/);
   assert.match(source, /function GameMenu/);
   assert.match(source, /Start Game/);
   assert.match(source, /How to play/);
@@ -50,6 +54,9 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function PlayerAvatar/);
   assert.match(source, /activeTab === "leaderboard"/);
   assert.match(source, /activeTab === "profile"/);
+  assert.match(source, /function EmbeddedGame/);
+  assert.match(source, /keshawn7b\.github\.io\/Meducktion/);
+  assert.match(source, /keshawn7b\.github\.io\/deduction-game/);
   assert.match(styles, /game-covers\.png/);
   assert.match(styles, /\.bottom-nav/);
 });

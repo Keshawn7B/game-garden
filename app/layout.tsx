@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = incoming.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const baseUrl = new URL(`${protocol}://${host}`);
   const title = "Pocket Play | ポケットプレイ";
-  const description = "Pocket-sized logic and memory games with local profiles, leaderboards, and high scores.";
+  const description = "Pocket-sized logic, memory, medical deduction, and multiplayer identity games in one app.";
 
   return {
     metadataBase: baseUrl,
