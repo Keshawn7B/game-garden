@@ -44,7 +44,12 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /meducktion-menu/);
   assert.match(source, /deducktion-menu/);
   assert.match(source, /function GameMenu/);
-  assert.match(source, /Start Game/);
+  assert.match(source, /Start \{supportsLocalMultiplayer/);
+  assert.match(source, /type GameMode = "solo" \| "multi"/);
+  assert.match(source, /className="mode-picker"/);
+  assert.match(source, /VERSUS<small>2 PLAYERS/);
+  assert.match(source, /function TurnBanner/);
+  assert.match(source, /mode=\{gameMode\}/);
   assert.match(source, /How to play/);
   assert.match(source, /aria-label="Close game menu"/);
   assert.match(source, /className="menu-close"/);
@@ -85,6 +90,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.global-rank-list/);
   assert.match(styles, /\.friend-list/);
   assert.match(styles, /\.friend-score-grid/);
+  assert.match(styles, /\.mode-picker/);
+  assert.match(styles, /\.turn-banner/);
   assert.match(source, /friendProfiles/);
   assert.match(source, /friend\.highScores/);
   assert.match(styles, /data-theme="sakura"/);

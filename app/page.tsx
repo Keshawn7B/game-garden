@@ -10,6 +10,7 @@ type ExternalGameId = "meducktion" | "deducktion";
 type LibraryGameId = PlayableGameId | ExternalGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "profile";
 type ThemeMode = "classic" | "sakura";
+type GameMode = "solo" | "multi";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
 type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun" | "pink-blossom" | "pink-heart" | "pink-bunny" | "pink-fan" | "pink-peach";
@@ -121,25 +122,40 @@ function Peg({ color, small = false, hidden = false }: { color?: ColorId; small?
   );
 }
 
-function Codebreaker({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
+function TurnBanner({ mode, currentPlayer, scores }: { mode: GameMode; currentPlayer: 0 | 1; scores?: [number, number] }) {
+  if (mode === "solo") return null;
+  return (
+    <div className="turn-banner" aria-live="polite">
+      <span>LOCAL VERSUS</span>
+      <strong>PLAYER {currentPlayer + 1}&apos;S TURN</strong>
+      {scores && <small>P1 {scores[0]} · {scores[1]} P2</small>}
+    </div>
+  );
+}
+
+function Codebreaker({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
   const [secret, setSecret] = useState<ColorId[]>(makeSecret);
   const [current, setCurrent] = useState<ColorId[]>([]);
-  const [guesses, setGuesses] = useState<{ colors: ColorId[]; exact: number; close: number }[]>([]);
+  const [guesses, setGuesses] = useState<{ colors: ColorId[]; exact: number; close: number; player: 0 | 1 }[]>([]);
+  const [currentPlayer, setCurrentPlayer] = useState<0 | 1>(0);
   const won = guesses.some((guess) => guess.exact === 4);
   const lost = guesses.length >= 8 && !won;
+  const winner = guesses.find((guess) => guess.exact === 4)?.player;
 
   const reset = () => {
     setSecret(makeSecret());
     setCurrent([]);
     setGuesses([]);
+    setCurrentPlayer(0);
   };
 
   const submit = () => {
     if (current.length !== 4 || won || lost) return;
     const result = scoreGuess(current, secret);
-    if (result.exact === 4) onScore(guesses.length + 1);
-    setGuesses((previous) => [...previous, { colors: current, ...result }]);
+    if (result.exact === 4 && mode === "solo") onScore(guesses.length + 1);
+    setGuesses((previous) => [...previous, { colors: current, ...result, player: currentPlayer }]);
     setCurrent([]);
+    if (mode === "multi" && result.exact !== 4) setCurrentPlayer((player) => player === 0 ? 1 : 0);
   };
 
   return (
@@ -151,14 +167,16 @@ function Codebreaker({ onBack, onScore }: { onBack: () => void; onScore: (score:
       </header>
 
       <section className="game-intro">
-        <p className="eyebrow">LOGIC · 1 PLAYER</p>
+        <p className="eyebrow">LOGIC · {mode === "multi" ? "2 PLAYERS" : "1 PLAYER"}</p>
         <h1>Crack the color code.</h1>
-        <p>Find four hidden colors in eight guesses. Colors can repeat.</p>
+        <p>{mode === "multi" ? "Take turns. The first player to crack the shared code wins." : "Find four hidden colors in eight guesses. Colors can repeat."}</p>
         <div className="legend" aria-label="Feedback key">
           <span><i className="key-dot exact-dot" /> Right color, right spot</span>
           <span><i className="key-dot close-dot" /> Right color, wrong spot</span>
         </div>
       </section>
+
+      {!won && !lost && <TurnBanner mode={mode} currentPlayer={currentPlayer} />}
 
       <section className="code-board" aria-label="Codebreaker board">
         <div className="secret-row">
@@ -175,7 +193,7 @@ function Codebreaker({ onBack, onScore }: { onBack: () => void; onScore: (score:
             const isCurrent = index === guesses.length && !won && !lost;
             return (
               <div className={`attempt-row ${isCurrent ? "active-attempt" : ""}`} key={index}>
-                <span className="attempt-number">{String(index + 1).padStart(2, "0")}</span>
+                <span className="attempt-number">{guess && mode === "multi" ? `P${guess.player + 1}` : String(index + 1).padStart(2, "0")}</span>
                 <div className="peg-row">
                   {Array.from({ length: 4 }, (__, pegIndex) => (
                     <Peg key={pegIndex} color={guess?.colors[pegIndex] ?? (isCurrent ? current[pegIndex] : undefined)} />
@@ -196,7 +214,7 @@ function Codebreaker({ onBack, onScore }: { onBack: () => void; onScore: (score:
 
         {won || lost ? (
           <div className="result-panel" role="status">
-            <div><strong>{won ? "Code cracked!" : "So close."}</strong><span>{won ? `Solved in ${guesses.length} ${guesses.length === 1 ? "guess" : "guesses"}.` : "The secret slipped away this round."}</span></div>
+            <div><strong>{won ? mode === "multi" ? `Player ${(winner ?? 0) + 1} wins!` : "Code cracked!" : mode === "multi" ? "Draw game." : "So close."}</strong><span>{won ? `Solved in ${guesses.length} ${guesses.length === 1 ? "guess" : "guesses"}.` : "The secret slipped away this round."}</span></div>
             <button className="primary-button" onClick={reset}>Play again</button>
           </div>
         ) : (
@@ -224,10 +242,11 @@ function Codebreaker({ onBack, onScore }: { onBack: () => void; onScore: (score:
   );
 }
 
-function OrderMatch({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
+function OrderMatch({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
   const [round, setRound] = useState(makeOrderRound);
   const [selected, setSelected] = useState<number | null>(null);
   const [checks, setChecks] = useState<number[]>([]);
+  const [currentPlayer, setCurrentPlayer] = useState<0 | 1>(0);
   const exact = checks.at(-1) ?? 0;
   const won = exact === 4;
   const lost = checks.length >= 8 && !won;
@@ -236,6 +255,7 @@ function OrderMatch({ onBack, onScore }: { onBack: () => void; onScore: (score: 
     setRound(makeOrderRound());
     setSelected(null);
     setChecks([]);
+    setCurrentPlayer(0);
   };
 
   const switchObject = (index: number) => {
@@ -259,8 +279,9 @@ function OrderMatch({ onBack, onScore }: { onBack: () => void; onScore: (score: 
   const checkOrder = () => {
     if (won || lost) return;
     const matches = round.objects.filter((color, index) => color === round.target[index]).length;
-    if (matches === 4) onScore(checks.length + 1);
+    if (matches === 4 && mode === "solo") onScore(checks.length + 1);
     setChecks((previous) => [...previous, matches]);
+    if (mode === "multi" && matches !== 4) setCurrentPlayer((player) => player === 0 ? 1 : 0);
   };
 
   return (
@@ -272,9 +293,11 @@ function OrderMatch({ onBack, onScore }: { onBack: () => void; onScore: (score: 
       </header>
 
       <section className="order-game">
-        <p className="eyebrow">LOGIC · 1 PLAYER</p>
+        <p className="eyebrow">LOGIC · {mode === "multi" ? "2 PLAYERS" : "1 PLAYER"}</p>
         <h1>Match the hidden order.</h1>
-        <p>Tap two objects to switch their places, then check your row.</p>
+        <p>{mode === "multi" ? "Take turns switching objects. The first player to match the row wins." : "Tap two objects to switch their places, then check your row."}</p>
+
+        {!won && !lost && <TurnBanner mode={mode} currentPlayer={currentPlayer} />}
 
         <div className="order-board">
           <div className="order-secret">
@@ -286,7 +309,7 @@ function OrderMatch({ onBack, onScore }: { onBack: () => void; onScore: (score: 
 
           <div className="order-status" aria-live="polite">
             <strong>{checks.length ? `${exact} / 4` : "— / 4"}</strong>
-            <span>{won ? "ORDER MATCHED" : lost ? "ORDER REVEALED" : checks.length ? "IN THE CORRECT PLACE" : "CHECK WHEN READY"}</span>
+            <span>{won ? mode === "multi" ? `PLAYER ${currentPlayer + 1} WINS` : "ORDER MATCHED" : lost ? "ORDER REVEALED" : checks.length ? "IN THE CORRECT PLACE" : "CHECK WHEN READY"}</span>
           </div>
 
           <div className="order-play-area">
@@ -322,24 +345,28 @@ function OrderMatch({ onBack, onScore }: { onBack: () => void; onScore: (score: 
   );
 }
 
-function NumberHunt({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
+function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
   const [target, setTarget] = useState(() => Math.floor(Math.random() * 100) + 1);
   const [value, setValue] = useState(50);
-  const [history, setHistory] = useState<number[]>([]);
-  const latest = history.at(-1);
+  const [history, setHistory] = useState<{ value: number; player: 0 | 1 }[]>([]);
+  const [currentPlayer, setCurrentPlayer] = useState<0 | 1>(0);
+  const latest = history.at(-1)?.value;
   const won = latest === target;
-  const lost = history.length >= 7 && !won;
+  const guessLimit = mode === "multi" ? 10 : 7;
+  const lost = history.length >= guessLimit && !won;
 
   const reset = () => {
     setTarget(Math.floor(Math.random() * 100) + 1);
     setValue(50);
     setHistory([]);
+    setCurrentPlayer(0);
   };
 
   const submit = () => {
     if (!won && !lost) {
-      if (value === target) onScore(history.length + 1);
-      setHistory((items) => [...items, value]);
+      if (value === target && mode === "solo") onScore(history.length + 1);
+      setHistory((items) => [...items, { value, player: currentPlayer }]);
+      if (mode === "multi" && value !== target) setCurrentPlayer((player) => player === 0 ? 1 : 0);
     }
   };
 
@@ -353,13 +380,14 @@ function NumberHunt({ onBack, onScore }: { onBack: () => void; onScore: (score: 
         <button className="icon-button" onClick={reset} aria-label="Start a new number game">↻</button>
       </header>
       <section className="number-game">
-        <p className="eyebrow">QUICK · 1 PLAYER</p>
+        <p className="eyebrow">QUICK · {mode === "multi" ? "2 PLAYERS" : "1 PLAYER"}</p>
         <h1>Find the secret number.</h1>
-        <p>I picked a number from 1–100. You get seven guesses.</p>
+        <p>{mode === "multi" ? "Take turns guessing from 1–100. First to find the number wins." : "I picked a number from 1–100. You get seven guesses."}</p>
+        {!won && !lost && <TurnBanner mode={mode} currentPlayer={currentPlayer} />}
         <div className={`number-orb ${won ? "number-win" : ""}`} aria-live="polite">
           <span>{won || lost ? target : "?"}</span>
         </div>
-        <h2>{message}</h2>
+        <h2>{won && mode === "multi" ? `Player ${currentPlayer + 1} wins!` : lost && mode === "multi" ? "Draw game." : message}</h2>
         <input aria-label="Your number guess" type="range" min="1" max="100" value={value} onChange={(event) => setValue(Number(event.target.value))} disabled={won || lost} />
         <div className="number-input-row">
           <button onClick={() => setValue((number) => Math.max(1, number - 1))} disabled={won || lost}>−</button>
@@ -368,19 +396,21 @@ function NumberHunt({ onBack, onScore }: { onBack: () => void; onScore: (score: 
         </div>
         <button className="primary-button wide-button" onClick={won || lost ? reset : submit}>{won || lost ? "Play again" : "Lock in guess"}</button>
         <div className="guess-trail">
-          {Array.from({ length: 7 }, (_, index) => <span key={index} className={history[index] === target ? "trail-win" : ""}>{history[index] ?? "·"}</span>)}
+          {Array.from({ length: guessLimit }, (_, index) => <span key={index} className={history[index]?.value === target ? "trail-win" : ""}>{history[index] ? `${mode === "multi" ? `P${history[index].player + 1}·` : ""}${history[index].value}` : "·"}</span>)}
         </div>
       </section>
     </main>
   );
 }
 
-function MemoryGame({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
+function MemoryGame({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
   const makeDeck = useCallback(() => shuffle([...MEMORY_SYMBOLS, ...MEMORY_SYMBOLS]).map((symbol, index) => ({ id: `${symbol}-${index}`, symbol })), []);
   const [cards, setCards] = useState(makeDeck);
   const [open, setOpen] = useState<number[]>([]);
   const [matched, setMatched] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
+  const [currentPlayer, setCurrentPlayer] = useState<0 | 1>(0);
+  const [pairScores, setPairScores] = useState<[number, number]>([0, 0]);
   const complete = matched.length === cards.length;
 
   const reset = () => {
@@ -388,6 +418,8 @@ function MemoryGame({ onBack, onScore }: { onBack: () => void; onScore: (score: 
     setOpen([]);
     setMatched([]);
     setMoves(0);
+    setCurrentPlayer(0);
+    setPairScores([0, 0]);
   };
 
   const flip = (index: number) => {
@@ -398,14 +430,18 @@ function MemoryGame({ onBack, onScore }: { onBack: () => void; onScore: (score: 
       setMoves((count) => count + 1);
       if (cards[next[0]].symbol === cards[next[1]].symbol) {
         window.setTimeout(() => {
+          if (mode === "multi") setPairScores(([playerOne, playerTwo]) => currentPlayer === 0 ? [playerOne + 1, playerTwo] : [playerOne, playerTwo + 1]);
           setMatched((items) => {
             const nextMatched = [...items, ...next];
-            if (nextMatched.length === cards.length) onScore(moves + 1);
+            if (nextMatched.length === cards.length && mode === "solo") onScore(moves + 1);
             return nextMatched;
           });
           setOpen([]);
         }, 450);
-      } else window.setTimeout(() => setOpen([]), 750);
+      } else window.setTimeout(() => {
+        setOpen([]);
+        if (mode === "multi") setCurrentPlayer((player) => player === 0 ? 1 : 0);
+      }, 750);
     }
   };
 
@@ -418,9 +454,10 @@ function MemoryGame({ onBack, onScore }: { onBack: () => void; onScore: (score: 
       </header>
       <section className="memory-game">
         <div className="memory-heading">
-          <div><p className="eyebrow">MEMORY · 1 PLAYER</p><h1>Meet your match.</h1><p>Flip two tiles. Find every pair.</p></div>
+          <div><p className="eyebrow">MEMORY · {mode === "multi" ? "2 PLAYERS" : "1 PLAYER"}</p><h1>Meet your match.</h1><p>{mode === "multi" ? "Take turns. Find a pair to keep your turn and score a point." : "Flip two tiles. Find every pair."}</p></div>
           <div className="moves"><strong>{moves}</strong><span>moves</span></div>
         </div>
+        {!complete && <TurnBanner mode={mode} currentPlayer={currentPlayer} scores={pairScores} />}
         <div className="memory-grid">
           {cards.map((card, index) => {
             const visible = open.includes(index) || matched.includes(index);
@@ -434,7 +471,7 @@ function MemoryGame({ onBack, onScore }: { onBack: () => void; onScore: (score: 
             );
           })}
         </div>
-        {complete && <div className="result-panel" role="status"><div><strong>Perfect pairs!</strong><span>You cleared the board in {moves} moves.</span></div><button className="primary-button" onClick={reset}>Play again</button></div>}
+        {complete && <div className="result-panel" role="status"><div><strong>{mode === "multi" ? pairScores[0] === pairScores[1] ? "Draw game!" : `Player ${pairScores[0] > pairScores[1] ? 1 : 2} wins!` : "Perfect pairs!"}</strong><span>{mode === "multi" ? `Final score ${pairScores[0]}–${pairScores[1]}.` : `You cleared the board in ${moves} moves.`}</span></div><button className="primary-button" onClick={reset}>Play again</button></div>}
       </section>
     </main>
   );
@@ -455,7 +492,7 @@ const GAME_MENUS: Record<LibraryGameId, {
     category: "Logic",
     glyph: "••••",
     color: "coral",
-    players: "1 Player",
+    players: "1–2 Players",
     rules: [
       "Choose four colors. Colors can repeat.",
       "Use the exact and close clues after each guess.",
@@ -468,7 +505,7 @@ const GAME_MENUS: Record<LibraryGameId, {
     category: "Logic",
     glyph: "↔",
     color: "order",
-    players: "1 Player",
+    players: "1–2 Players",
     rules: [
       "A hidden row uses the same four colored objects.",
       "Tap any two objects to switch their positions.",
@@ -481,7 +518,7 @@ const GAME_MENUS: Record<LibraryGameId, {
     category: "Quick play",
     glyph: "42",
     color: "blue",
-    players: "1 Player",
+    players: "1–2 Players",
     rules: [
       "Pick a number from 1 to 100.",
       "Use the higher or lower clue after each guess.",
@@ -494,7 +531,7 @@ const GAME_MENUS: Record<LibraryGameId, {
     category: "Memory",
     glyph: "✦",
     color: "violet",
-    players: "1 Player",
+    players: "1–2 Players",
     rules: [
       "Flip two cards at a time.",
       "Matching cards stay open; other cards flip back.",
@@ -529,8 +566,10 @@ const GAME_MENUS: Record<LibraryGameId, {
   },
 };
 
-function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: () => void; onBack: () => void }) {
+function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
   const details = GAME_MENUS[game];
+  const [selectedMode, setSelectedMode] = useState<GameMode>("solo");
+  const supportsLocalMultiplayer = game !== "meducktion" && game !== "deducktion";
 
   return (
     <main className="game-menu-shell">
@@ -546,11 +585,17 @@ function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: () =>
           <p className="menu-japanese">{details.japanese}</p>
           <h1>{details.title}</h1>
           <div className="menu-meta"><span>{details.players}</span><span>{details.category}</span></div>
+          {supportsLocalMultiplayer && (
+            <div className="mode-picker" aria-label="Choose game mode">
+              <button className={selectedMode === "solo" ? "active" : ""} onClick={() => setSelectedMode("solo")}><b>一</b><span>SOLO<small>1 PLAYER</small></span></button>
+              <button className={selectedMode === "multi" ? "active" : ""} onClick={() => setSelectedMode("multi")}><b>対</b><span>VERSUS<small>2 PLAYERS</small></span></button>
+            </div>
+          )}
           <div className="menu-rules">
             <h2>How to play <span>遊び方</span></h2>
             <ol>{details.rules.map((rule, index) => <li key={rule}><b>{index + 1}</b><span>{rule}</span></li>)}</ol>
           </div>
-          <button className="primary-button menu-start" onClick={onPlay}>Start Game <span>→</span></button>
+          <button className="primary-button menu-start" onClick={() => onPlay(selectedMode)}>Start {supportsLocalMultiplayer && selectedMode === "multi" ? "Versus" : "Game"} <span>→</span></button>
         </div>
       </section>
     </main>
@@ -881,6 +926,7 @@ function AppHome({
 
 export default function Home() {
   const [game, setGame] = useState<GameId>("games");
+  const [gameMode, setGameMode] = useState<GameMode>("solo");
   const [highScores, setHighScores] = useState<HighScores>({});
   const [profileName, setProfileName] = useState("Player One");
   const [avatarId, setAvatarId] = useState<AvatarId>("play");
@@ -1159,21 +1205,21 @@ export default function Home() {
   })), [friends, friendProfiles]);
 
   const view = useMemo(() => {
-    if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={() => selectGame("codebreaker")} onBack={() => selectGame("games")} />;
-    if (game === "order-menu") return <GameMenu game="order" onPlay={() => selectGame("order")} onBack={() => selectGame("games")} />;
-    if (game === "number-menu") return <GameMenu game="number" onPlay={() => selectGame("number")} onBack={() => selectGame("games")} />;
-    if (game === "memory-menu") return <GameMenu game="memory" onPlay={() => selectGame("memory")} onBack={() => selectGame("games")} />;
+    if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={(mode) => { setGameMode(mode); selectGame("codebreaker"); }} onBack={() => selectGame("games")} />;
+    if (game === "order-menu") return <GameMenu game="order" onPlay={(mode) => { setGameMode(mode); selectGame("order"); }} onBack={() => selectGame("games")} />;
+    if (game === "number-menu") return <GameMenu game="number" onPlay={(mode) => { setGameMode(mode); selectGame("number"); }} onBack={() => selectGame("games")} />;
+    if (game === "memory-menu") return <GameMenu game="memory" onPlay={(mode) => { setGameMode(mode); selectGame("memory"); }} onBack={() => selectGame("games")} />;
     if (game === "meducktion-menu") return <GameMenu game="meducktion" onPlay={() => selectGame("meducktion")} onBack={() => selectGame("games")} />;
     if (game === "deducktion-menu") return <GameMenu game="deducktion" onPlay={() => selectGame("deducktion")} onBack={() => selectGame("games")} />;
-    if (game === "codebreaker") return <Codebreaker onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
-    if (game === "order") return <OrderMatch onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
-    if (game === "number") return <NumberHunt onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
-    if (game === "memory") return <MemoryGame onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
+    if (game === "codebreaker") return <Codebreaker mode={gameMode} onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
+    if (game === "order") return <OrderMatch mode={gameMode} onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
+    if (game === "number") return <NumberHunt mode={gameMode} onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
+    if (game === "memory") return <MemoryGame mode={gameMode} onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
     return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} onAddFriend={addFriend} onRemoveFriend={removeFriend} />;
-  }, [game, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, addFriend, removeFriend]);
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, addFriend, removeFriend]);
 
   return view;
 }
