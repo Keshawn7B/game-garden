@@ -9,13 +9,13 @@ async function render() {
   return worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
 }
 
-test("server-renders the Pocket Play game hub", async () => {
+test("server-renders the Game Garden hub", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Pocket Play/);
+  assert.match(html, /Game Garden/);
   assert.match(html, /Games/);
-  assert.match(html, /ポケットプレイ/);
+  assert.match(html, /ゲームガーデン/);
   assert.match(html, /ゲーム/);
   assert.doesNotMatch(html, /POCKET ARCADE|SMALL GAMES|HOW TO PLAY|ポケットアーケード/);
   assert.match(html, /Codebreaker/);
@@ -27,7 +27,8 @@ test("server-renders the Pocket Play game hub", async () => {
   assert.match(html, /App navigation/);
   assert.match(html, /Ranks/);
   assert.match(html, /Profile/);
-  assert.match(html, /og-app-v2\.png/);
+  assert.match(html, /og-game-garden\.png/);
+  assert.doesNotMatch(html, /Pocket Play|POCKET PLAY|ポケットプレイ/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 

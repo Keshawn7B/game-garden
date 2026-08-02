@@ -101,7 +101,7 @@ function Codebreaker({ onBack, onScore }: { onBack: () => void; onScore: (score:
     <main className="game-shell codebreaker-shell">
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
         <button className="icon-button" onClick={reset} aria-label="Start a new code">↻</button>
       </header>
 
@@ -222,7 +222,7 @@ function OrderMatch({ onBack, onScore }: { onBack: () => void; onScore: (score: 
     <main className="game-shell order-shell">
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
         <button className="icon-button" onClick={reset} aria-label="Start a new order">↻</button>
       </header>
 
@@ -304,7 +304,7 @@ function NumberHunt({ onBack, onScore }: { onBack: () => void; onScore: (score: 
     <main className="game-shell number-shell">
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
         <button className="icon-button" onClick={reset} aria-label="Start a new number game">↻</button>
       </header>
       <section className="number-game">
@@ -368,7 +368,7 @@ function MemoryGame({ onBack, onScore }: { onBack: () => void; onScore: (score: 
     <main className="game-shell memory-shell">
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
         <button className="icon-button" onClick={reset} aria-label="Shuffle and restart">↻</button>
       </header>
       <section className="memory-game">
@@ -491,7 +491,7 @@ function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: () =>
     <main className="game-menu-shell">
       <header className="game-topbar menu-topbar">
         <button className="back-button" onClick={onBack}>← Games</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
         <span className="menu-header-spacer" aria-hidden="true" />
       </header>
       <section className="game-menu">
@@ -571,7 +571,7 @@ function AppHome({
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div className="wordmark"><span className="brand-dot">P</span><span><b>POCKET PLAY</b><small>ポケットプレイ</small></span></div>
+        <div className="wordmark"><span className="brand-dot">G</span><span><b>GAME GARDEN</b><small>ゲームガーデン</small></span></div>
         <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
           <PlayerAvatar small />
         </button>

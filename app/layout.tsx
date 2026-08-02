@@ -10,15 +10,15 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = incoming.get("x-forwarded-host") ?? incoming.get("host") ?? "pocket-play-arcade.kfuture.chatgpt.site";
   const protocol = incoming.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const baseUrl = new URL(`${protocol}://${host}`);
-  const title = "Pocket Play | ポケットプレイ";
+  const title = "Game Garden | ゲームガーデン";
   const description = "Pocket-sized logic, memory, medical deduction, and multiplayer identity games in one app.";
 
   return {
     metadataBase: baseUrl,
     title,
     description,
-    openGraph: { title, description, type: "website", images: [{ url: "/og-app-v2.png", width: 1774, height: 887, alt: "Pocket Play app and its four games" }] },
-    twitter: { card: "summary_large_image", title, description, images: ["/og-app-v2.png"] },
+    openGraph: { title, description, type: "website", images: [{ url: "/og-game-garden.png", width: 1774, height: 887, alt: "Game Garden arcade app" }] },
+    twitter: { card: "summary_large_image", title, description, images: ["/og-game-garden.png"] },
   };
 }
 
