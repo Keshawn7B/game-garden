@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
@@ -551,6 +551,18 @@ function formatScore(game: PlayableGameId, score?: number) {
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
+function friendlyAuthError(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  if (code === "auth/email-already-in-use") return "That email already has an account. Sign in instead.";
+  if (code === "auth/invalid-credential") return "The email or password is incorrect.";
+  if (code === "auth/invalid-email") return "Enter a valid email address.";
+  if (code === "auth/weak-password") return "Use a password with at least 6 characters.";
+  if (code === "auth/too-many-requests") return "Too many attempts. Wait a moment and try again.";
+  if (code === "auth/unauthorized-domain") return "This Game Garden address must be added to Firebase authorized domains.";
+  if (code === "auth/operation-not-allowed") return "This sign-in method still needs to be enabled in Firebase.";
+  return error instanceof Error ? error.message : "Could not sign in.";
+}
+
 async function saveCloudScore(user: User, gameId: PlayableGameId, score: number, profileName: string) {
   const entryRef = doc(db, "leaderboards", gameId, "entries", user.uid);
   const profileRef = doc(db, "users", user.uid);
@@ -587,6 +599,8 @@ function AppHome({
   authLoading,
   authError,
   onSignIn,
+  onEmailSignIn,
+  onEmailCreate,
   onSignOut,
   leaderboards,
 }: {
@@ -601,12 +615,16 @@ function AppHome({
   authLoading: boolean;
   authError: string;
   onSignIn: () => void;
+  onEmailSignIn: (email: string, password: string) => void;
+  onEmailCreate: (email: string, password: string) => void;
   onSignOut: () => void;
   leaderboards: Leaderboards;
 }) {
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
   const [rankGame, setRankGame] = useState<PlayableGameId>("codebreaker");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const activeRanks = leaderboards[rankGame] ?? [];
 
   return (
@@ -687,7 +705,18 @@ function AppHome({
               <span className="local-badge">{firebaseUser ? "CLOUD PROFILE" : "GUEST PROFILE"}</span>
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <div className="profile-actions">
-                {firebaseUser ? <><button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button></> : <button className="primary-button google-button" onClick={onSignIn} disabled={authLoading}>{authLoading ? "Connecting…" : "Continue with Google"}</button>}
+                {firebaseUser ? <><button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button></> : <>
+                  <div className="email-auth-fields">
+                    <input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="Email address" aria-label="Email address" autoComplete="email" />
+                    <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="Password" aria-label="Password" autoComplete="current-password" minLength={6} />
+                  </div>
+                  <div className="email-auth-actions">
+                    <button className="primary-button" onClick={() => onEmailSignIn(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 6}>Sign in</button>
+                    <button className="secondary-button" onClick={() => onEmailCreate(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 6}>Create account</button>
+                  </div>
+                  <span className="auth-divider">OR</span>
+                  <button className="primary-button google-button" onClick={onSignIn} disabled={authLoading}>{authLoading ? "Connecting…" : "Continue with Google"}</button>
+                </>}
               </div>
             </div>
             <div className="profile-stats">
@@ -734,7 +763,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    void getRedirectResult(auth).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not finish sign in."));
+    void getRedirectResult(auth).catch((error: unknown) => setAuthError(friendlyAuthError(error)));
     return onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       setAuthLoading(false);
@@ -818,6 +847,7 @@ export default function Home() {
         photoURL: firebaseUser.photoURL || "",
         updatedAt: serverTimestamp(),
       }, { merge: true });
+      await updateProfile(firebaseUser, { displayName });
       const batch = writeBatch(db);
       for (const [gameId, score] of Object.entries(highScores) as [PlayableGameId, number][]) {
         batch.set(doc(db, "leaderboards", gameId, "entries", firebaseUser.uid), {
@@ -843,11 +873,45 @@ export default function Home() {
     } catch (error: unknown) {
       const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
       if (code === "auth/popup-blocked") await signInWithRedirect(auth, googleProvider);
-      else setAuthError(error instanceof Error ? error.message : "Could not sign in with Google.");
+      else setAuthError(friendlyAuthError(error));
     } finally {
       setAuthLoading(false);
     }
   }, []);
+
+  const emailSignIn = useCallback(async (email: string, password: string) => {
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (error) {
+      setAuthError(friendlyAuthError(error));
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  const emailCreate = useCallback(async (email: string, password: string) => {
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const displayName = profileName.trim() || email.split("@")[0] || "Player One";
+      await updateProfile(credential.user, { displayName });
+      await setDoc(doc(db, "users", credential.user.uid), {
+        uid: credential.user.uid,
+        displayName,
+        photoURL: "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      setProfileName(displayName);
+    } catch (error) {
+      setAuthError(friendlyAuthError(error));
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [profileName]);
 
   const signOutProfile = useCallback(() => {
     void signOut(auth).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not sign out."));
@@ -867,8 +931,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} onProfileNameChange={updateProfileName} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onSignOut={signOutProfile} leaderboards={leaderboards} />;
-  }, [game, highScores, profileName, recordScore, updateProfileName, saveProfile, firebaseUser, authLoading, authError, signIn, signOutProfile, leaderboards]);
+    return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} onProfileNameChange={updateProfileName} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} />;
+  }, [game, highScores, profileName, recordScore, updateProfileName, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards]);
 
   return view;
 }

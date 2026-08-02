@@ -58,6 +58,9 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /activeTab === "leaderboard"/);
   assert.match(source, /activeTab === "profile"/);
   assert.match(source, /Continue with Google/);
+  assert.match(source, /Create account/);
+  assert.match(source, /signInWithEmailAndPassword/);
+  assert.match(source, /createUserWithEmailAndPassword/);
   assert.match(source, /onAuthStateChanged/);
   assert.match(source, /saveCloudScore/);
   assert.match(source, /<p>GLOBAL<\/p><h1>Leaderboard/);
