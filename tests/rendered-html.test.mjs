@@ -100,8 +100,15 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /onRespondInvite/);
   assert.match(source, /ROOM READY/);
   assert.match(source, /nav-invite-badge/);
+  assert.match(source, /const HEADER_META/);
+  assert.match(source, /className="header-seal"/);
+  assert.match(source, /className="header-context"/);
+  assert.match(source, /className="app-error-banner"/);
   assert.match(styles, /\.invite-center/);
   assert.match(styles, /\.friend-invite-picker/);
+  assert.match(styles, /\.header-invites/);
+  assert.match(styles, /\.header-online/);
+  assert.equal((styles.match(/\.hub-nav\{height:65px/g) ?? []).length, 1);
   assert.match(styles, /data-theme="sakura"/);
   assert.match(styles, /content:"桜"/);
   assert.doesNotMatch(styles, /data-theme="sakura"[^}]*\.bottom-nav[^}]*position:relative/);

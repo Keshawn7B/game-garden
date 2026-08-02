@@ -36,6 +36,12 @@ type GameInvite = {
 };
 
 const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: string }> = {
+  games: { label: "ARCADE", japanese: "ゲーム", glyph: "遊" },
+  leaderboard: { label: "RANKS", japanese: "ランキング", glyph: "冠" },
+  friends: { label: "SOCIAL", japanese: "フレンド", glyph: "友" },
+  profile: { label: "PLAYER", japanese: "プロフィール", glyph: "人" },
+};
 
 const AVATARS: { id: AvatarId; glyph: string; label: string }[] = [
   { id: "play", glyph: "遊", label: "Play" },
@@ -794,6 +800,7 @@ function AppHome({
   const liveIncoming = incomingInvites.filter(inviteIsLive);
   const liveOutgoing = outgoingInvites.filter(inviteIsLive);
   const readyInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.status === "accepted" && all.findIndex((item) => item.id === invite.id) === index);
+  const currentHeader = HEADER_META[activeTab];
 
   const submitFriend = async () => {
     setFriendBusy(true);
@@ -821,11 +828,18 @@ function AppHome({
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div className="wordmark"><span className="brand-dot">G</span><span><b>GAME GARDEN</b><small>ゲームガーデン</small></span></div>
+        <button className="header-brand" onClick={() => onTabChange("games")} aria-label="Open Game Garden games">
+          <span className="header-seal">園<small>GG</small></span>
+          <span className="header-brand-copy"><b>GAME GARDEN</b><small>遊びの庭 · PLAY TOGETHER</small></span>
+        </button>
+        <div className="header-context" aria-label={`${currentHeader.label} section`}><span>{currentHeader.glyph}</span><div><small>{currentHeader.japanese}</small><strong>{currentHeader.label}</strong></div></div>
         <div className="header-actions">
+          {firebaseUser && <span className="header-online"><i />ONLINE</span>}
+          {liveIncoming.length > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${liveIncoming.length} pending game invites`}><b>招</b><span>{liveIncoming.length}</span></button>}
           <button className="theme-toggle" onClick={onThemeToggle} aria-label="Toggle Sakura Mode" aria-pressed={theme === "sakura"}><b>桜</b><span>MODE</span></button>
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
             <PlayerAvatar small avatarId={avatarId} />
+            <i className={firebaseUser ? "is-online" : ""} />
           </button>
         </div>
       </header>
@@ -838,6 +852,7 @@ function AppHome({
             <em>VIEW</em>
           </button>
         )}
+        {authError && activeTab !== "profile" && <p className="app-error-banner" role="alert"><b>!</b><span>{authError}</span></p>}
         {activeTab === "games" && (
           <section className="app-panel games-panel">
             <div className="app-title"><div><p>PLAY</p><h1>Games <span>ゲーム</span></h1></div><strong>{GAMES.length}<small>GAMES</small></strong></div>
@@ -1048,21 +1063,26 @@ export default function Home() {
   useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
     onPopState();
-    try {
-      const savedScores = window.localStorage.getItem("pocket-play-scores");
-      const savedName = window.localStorage.getItem("pocket-play-name");
-      const savedAvatar = window.localStorage.getItem("game-garden-avatar");
-      const savedTheme = window.localStorage.getItem("game-garden-theme");
-      if (savedScores) setHighScores(JSON.parse(savedScores));
-      if (savedName) setProfileName(savedName);
-      if (isAvatarId(savedAvatar)) setAvatarId(savedAvatar);
-      if (savedTheme === "sakura") {
-        setTheme("sakura");
-        document.documentElement.dataset.theme = "sakura";
-      } else delete document.documentElement.dataset.theme;
-    } catch { /* Device storage may be unavailable. */ }
+    const restoreTimer = window.setTimeout(() => {
+      try {
+        const savedScores = window.localStorage.getItem("pocket-play-scores");
+        const savedName = window.localStorage.getItem("pocket-play-name");
+        const savedAvatar = window.localStorage.getItem("game-garden-avatar");
+        const savedTheme = window.localStorage.getItem("game-garden-theme");
+        if (savedScores) setHighScores(JSON.parse(savedScores));
+        if (savedName) setProfileName(savedName);
+        if (isAvatarId(savedAvatar)) setAvatarId(savedAvatar);
+        if (savedTheme === "sakura") {
+          setTheme("sakura");
+          document.documentElement.dataset.theme = "sakura";
+        } else delete document.documentElement.dataset.theme;
+      } catch { /* Device storage may be unavailable. */ }
+    }, 0);
     window.addEventListener("hashchange", onPopState);
-    return () => window.removeEventListener("hashchange", onPopState);
+    return () => {
+      window.clearTimeout(restoreTimer);
+      window.removeEventListener("hashchange", onPopState);
+    };
   }, []);
 
   useEffect(() => {
@@ -1071,7 +1091,13 @@ export default function Home() {
       setFirebaseUser(user);
       setAuthLoading(false);
       setAuthError("");
-      if (!user) return;
+      if (!user) {
+        setFriends([]);
+        setFriendProfiles({});
+        setIncomingInvites([]);
+        setOutgoingInvites([]);
+        return;
+      }
 
       try {
         const profileRef = doc(db, "users", user.uid);
@@ -1114,21 +1140,14 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!firebaseUser) {
-      setFriends([]);
-      return;
-    }
+    if (!firebaseUser) return;
     return onSnapshot(collection(db, "users", firebaseUser.uid, "friends"), (snapshot) => {
       setFriends(snapshot.docs.map((friend) => friend.data() as FriendEntry).sort((a, b) => a.name.localeCompare(b.name)));
     }, () => setAuthError("Could not load the friend list."));
   }, [firebaseUser]);
 
   useEffect(() => {
-    if (!firebaseUser) {
-      setIncomingInvites([]);
-      setOutgoingInvites([]);
-      return;
-    }
+    if (!firebaseUser) return;
     const byNewest = (left: GameInvite, right: GameInvite) => (right.updatedAt?.toMillis() ?? 0) - (left.updatedAt?.toMillis() ?? 0);
     const incomingUnsubscribe = onSnapshot(query(collection(db, "invites"), where("toUid", "==", firebaseUser.uid)), (snapshot) => {
       setIncomingInvites(snapshot.docs.map((invite) => ({ ...invite.data(), id: invite.id } as GameInvite)).sort(byNewest));
@@ -1143,7 +1162,6 @@ export default function Home() {
   }, [firebaseUser]);
 
   useEffect(() => {
-    setFriendProfiles({});
     if (!friends.length) return;
     const unsubscribers = friends.map((friend) => onSnapshot(doc(db, "publicProfiles", friend.uid), (snapshot) => {
       if (!snapshot.exists()) return;
