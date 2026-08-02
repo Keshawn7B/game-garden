@@ -5,7 +5,7 @@ import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, 
 import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "rps" | "dice";
 type ExternalGameId = "meducktion" | "deducktion";
 type LibraryGameId = PlayableGameId | ExternalGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "profile";
@@ -521,6 +521,188 @@ function MemoryGame({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
   );
 }
 
+type TicMark = "" | "X" | "O";
+const TIC_LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+
+function ticWinner(board: TicMark[]) {
+  for (const [a, b, c] of TIC_LINES) if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+  return "";
+}
+
+function cpuTicMove(board: TicMark[]) {
+  const open = board.map((mark, index) => mark ? -1 : index).filter((index) => index >= 0);
+  for (const mark of ["O", "X"] as TicMark[]) {
+    const winning = open.find((index) => ticWinner(board.map((cell, cellIndex) => cellIndex === index ? mark : cell)) === mark);
+    if (winning != null) return winning;
+  }
+  if (!board[4]) return 4;
+  const corners = open.filter((index) => [0, 2, 6, 8].includes(index));
+  return (corners.length ? corners : open)[Math.floor(Math.random() * (corners.length ? corners.length : open.length))];
+}
+
+function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
+  const [board, setBoard] = useState<TicMark[]>(Array(9).fill(""));
+  const [turn, setTurn] = useState<TicMark>("X");
+  const winner = ticWinner(board);
+  const draw = !winner && board.every(Boolean);
+
+  const reset = () => { setBoard(Array(9).fill("")); setTurn("X"); };
+  const play = (index: number) => {
+    if (board[index] || winner || draw) return;
+    const next = board.map((cell, cellIndex) => cellIndex === index ? turn : cell);
+    if (mode === "multi") {
+      setBoard(next);
+      setTurn(turn === "X" ? "O" : "X");
+      return;
+    }
+    if (ticWinner(next) === "X") {
+      setBoard(next);
+      onScore(next.filter((mark) => mark === "X").length);
+      return;
+    }
+    const cpuIndex = cpuTicMove(next);
+    setBoard(cpuIndex == null ? next : next.map((cell, cellIndex) => cellIndex === cpuIndex ? "O" : cell));
+  };
+
+  return (
+    <main className="game-shell simple-game-shell">
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div><button className="icon-button" onClick={reset} aria-label="Restart tic tac toe">↻</button></header>
+      <section className="simple-game tic-game">
+        <p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
+        <h1>Tic Tac Toe</h1>
+        <p>Make three in a row before your opponent.</p>
+        {!winner && !draw && <TurnBanner mode={mode} currentPlayer={turn === "X" ? 0 : 1} />}
+        <div className="tic-board" aria-label="Tic tac toe board">
+          {board.map((mark, index) => <button key={index} className={mark ? `tic-${mark.toLowerCase()}` : ""} onClick={() => play(index)} aria-label={`Square ${index + 1}${mark ? `: ${mark}` : ""}`}>{mark}</button>)}
+        </div>
+        <div className="simple-status" role="status"><strong>{winner ? mode === "multi" ? `Player ${winner === "X" ? 1 : 2} wins!` : winner === "X" ? "You win!" : "CPU wins." : draw ? "Draw game." : mode === "multi" ? `Player ${turn === "X" ? 1 : 2}'s turn` : "You are X"}</strong><span>{winner || draw ? "Ready for another round?" : "Tap an open square."}</span></div>
+        {(winner || draw) && <button className="primary-button simple-reset" onClick={reset}>Play again</button>}
+      </section>
+    </main>
+  );
+}
+
+const RPS_CHOICES = [
+  { id: "rock", symbol: "✊", label: "Rock" },
+  { id: "paper", symbol: "✋", label: "Paper" },
+  { id: "scissors", symbol: "✌", label: "Scissors" },
+] as const;
+type RpsChoice = (typeof RPS_CHOICES)[number]["id"];
+
+function rpsWinner(first: RpsChoice, second: RpsChoice) {
+  if (first === second) return -1;
+  return (first === "rock" && second === "scissors") || (first === "paper" && second === "rock") || (first === "scissors" && second === "paper") ? 0 : 1;
+}
+
+function randomRpsChoice(): RpsChoice {
+  return RPS_CHOICES[Math.floor(Math.random() * RPS_CHOICES.length)].id;
+}
+
+function RockPaperScissors({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
+  const [scores, setScores] = useState<[number, number]>([0, 0]);
+  const [pending, setPending] = useState<RpsChoice | null>(null);
+  const [rounds, setRounds] = useState(0);
+  const [message, setMessage] = useState(mode === "multi" ? "Player 1, choose in secret." : "Choose your move.");
+  const gameOver = scores[0] >= 3 || scores[1] >= 3;
+
+  const reset = () => { setScores([0, 0]); setPending(null); setRounds(0); setMessage(mode === "multi" ? "Player 1, choose in secret." : "Choose your move."); };
+  const choose = (choice: RpsChoice) => {
+    if (gameOver) return;
+    if (mode === "multi" && !pending) {
+      setPending(choice);
+      setMessage("Choice locked. Pass to Player 2.");
+      return;
+    }
+    const opponent = mode === "multi" ? choice : randomRpsChoice();
+    const player = mode === "multi" ? pending! : choice;
+    const result = rpsWinner(player, opponent);
+    const nextScores: [number, number] = [...scores];
+    if (result >= 0) nextScores[result] += 1;
+    const playerLabel = RPS_CHOICES.find((item) => item.id === player)!.label;
+    const opponentLabel = RPS_CHOICES.find((item) => item.id === opponent)!.label;
+    setScores(nextScores);
+    setRounds((count) => count + 1);
+    setPending(null);
+    setMessage(result < 0 ? `${playerLabel} ties ${opponentLabel}.` : mode === "multi" ? `Player ${result + 1} wins: ${playerLabel} vs ${opponentLabel}.` : result === 0 ? `${playerLabel} beats ${opponentLabel}.` : `${opponentLabel} beats ${playerLabel}.`);
+    if (mode === "solo" && nextScores[0] === 3) onScore(rounds + 1);
+  };
+
+  return (
+    <main className="game-shell simple-game-shell">
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div><button className="icon-button" onClick={reset} aria-label="Restart rock paper scissors">↻</button></header>
+      <section className="simple-game rps-game">
+        <p className="eyebrow">QUICK · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
+        <h1>Rock Paper Scissors</h1>
+        <p>First to three points wins the match.</p>
+        {!gameOver && <TurnBanner mode={mode} currentPlayer={pending ? 1 : 0} scores={scores} />}
+        <div className="duel-score"><div><span>{mode === "multi" ? "PLAYER 1" : "YOU"}</span><strong>{scores[0]}</strong></div><b>VS</b><div><span>{mode === "multi" ? "PLAYER 2" : "CPU"}</span><strong>{scores[1]}</strong></div></div>
+        <div className="rps-choices">{RPS_CHOICES.map((choice) => <button key={choice.id} onClick={() => choose(choice.id)} disabled={gameOver}><b>{choice.symbol}</b><span>{choice.label}</span></button>)}</div>
+        <div className="simple-status" role="status"><strong>{gameOver ? scores[0] > scores[1] ? mode === "multi" ? "Player 1 wins!" : "You win!" : mode === "multi" ? "Player 2 wins!" : "CPU wins." : message}</strong><span>{gameOver ? `Final score ${scores[0]}–${scores[1]}.` : `Round ${rounds + 1}`}</span></div>
+        {gameOver && <button className="primary-button simple-reset" onClick={reset}>Play again</button>}
+      </section>
+    </main>
+  );
+}
+
+const DICE_FACES = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+
+function rollDie() {
+  return Math.floor(Math.random() * 6) + 1;
+}
+
+function DiceRace({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
+  const [positions, setPositions] = useState<[number, number]>([0, 0]);
+  const [faces, setFaces] = useState<[number, number]>([0, 0]);
+  const [currentPlayer, setCurrentPlayer] = useState<0 | 1>(0);
+  const [rolls, setRolls] = useState(0);
+  const winner = positions[0] >= 20 ? 0 : positions[1] >= 20 ? 1 : null;
+
+  const reset = () => { setPositions([0, 0]); setFaces([0, 0]); setCurrentPlayer(0); setRolls(0); };
+  const roll = () => {
+    if (winner != null) return;
+    const playerRoll = rollDie();
+    if (mode === "multi") {
+      const next: [number, number] = [...positions];
+      next[currentPlayer] += playerRoll;
+      setPositions(next);
+      setFaces((previous) => currentPlayer === 0 ? [playerRoll, previous[1]] : [previous[0], playerRoll]);
+      setRolls((count) => count + 1);
+      setCurrentPlayer(currentPlayer === 0 ? 1 : 0);
+      return;
+    }
+    const nextPlayer = positions[0] + playerRoll;
+    const nextRolls = rolls + 1;
+    if (nextPlayer >= 20) {
+      setPositions([nextPlayer, positions[1]]);
+      setFaces([playerRoll, faces[1]]);
+      setRolls(nextRolls);
+      onScore(nextRolls);
+      return;
+    }
+    const cpuRoll = rollDie();
+    setPositions([nextPlayer, positions[1] + cpuRoll]);
+    setFaces([playerRoll, cpuRoll]);
+    setRolls(nextRolls);
+  };
+
+  return (
+    <main className="game-shell simple-game-shell">
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div><button className="icon-button" onClick={reset} aria-label="Restart dice race">↻</button></header>
+      <section className="simple-game dice-game">
+        <p className="eyebrow">LUCK · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
+        <h1>Dice Race</h1>
+        <p>Roll to race to 20. The first player across wins.</p>
+        {winner == null && <TurnBanner mode={mode} currentPlayer={currentPlayer} />}
+        <div className="dice-racers">
+          {positions.map((position, index) => <div key={index}><span>{mode === "solo" && index === 1 ? "CPU" : `PLAYER ${index + 1}`}</span><b>{faces[index] ? DICE_FACES[faces[index] - 1] : "□"}</b><strong>{Math.min(position, 20)}<small>/20</small></strong><i><em style={{ width: `${Math.min(position / 20 * 100, 100)}%` }} /></i></div>)}
+        </div>
+        <button className="primary-button dice-roll" onClick={winner == null ? roll : reset}>{winner == null ? `Roll ${mode === "multi" ? `for Player ${currentPlayer + 1}` : "the dice"}` : "Play again"}</button>
+        <div className="simple-status" role="status"><strong>{winner == null ? mode === "multi" ? `Player ${currentPlayer + 1}'s roll` : "Your roll also rolls for the CPU." : mode === "solo" ? winner === 0 ? "You win!" : "CPU wins." : `Player ${winner + 1} wins!`}</strong><span>{rolls} {rolls === 1 ? "roll" : "rolls"} played</span></div>
+      </section>
+    </main>
+  );
+}
+
 const GAME_MENUS: Record<LibraryGameId, {
   title: string;
   japanese: string;
@@ -580,6 +762,45 @@ const GAME_MENUS: Record<LibraryGameId, {
       "Flip two cards at a time.",
       "Matching cards stay open; other cards flip back.",
       "Clear every pair in as few moves as possible.",
+    ],
+  },
+  tictactoe: {
+    title: "Tic Tac Toe",
+    japanese: "三目並べ",
+    category: "Strategy",
+    glyph: "X○",
+    color: "tic",
+    players: "1–2 Players",
+    rules: [
+      "Place your mark in any open square.",
+      "Make a row of three across, down, or diagonally.",
+      "Play against the CPU or pass the device to a friend.",
+    ],
+  },
+  rps: {
+    title: "Rock Paper Scissors",
+    japanese: "じゃんけん",
+    category: "Quick play",
+    glyph: "RPS",
+    color: "rps",
+    players: "1–2 Players",
+    rules: [
+      "Rock beats scissors, scissors beat paper, and paper beats rock.",
+      "In Versus mode, each player chooses in secret.",
+      "The first player to score three points wins.",
+    ],
+  },
+  dice: {
+    title: "Dice Race",
+    japanese: "サイコロ競走",
+    category: "Luck",
+    glyph: "⚄",
+    color: "dice",
+    players: "1–2 Players",
+    rules: [
+      "Roll the die to move along the race track.",
+      "Solo mode automatically rolls once for the CPU.",
+      "Be the first player to reach 20 spaces.",
     ],
   },
   meducktion: {
@@ -670,13 +891,18 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "order", number: "02", name: "Order Match", japanese: "並べ替え", meta: "LOGIC", scoreGame: "order" },
   { id: "number", number: "03", name: "Number Hunt", japanese: "数字探し", meta: "QUICK", scoreGame: "number" },
   { id: "memory", number: "04", name: "Memory Flip", japanese: "記憶", meta: "MEMORY", scoreGame: "memory" },
-  { id: "meducktion", number: "05", name: "Meducktion", japanese: "医学推理", meta: "CARD GAME" },
-  { id: "deducktion", number: "06", name: "Deducktion", japanese: "正体推理", meta: "CARD GAME" },
+  { id: "tictactoe", number: "05", name: "Tic Tac Toe", japanese: "三目並べ", meta: "STRATEGY", scoreGame: "tictactoe" },
+  { id: "rps", number: "06", name: "Rock Paper Scissors", japanese: "じゃんけん", meta: "QUICK", scoreGame: "rps" },
+  { id: "dice", number: "07", name: "Dice Race", japanese: "サイコロ競走", meta: "LUCK", scoreGame: "dice" },
+  { id: "meducktion", number: "08", name: "Meducktion", japanese: "医学推理", meta: "CARD GAME" },
+  { id: "deducktion", number: "09", name: "Deducktion", japanese: "正体推理", meta: "CARD GAME" },
 ];
+
+const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "rps", "dice"];
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
-  const unit = game === "memory" ? "moves" : game === "order" ? "checks" : "guesses";
+  const unit = game === "memory" || game === "tictactoe" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
@@ -1176,7 +1402,7 @@ export default function Home() {
         const savedScores = window.localStorage.getItem("pocket-play-scores");
         const localScores = savedScores ? JSON.parse(savedScores) as HighScores : {};
         const mergedScores = { ...cloudScores };
-        for (const gameId of ["codebreaker", "order", "number", "memory"] as PlayableGameId[]) {
+        for (const gameId of SCORE_GAME_IDS) {
           const local = localScores[gameId];
           const cloud = cloudScores[gameId];
           if (local != null && (cloud == null || local < cloud)) {
@@ -1246,8 +1472,7 @@ export default function Home() {
   }, [friends]);
 
   useEffect(() => {
-    const games: PlayableGameId[] = ["codebreaker", "order", "number", "memory"];
-    const unsubscribers = games.map((gameId) => onSnapshot(
+    const unsubscribers = SCORE_GAME_IDS.map((gameId) => onSnapshot(
       query(collection(db, "leaderboards", gameId, "entries"), orderBy("score", "asc"), limit(10)),
       (snapshot) => setLeaderboards((previous) => ({ ...previous, [gameId]: snapshot.docs.map((entry) => entry.data() as LeaderboardEntry) })),
       () => undefined,
@@ -1472,12 +1697,18 @@ export default function Home() {
     if (game === "order-menu") return <GameMenu game="order" onPlay={(mode) => { setGameMode(mode); selectGame("order"); }} onBack={() => selectGame("games")} />;
     if (game === "number-menu") return <GameMenu game="number" onPlay={(mode) => { setGameMode(mode); selectGame("number"); }} onBack={() => selectGame("games")} />;
     if (game === "memory-menu") return <GameMenu game="memory" onPlay={(mode) => { setGameMode(mode); selectGame("memory"); }} onBack={() => selectGame("games")} />;
+    if (game === "tictactoe-menu") return <GameMenu game="tictactoe" onPlay={(mode) => { setGameMode(mode); selectGame("tictactoe"); }} onBack={() => selectGame("games")} />;
+    if (game === "rps-menu") return <GameMenu game="rps" onPlay={(mode) => { setGameMode(mode); selectGame("rps"); }} onBack={() => selectGame("games")} />;
+    if (game === "dice-menu") return <GameMenu game="dice" onPlay={(mode) => { setGameMode(mode); selectGame("dice"); }} onBack={() => selectGame("games")} />;
     if (game === "meducktion-menu") return <GameMenu game="meducktion" onPlay={() => selectGame("meducktion")} onBack={() => selectGame("games")} />;
     if (game === "deducktion-menu") return <GameMenu game="deducktion" onPlay={() => selectGame("deducktion")} onBack={() => selectGame("games")} />;
     if (game === "codebreaker") return <Codebreaker mode={gameMode} onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode={gameMode} onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
     if (game === "number") return <NumberHunt mode={gameMode} onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
     if (game === "memory") return <MemoryGame mode={gameMode} onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
+    if (game === "tictactoe") return <TicTacToe mode={gameMode} onBack={() => selectGame("tictactoe-menu")} onScore={(score) => recordScore("tictactoe", score)} />;
+    if (game === "rps") return <RockPaperScissors mode={gameMode} onBack={() => selectGame("rps-menu")} onScore={(score) => recordScore("rps", score)} />;
+    if (game === "dice") return <DiceRace mode={gameMode} onBack={() => selectGame("dice-menu")} onScore={(score) => recordScore("dice", score)} />;
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";

@@ -41,6 +41,9 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /order-menu/);
   assert.match(source, /number-menu/);
   assert.match(source, /memory-menu/);
+  assert.match(source, /tictactoe-menu/);
+  assert.match(source, /rps-menu/);
+  assert.match(source, /dice-menu/);
   assert.match(source, /meducktion-menu/);
   assert.match(source, /deducktion-menu/);
   assert.match(source, /function GameMenu/);
@@ -55,6 +58,9 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /className="menu-close"/);
   assert.match(source, /<div className="menu-card">\s*<button className="menu-close"/);
   assert.match(source, /function OrderMatch/);
+  assert.match(source, /function TicTacToe/);
+  assert.match(source, /function RockPaperScissors/);
+  assert.match(source, /function DiceRace/);
   assert.match(source, /switchObject/);
   assert.match(source, /Check order/);
   assert.match(source, /pocket-play-scores/);
@@ -111,6 +117,10 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.friend-score-grid/);
   assert.match(styles, /\.mode-picker/);
   assert.match(styles, /\.turn-banner/);
+  assert.match(styles, /\.tic-board/);
+  assert.match(styles, /\.rps-choices/);
+  assert.match(styles, /\.dice-racers/);
+  assert.match(firestoreRules, /'tictactoe', 'rps', 'dice'/);
   assert.match(source, /friendProfiles/);
   assert.match(source, /friend\.highScores/);
   assert.match(source, /type InviteStatus = "pending" \| "accepted" \| "declined" \| "cancelled"/);

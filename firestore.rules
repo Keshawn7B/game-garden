@@ -76,7 +76,7 @@ service cloud.firestore {
     function validScore(gameId, userId) {
       return request.auth != null
         && request.auth.uid == userId
-        && gameId in ['codebreaker', 'order', 'number', 'memory']
+        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'rps', 'dice']
         && request.resource.data.uid == userId
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
@@ -124,7 +124,10 @@ service cloud.firestore {
       return (gameId == 'codebreaker' && gameName == 'Codebreaker')
         || (gameId == 'order' && gameName == 'Order Match')
         || (gameId == 'number' && gameName == 'Number Hunt')
-        || (gameId == 'memory' && gameName == 'Memory Flip');
+        || (gameId == 'memory' && gameName == 'Memory Flip')
+        || (gameId == 'tictactoe' && gameName == 'Tic Tac Toe')
+        || (gameId == 'rps' && gameName == 'Rock Paper Scissors')
+        || (gameId == 'dice' && gameName == 'Dice Race');
     }
 
     function validAvatar(avatarId) {
