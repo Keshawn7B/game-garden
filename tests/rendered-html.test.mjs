@@ -84,6 +84,9 @@ test("routes every game through a start menu", async () => {
   assert.equal((avatarOptions.match(/id: "/g) ?? []).length, 15);
   assert.equal((avatarOptions.match(/glyph: "/g) ?? []).length, 2);
   assert.match(source, /avatar\.glyph && <b className="avatar-mark">/);
+  assert.match(source, /className="header-profile"/);
+  assert.match(source, /<PlayerAvatar small avatarId=\{avatarId\} \/>/);
+  assert.doesNotMatch(styles, /\.header-profile>i/);
   assert.match(source, /onAuthStateChanged/);
   assert.match(source, /saveCloudScore/);
   assert.match(source, /<p>GLOBAL<\/p><h1>Leaderboard/);

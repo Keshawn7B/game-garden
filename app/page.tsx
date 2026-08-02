@@ -900,7 +900,6 @@ function AppHome({
           <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
             <PlayerAvatar small avatarId={avatarId} />
-            <i className={firebaseUser ? "is-online" : ""} />
           </button>
         </div>
       </header>
