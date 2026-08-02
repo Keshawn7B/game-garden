@@ -94,6 +94,14 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.turn-banner/);
   assert.match(source, /friendProfiles/);
   assert.match(source, /friend\.highScores/);
+  assert.match(source, /type InviteStatus = "pending" \| "accepted" \| "declined" \| "cancelled"/);
+  assert.match(source, /inviteIdFor/);
+  assert.match(source, /Game invites/);
+  assert.match(source, /onRespondInvite/);
+  assert.match(source, /ROOM READY/);
+  assert.match(source, /nav-invite-badge/);
+  assert.match(styles, /\.invite-center/);
+  assert.match(styles, /\.friend-invite-picker/);
   assert.match(styles, /data-theme="sakura"/);
   assert.match(styles, /content:"桜"/);
   assert.doesNotMatch(styles, /data-theme="sakura"[^}]*\.bottom-nav[^}]*position:relative/);
@@ -102,5 +110,8 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /publicProfiles/);
   assert.match(firestoreRules, /highScores is map/);
   assert.match(firestoreRules, /users\/\{userId\}\/friends/);
+  assert.match(firestoreRules, /invites\/\{inviteId\}/);
+  assert.match(firestoreRules, /validNewInvite/);
+  assert.match(firestoreRules, /affectedKeys\(\)\.hasOnly/);
   assert.match(firestoreRules, /'sakura'.*'dragon'.*'pink-blossom'.*'pink-peach'/);
 });

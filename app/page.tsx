@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory";
@@ -18,6 +18,24 @@ type HighScores = Partial<Record<PlayableGameId, number>>;
 type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
 type FriendEntry = { uid: string; name: string; avatarId: AvatarId; highScores?: HighScores };
+type InviteStatus = "pending" | "accepted" | "declined" | "cancelled";
+type GameInvite = {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  fromAvatar: AvatarId;
+  toUid: string;
+  toName: string;
+  toAvatar: AvatarId;
+  gameId: PlayableGameId;
+  gameName: string;
+  status: InviteStatus;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+  expiresAt?: Timestamp;
+};
+
+const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 const AVATARS: { id: AvatarId; glyph: string; label: string }[] = [
   { id: "play", glyph: "遊", label: "Play" },
@@ -43,6 +61,20 @@ function isAvatarId(value: unknown): value is AvatarId {
 
 function friendCodeFor(uid: string) {
   return uid.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase();
+}
+
+function inviteIdFor(fromUid: string, toUid: string, gameId: PlayableGameId) {
+  return `${fromUid}--${toUid}--${gameId}`;
+}
+
+function inviteIsLive(invite: GameInvite) {
+  return invite.status === "pending" && (invite.expiresAt?.toMillis() ?? Number.POSITIVE_INFINITY) > Date.now();
+}
+
+function inviteTimeLeft(invite: GameInvite) {
+  const remaining = Math.max(0, (invite.expiresAt?.toMillis() ?? Date.now()) - Date.now());
+  const hours = Math.max(1, Math.ceil(remaining / (60 * 60 * 1000)));
+  return `${hours}h left`;
 }
 
 async function syncPublicProfile(user: User, name: string, avatarId: AvatarId, highScores: HighScores) {
@@ -709,6 +741,12 @@ function AppHome({
   friendCode,
   onAddFriend,
   onRemoveFriend,
+  incomingInvites,
+  outgoingInvites,
+  onSendInvite,
+  onRespondInvite,
+  onCancelInvite,
+  onCloseInvite,
 }: {
   activeTab: AppTab;
   theme: ThemeMode;
@@ -733,6 +771,12 @@ function AppHome({
   friendCode: string;
   onAddFriend: (code: string) => Promise<string>;
   onRemoveFriend: (uid: string) => void;
+  incomingInvites: GameInvite[];
+  outgoingInvites: GameInvite[];
+  onSendInvite: (friend: FriendEntry, gameId: PlayableGameId) => Promise<string>;
+  onRespondInvite: (invite: GameInvite, response: "accepted" | "declined") => Promise<void>;
+  onCancelInvite: (invite: GameInvite) => Promise<void>;
+  onCloseInvite: (invite: GameInvite) => Promise<void>;
 }) {
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
@@ -742,7 +786,14 @@ function AppHome({
   const [friendInput, setFriendInput] = useState("");
   const [friendMessage, setFriendMessage] = useState("");
   const [friendBusy, setFriendBusy] = useState(false);
+  const [inviteTarget, setInviteTarget] = useState<string | null>(null);
+  const [inviteGame, setInviteGame] = useState<PlayableGameId>("codebreaker");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState("");
   const activeRanks = leaderboards[rankGame] ?? [];
+  const liveIncoming = incomingInvites.filter(inviteIsLive);
+  const liveOutgoing = outgoingInvites.filter(inviteIsLive);
+  const readyInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.status === "accepted" && all.findIndex((item) => item.id === invite.id) === index);
 
   const submitFriend = async () => {
     setFriendBusy(true);
@@ -753,6 +804,17 @@ function AppHome({
       setFriendInput("");
     } finally {
       setFriendBusy(false);
+    }
+  };
+
+  const submitInvite = async (friend: FriendEntry) => {
+    setInviteBusy(true);
+    setInviteMessage("");
+    try {
+      setInviteMessage(await onSendInvite(friend, inviteGame));
+      setInviteTarget(null);
+    } finally {
+      setInviteBusy(false);
     }
   };
 
@@ -769,6 +831,13 @@ function AppHome({
       </header>
 
       <div className="app-content">
+        {activeTab !== "friends" && liveIncoming.length > 0 && (
+          <button className="invite-alert" onClick={() => onTabChange("friends")}>
+            <AvatarGlyph avatarId={liveIncoming[0].fromAvatar} className="invite-alert-avatar" />
+            <span><b>GAME INVITE</b><strong>{liveIncoming[0].fromName} wants to play {liveIncoming[0].gameName}.</strong></span>
+            <em>VIEW</em>
+          </button>
+        )}
         {activeTab === "games" && (
           <section className="app-panel games-panel">
             <div className="app-title"><div><p>PLAY</p><h1>Games <span>ゲーム</span></h1></div><strong>{GAMES.length}<small>GAMES</small></strong></div>
@@ -879,6 +948,34 @@ function AppHome({
                 <button className="primary-button" onClick={() => onTabChange("profile")}>Open profile</button>
               </div>
             ) : <>
+              <div className="invite-center">
+                <div className="invite-center-heading"><span>Game invites</span><span>対戦招待</span></div>
+                {liveIncoming.map((invite) => (
+                  <div className="invite-card incoming-invite" key={invite.id}>
+                    <AvatarGlyph avatarId={invite.fromAvatar} className="invite-avatar" />
+                    <div><small>INVITED YOU · {inviteTimeLeft(invite)}</small><strong>{invite.fromName}</strong><span>{invite.gameName} · Online match</span></div>
+                    <div className="invite-actions"><button className="primary-button" onClick={() => void onRespondInvite(invite, "accepted")}>Accept</button><button className="secondary-button" onClick={() => void onRespondInvite(invite, "declined")}>Decline</button></div>
+                  </div>
+                ))}
+                {readyInvites.map((invite) => {
+                  const isHost = invite.fromUid === firebaseUser.uid;
+                  return (
+                    <div className="invite-card ready-invite" key={invite.id}>
+                      <AvatarGlyph avatarId={isHost ? invite.toAvatar : invite.fromAvatar} className="invite-avatar" />
+                      <div><small>ROOM READY · #{invite.id.slice(-8).toUpperCase()}</small><strong>{invite.gameName}</strong><span>You + {isHost ? invite.toName : invite.fromName}</span></div>
+                      <button className="invite-close" onClick={() => void onCloseInvite(invite)} aria-label={`Close ${invite.gameName} room`}>×</button>
+                    </div>
+                  );
+                })}
+                {liveOutgoing.map((invite) => (
+                  <div className="invite-card outgoing-invite" key={invite.id}>
+                    <AvatarGlyph avatarId={invite.toAvatar} className="invite-avatar" />
+                    <div><small>WAITING · {inviteTimeLeft(invite)}</small><strong>{invite.toName}</strong><span>{invite.gameName}</span></div>
+                    <button className="secondary-button invite-cancel" onClick={() => void onCancelInvite(invite)}>Cancel</button>
+                  </div>
+                ))}
+                {!liveIncoming.length && !liveOutgoing.length && !readyInvites.length && <p className="empty-invites">No active invites. Challenge a friend below.</p>}
+              </div>
               <div className="friend-code-card">
                 <span>YOUR FRIEND CODE</span>
                 <strong>{friendCode}</strong>
@@ -891,13 +988,21 @@ function AppHome({
               </div>
               <div className="friend-list">
                 <div className="friend-list-heading"><span>Friend list</span><span>フレンド</span></div>
+                {inviteMessage && <p className="invite-message" role="status">{inviteMessage}</p>}
                 {friends.length ? friends.map((friend) => (
                   <div className="friend-row" key={friend.uid}>
                     <div className="friend-row-head">
                       <AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" />
                       <strong>{friend.name}</strong>
-                      <button onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button>
+                      <div className="friend-row-actions"><button className="friend-invite-button" onClick={() => { setInviteTarget((current) => current === friend.uid ? null : friend.uid); setInviteMessage(""); }}>INVITE</button><button className="friend-remove-button" onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button></div>
                     </div>
+                    {inviteTarget === friend.uid && (
+                      <div className="friend-invite-picker">
+                        <span>CHOOSE A GAME</span>
+                        <div>{scoredGames.map((game) => <button key={game.id} className={inviteGame === game.scoreGame ? "active" : ""} onClick={() => setInviteGame(game.scoreGame)}>{game.name}</button>)}</div>
+                        <button className="primary-button" disabled={inviteBusy} onClick={() => void submitInvite(friend)}>{inviteBusy ? "Sending…" : `Invite ${friend.name}`}</button>
+                      </div>
+                    )}
                     <div className="friend-score-grid" aria-label={`${friend.name} high scores`}>
                       {scoredGames.map((game) => (
                         <div key={game.id}>
@@ -917,7 +1022,7 @@ function AppHome({
       <nav className="bottom-nav" aria-label="App navigation">
         <button className={activeTab === "games" ? "active" : ""} onClick={() => onTabChange("games")}><b>遊</b><span>Games</span></button>
         <button className={activeTab === "leaderboard" ? "active" : ""} onClick={() => onTabChange("leaderboard")}><b>冠</b><span>Ranks</span></button>
-        <button className={activeTab === "friends" ? "active" : ""} onClick={() => onTabChange("friends")}><b>友</b><span>Friends</span></button>
+        <button className={activeTab === "friends" ? "active" : ""} onClick={() => onTabChange("friends")}><b>友{liveIncoming.length > 0 && <i className="nav-invite-badge">{liveIncoming.length}</i>}</b><span>Friends</span></button>
         <button className={activeTab === "profile" ? "active" : ""} onClick={() => onTabChange("profile")}><b>人</b><span>Profile</span></button>
       </nav>
     </main>
@@ -937,6 +1042,8 @@ export default function Home() {
   const [leaderboards, setLeaderboards] = useState<Leaderboards>({});
   const [friends, setFriends] = useState<FriendEntry[]>([]);
   const [friendProfiles, setFriendProfiles] = useState<Record<string, FriendEntry>>({});
+  const [incomingInvites, setIncomingInvites] = useState<GameInvite[]>([]);
+  const [outgoingInvites, setOutgoingInvites] = useState<GameInvite[]>([]);
 
   useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
@@ -1014,6 +1121,25 @@ export default function Home() {
     return onSnapshot(collection(db, "users", firebaseUser.uid, "friends"), (snapshot) => {
       setFriends(snapshot.docs.map((friend) => friend.data() as FriendEntry).sort((a, b) => a.name.localeCompare(b.name)));
     }, () => setAuthError("Could not load the friend list."));
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!firebaseUser) {
+      setIncomingInvites([]);
+      setOutgoingInvites([]);
+      return;
+    }
+    const byNewest = (left: GameInvite, right: GameInvite) => (right.updatedAt?.toMillis() ?? 0) - (left.updatedAt?.toMillis() ?? 0);
+    const incomingUnsubscribe = onSnapshot(query(collection(db, "invites"), where("toUid", "==", firebaseUser.uid)), (snapshot) => {
+      setIncomingInvites(snapshot.docs.map((invite) => ({ ...invite.data(), id: invite.id } as GameInvite)).sort(byNewest));
+    }, () => setAuthError("Could not load incoming invitations."));
+    const outgoingUnsubscribe = onSnapshot(query(collection(db, "invites"), where("fromUid", "==", firebaseUser.uid)), (snapshot) => {
+      setOutgoingInvites(snapshot.docs.map((invite) => ({ ...invite.data(), id: invite.id } as GameInvite)).sort(byNewest));
+    }, () => setAuthError("Could not load sent invitations."));
+    return () => {
+      incomingUnsubscribe();
+      outgoingUnsubscribe();
+    };
   }, [firebaseUser]);
 
   useEffect(() => {
@@ -1198,6 +1324,59 @@ export default function Home() {
     void deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid)).catch(() => setAuthError("Could not remove that friend."));
   }, [firebaseUser]);
 
+  const sendInvite = useCallback(async (friend: FriendEntry, gameId: PlayableGameId) => {
+    if (!firebaseUser) return "Sign in before sending an invite.";
+    const duplicate = outgoingInvites.find((invite) => invite.toUid === friend.uid && invite.gameId === gameId && (inviteIsLive(invite) || invite.status === "accepted"));
+    if (duplicate?.status === "accepted") return `Your ${duplicate.gameName} room with ${friend.name} is already ready.`;
+    if (duplicate) return `${friend.name} already has that invitation.`;
+    const gameDetails = GAMES.find((game) => game.id === gameId)!;
+    const inviteId = inviteIdFor(firebaseUser.uid, friend.uid, gameId);
+    try {
+      await setDoc(doc(db, "invites", inviteId), {
+        fromUid: firebaseUser.uid,
+        fromName: profileName.trim() || firebaseUser.displayName || "Player One",
+        fromAvatar: avatarId,
+        toUid: friend.uid,
+        toName: friend.name,
+        toAvatar: isAvatarId(friend.avatarId) ? friend.avatarId : "play",
+        gameId,
+        gameName: gameDetails.name,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + INVITE_LIFETIME_MS),
+      });
+      return `Invitation sent to ${friend.name}.`;
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not send the invitation.");
+      return "Could not send the invitation.";
+    }
+  }, [firebaseUser, outgoingInvites, profileName, avatarId]);
+
+  const respondInvite = useCallback(async (invite: GameInvite, response: "accepted" | "declined") => {
+    try {
+      await updateDoc(doc(db, "invites", invite.id), { status: response, respondedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not respond to the invitation.");
+    }
+  }, []);
+
+  const cancelInvite = useCallback(async (invite: GameInvite) => {
+    try {
+      await updateDoc(doc(db, "invites", invite.id), { status: "cancelled", respondedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not cancel the invitation.");
+    }
+  }, []);
+
+  const closeInvite = useCallback(async (invite: GameInvite) => {
+    try {
+      await deleteDoc(doc(db, "invites", invite.id));
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not close the room.");
+    }
+  }, []);
+
   const visibleFriends = useMemo(() => friends.map((friend) => ({
     ...friend,
     ...friendProfiles[friend.uid],
@@ -1218,8 +1397,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} onAddFriend={addFriend} onRemoveFriend={removeFriend} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, addFriend, removeFriend]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, addFriend, removeFriend, incomingInvites, outgoingInvites, sendInvite, respondInvite, cancelInvite, closeInvite]);
 
   return view;
 }

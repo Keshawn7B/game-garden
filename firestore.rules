@@ -34,6 +34,37 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    match /invites/{inviteId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow create: if validNewInvite(inviteId, request.resource.data);
+      allow update: if validInviteShape(inviteId, request.resource.data)
+        && (
+          (request.auth.uid == resource.data.toUid
+            && resource.data.status == 'pending'
+            && resource.data.expiresAt > request.time
+            && request.resource.data.status in ['accepted', 'declined']
+            && request.resource.data.respondedAt == request.time
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt', 'updatedAt']))
+          ||
+          (request.auth.uid == resource.data.fromUid
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.respondedAt == request.time
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt', 'updatedAt']))
+          ||
+          (request.auth.uid == resource.data.fromUid
+            && (resource.data.status in ['declined', 'cancelled']
+              || (resource.data.status == 'pending' && resource.data.expiresAt <= request.time))
+            && validNewInvite(inviteId, request.resource.data))
+        );
+      allow delete: if request.auth != null
+        && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid)
+        && (resource.data.status != 'pending' || resource.data.expiresAt <= request.time);
+    }
+
     match /leaderboards/{gameId}/entries/{userId} {
       allow read: if true;
       allow create: if validScore(gameId, userId);
@@ -54,6 +85,46 @@ service cloud.firestore {
         && request.resource.data.score is int
         && request.resource.data.score >= 1
         && request.resource.data.score <= 10000;
+    }
+
+    function validNewInvite(inviteId, invite) {
+      return request.auth != null
+        && request.auth.uid == invite.fromUid
+        && invite.status == 'pending'
+        && invite.createdAt == request.time
+        && invite.updatedAt == request.time
+        && invite.expiresAt is timestamp
+        && invite.expiresAt > request.time
+        && invite.keys().hasOnly(['fromUid', 'fromName', 'fromAvatar', 'toUid', 'toName', 'toAvatar', 'gameId', 'gameName', 'status', 'createdAt', 'updatedAt', 'expiresAt'])
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(invite.toUid))
+        && validInviteShape(inviteId, invite);
+    }
+
+    function validInviteShape(inviteId, invite) {
+      return inviteId == invite.fromUid + '--' + invite.toUid + '--' + invite.gameId
+        && invite.fromUid is string
+        && invite.toUid is string
+        && invite.fromUid != invite.toUid
+        && invite.fromName is string
+        && invite.fromName.size() >= 1
+        && invite.fromName.size() <= 18
+        && invite.toName is string
+        && invite.toName.size() >= 1
+        && invite.toName.size() <= 18
+        && validAvatar(invite.fromAvatar)
+        && validAvatar(invite.toAvatar)
+        && validInviteGame(invite.gameId, invite.gameName)
+        && invite.status in ['pending', 'accepted', 'declined', 'cancelled']
+        && invite.createdAt is timestamp
+        && invite.updatedAt is timestamp
+        && invite.expiresAt is timestamp;
+    }
+
+    function validInviteGame(gameId, gameName) {
+      return (gameId == 'codebreaker' && gameName == 'Codebreaker')
+        || (gameId == 'order' && gameName == 'Order Match')
+        || (gameId == 'number' && gameName == 'Number Hunt')
+        || (gameId == 'memory' && gameName == 'Memory Flip');
     }
 
     function validAvatar(avatarId) {
