@@ -65,6 +65,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /activeTab === "friends"/);
   assert.match(source, /YOUR FRIEND CODE/);
   assert.match(source, /friendCodeFor/);
+  assert.match(source, /friendCodeFromUrl/);
+  assert.match(source, /Share friend link/);
+  assert.match(source, /navigator\.share/);
+  assert.match(source, /navigator\.clipboard/);
+  assert.match(source, /searchParams\.set\("friend"/);
   assert.match(source, /publicProfiles/);
   assert.match(source, /onAddFriend/);
   assert.match(source, /Continue with Google/);
@@ -87,6 +92,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /name: "Deducktion"[\s\S]*?meta: "CARD GAME"/);
   assert.match(styles, /game-covers\.png/);
   assert.match(styles, /\.bottom-nav/);
+  assert.match(styles, /\.friend-link-actions/);
   assert.match(styles, /\.global-rank-list/);
   assert.match(styles, /\.friend-list/);
   assert.match(styles, /\.friend-score-grid/);

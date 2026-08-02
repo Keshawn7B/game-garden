@@ -69,6 +69,12 @@ function friendCodeFor(uid: string) {
   return uid.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase();
 }
 
+function friendCodeFromUrl() {
+  if (typeof window === "undefined") return "";
+  const code = new URLSearchParams(window.location.search).get("friend")?.toUpperCase() ?? "";
+  return /^[A-Z0-9]{8}$/.test(code) ? code : "";
+}
+
 function inviteIdFor(fromUid: string, toUid: string, gameId: PlayableGameId) {
   return `${fromUid}--${toUid}--${gameId}`;
 }
@@ -745,6 +751,7 @@ function AppHome({
   leaderboards,
   friends,
   friendCode,
+  friendLinkCode,
   onAddFriend,
   onRemoveFriend,
   incomingInvites,
@@ -775,6 +782,7 @@ function AppHome({
   leaderboards: Leaderboards;
   friends: FriendEntry[];
   friendCode: string;
+  friendLinkCode: string;
   onAddFriend: (code: string) => Promise<string>;
   onRemoveFriend: (uid: string) => void;
   incomingInvites: GameInvite[];
@@ -789,8 +797,9 @@ function AppHome({
   const [rankGame, setRankGame] = useState<PlayableGameId>("codebreaker");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [friendInput, setFriendInput] = useState("");
-  const [friendMessage, setFriendMessage] = useState("");
+  const [friendInput, setFriendInput] = useState(friendLinkCode);
+  const [friendMessage, setFriendMessage] = useState(friendLinkCode ? "Friend link loaded. Tap Add to connect." : "");
+  const [shareMessage, setShareMessage] = useState("");
   const [friendBusy, setFriendBusy] = useState(false);
   const [inviteTarget, setInviteTarget] = useState<string | null>(null);
   const [inviteGame, setInviteGame] = useState<PlayableGameId>("codebreaker");
@@ -808,9 +817,62 @@ function AppHome({
     try {
       const message = await onAddFriend(friendInput);
       setFriendMessage(message);
-      setFriendInput("");
+      if (message.endsWith(" was added.")) {
+        setFriendInput("");
+        const url = new URL(window.location.href);
+        url.searchParams.delete("friend");
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
     } finally {
       setFriendBusy(false);
+    }
+  };
+
+  const makeFriendLink = () => {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("friend", friendCode);
+    url.hash = "friends";
+    return url.toString();
+  };
+
+  const copyFriendLink = async () => {
+    const link = makeFriendLink();
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = link;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        textArea.remove();
+      }
+      setShareMessage("Friend link copied. Send it anywhere you like.");
+    } catch {
+      setShareMessage("Could not copy the link. Try the Share button.");
+    }
+  };
+
+  const shareFriendLink = async () => {
+    const link = makeFriendLink();
+    if (!navigator.share) {
+      await copyFriendLink();
+      return;
+    }
+    try {
+      await navigator.share({
+        title: "Game Garden",
+        text: `Add ${profileName || "me"} as a friend on Game Garden.`,
+        url: link,
+      });
+      setShareMessage("Friend link shared.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      await copyFriendLink();
     }
   };
 
@@ -993,7 +1055,12 @@ function AppHome({
               <div className="friend-code-card">
                 <span>YOUR FRIEND CODE</span>
                 <strong>{friendCode}</strong>
-                <small>Share this code with another player.</small>
+                <small>Send a direct link or share this code.</small>
+                <div className="friend-link-actions">
+                  <button className="friend-share-button" onClick={() => void shareFriendLink()}>Share friend link</button>
+                  <button className="friend-copy-button" onClick={() => void copyFriendLink()}>Copy link</button>
+                </div>
+                {shareMessage && <p className="friend-share-message" role="status">{shareMessage}</p>}
               </div>
               <div className="friend-add-card">
                 <label htmlFor="friend-code">ADD A FRIEND <span>友達を追加</span></label>
@@ -1045,6 +1112,7 @@ function AppHome({
 
 export default function Home() {
   const [game, setGame] = useState<GameId>("games");
+  const [friendLinkCode] = useState(friendCodeFromUrl);
   const [gameMode, setGameMode] = useState<GameMode>("solo");
   const [highScores, setHighScores] = useState<HighScores>({});
   const [profileName, setProfileName] = useState("Player One");
@@ -1414,8 +1482,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, addFriend, removeFriend, incomingInvites, outgoingInvites, sendInvite, respondInvite, cancelInvite, closeInvite]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, sendInvite, respondInvite, cancelInvite, closeInvite]);
 
   return view;
 }
