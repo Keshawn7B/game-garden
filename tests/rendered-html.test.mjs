@@ -66,7 +66,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /game-garden-theme/);
   assert.match(source, /avatar-style-/);
   const avatarOptions = source.match(/const AVATARS[\s\S]*?\n\];/)?.[0] ?? "";
-  assert.equal((avatarOptions.match(/glyph: "/g) ?? []).length, 10);
+  assert.equal((avatarOptions.match(/glyph: "/g) ?? []).length, 15);
   assert.match(source, /onAuthStateChanged/);
   assert.match(source, /saveCloudScore/);
   assert.match(source, /<p>GLOBAL<\/p><h1>Leaderboard/);
@@ -83,5 +83,5 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(styles, /data-theme="sakura"[^}]*\.bottom-nav[^}]*position:relative/);
   assert.match(firebaseSource, /game-garden-658de/);
   assert.match(firestoreRules, /request\.auth\.uid == userId/);
-  assert.match(firestoreRules, /'sakura'.*'dragon'.*'sun'/);
+  assert.match(firestoreRules, /'sakura'.*'dragon'.*'pink-blossom'.*'pink-peach'/);
 });

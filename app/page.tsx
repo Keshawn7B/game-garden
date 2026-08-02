@@ -12,7 +12,7 @@ type AppTab = "games" | "leaderboard" | "profile";
 type ThemeMode = "classic" | "sakura";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
-type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun";
+type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun" | "pink-blossom" | "pink-heart" | "pink-bunny" | "pink-fan" | "pink-peach";
 type HighScores = Partial<Record<PlayableGameId, number>>;
 type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
@@ -28,6 +28,11 @@ const AVATARS: { id: AvatarId; glyph: string; label: string }[] = [
   { id: "cat", glyph: "猫", label: "Cat" },
   { id: "ninja", glyph: "忍", label: "Ninja" },
   { id: "sun", glyph: "日", label: "Sun" },
+  { id: "pink-blossom", glyph: "花", label: "Pink blossom" },
+  { id: "pink-heart", glyph: "愛", label: "Pink heart" },
+  { id: "pink-bunny", glyph: "兎", label: "Pink bunny" },
+  { id: "pink-fan", glyph: "扇", label: "Pink fan" },
+  { id: "pink-peach", glyph: "桃", label: "Pink peach" },
 ];
 
 function isAvatarId(value: unknown): value is AvatarId {

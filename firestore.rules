@@ -22,7 +22,7 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 18
-        && request.resource.data.avatarId in ['play', 'sakura', 'fox', 'koi', 'moon', 'crane', 'dragon', 'cat', 'ninja', 'sun']
+        && request.resource.data.avatarId in ['play', 'sakura', 'fox', 'koi', 'moon', 'crane', 'dragon', 'cat', 'ninja', 'sun', 'pink-blossom', 'pink-heart', 'pink-bunny', 'pink-fan', 'pink-peach']
         && request.resource.data.score is int
         && request.resource.data.score >= 1
         && request.resource.data.score <= 10000;

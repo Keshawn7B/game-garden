@@ -67,6 +67,11 @@ footer { min-height:95px; padding:25px clamp(24px,6vw,90px); display:flex;justif
 .avatar-style-cat { background:linear-gradient(35deg,#ef001b 0 32%,#fff 33% 66%,#111 67%); }
 .avatar-style-ninja { background:linear-gradient(145deg,#111 0 48%,#ef001b 49% 62%,#2b2b2b 63%); }
 .avatar-style-sun { background:radial-gradient(circle,#ef001b 0 32%,#fff 33% 56%,#111 57%); }
+.avatar-style-pink-blossom { background:radial-gradient(circle at 28% 25%,#fff 0 8%,transparent 9%),radial-gradient(circle at 72% 68%,#ffb2cb 0 13%,transparent 14%),linear-gradient(145deg,#ff7fad 0 54%,#d91f62 55%); }
+.avatar-style-pink-heart { background:radial-gradient(circle at 66% 24%,#ffd4e2 0 11%,transparent 12%),linear-gradient(35deg,#9f1747 0 34%,#ff4f8c 35% 70%,#fff 71%); }
+.avatar-style-pink-bunny { background:linear-gradient(145deg,#fff 0 34%,#ff9fbe 35% 68%,#df2d69 69%); }
+.avatar-style-pink-fan { background:repeating-conic-gradient(from -25deg,#fff 0 12deg,#ff79a6 13deg 25deg,#c91e58 26deg 38deg); }
+.avatar-style-pink-peach { background:radial-gradient(ellipse at 50% 63%,#ff8eb3 0 37%,transparent 38%),linear-gradient(145deg,#fff1f6 0 48%,#d82864 49%); }
 .player-avatar[class*="avatar-style-"] b { background:rgba(0,0,0,.48); }
 :root[data-theme="sakura"] .app-shell,:root[data-theme="sakura"] .game-menu-shell,:root[data-theme="sakura"] .game-shell { background-image:radial-gradient(ellipse at 18% 12%,rgba(255,142,178,.15) 0 2px,transparent 3px),radial-gradient(ellipse at 76% 31%,rgba(228,49,107,.11) 0 3px,transparent 4px),linear-gradient(90deg,rgba(104,22,52,.025) 1px,transparent 1px),linear-gradient(rgba(104,22,52,.025) 1px,transparent 1px);background-size:57px 57px,83px 83px,30px 30px,30px 30px;background-color:var(--paper); }
 :root[data-theme="sakura"] .app-shell::before { content:"桜";position:fixed;right:-22px;top:92px;z-index:0;color:rgba(228,49,107,.055);font-family:var(--font-japanese),sans-serif;font-size:190px;font-weight:900;line-height:1;pointer-events:none; }
