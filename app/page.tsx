@@ -829,8 +829,7 @@ function AppHome({
     <main className="app-shell">
       <header className="app-header">
         <button className="header-brand" onClick={() => onTabChange("games")} aria-label="Open Game Garden games">
-          <span className="header-seal">園<small>GG</small></span>
-          <span className="header-brand-copy"><b>GAME GARDEN</b><small>遊びの庭 · PLAY TOGETHER</small></span>
+          <span className="header-title-logo" aria-hidden="true" />
         </button>
         <div className="header-context" aria-label={`${currentHeader.label} section`}><span>{currentHeader.glyph}</span><div><small>{currentHeader.japanese}</small><strong>{currentHeader.label}</strong></div></div>
         <div className="header-actions">
