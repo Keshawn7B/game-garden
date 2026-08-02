@@ -58,6 +58,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /keshawn7b\.github\.io\/Meducktion/);
   assert.match(source, /keshawn7b\.github\.io\/deduction-game/);
   assert.match(source, /deducktion-cover-title">DEDUCKTION/);
+  assert.match(source, /name: "Deducktion"[\s\S]*?meta: "CARD GAME"/);
   assert.match(styles, /game-covers\.png/);
   assert.match(styles, /\.bottom-nav/);
 });

@@ -472,7 +472,7 @@ const GAME_MENUS: Record<LibraryGameId, {
   deducktion: {
     title: "Deducktion",
     japanese: "正体推理",
-    category: "Online",
+    category: "Card game",
     glyph: "探",
     color: "deducktion",
     players: "Multiplayer",
@@ -537,7 +537,7 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "number", number: "03", name: "Number Hunt", japanese: "数字探し", meta: "QUICK", scoreGame: "number" },
   { id: "memory", number: "04", name: "Memory Flip", japanese: "記憶", meta: "MEMORY", scoreGame: "memory" },
   { id: "meducktion", number: "05", name: "Meducktion", japanese: "医学推理", meta: "CARD GAME" },
-  { id: "deducktion", number: "06", name: "Deducktion", japanese: "正体推理", meta: "ONLINE" },
+  { id: "deducktion", number: "06", name: "Deducktion", japanese: "正体推理", meta: "CARD GAME" },
 ];
 
 function formatScore(game: PlayableGameId, score?: number) {
