@@ -9,6 +9,7 @@ type PlayableGameId = "codebreaker" | "order" | "number" | "memory";
 type ExternalGameId = "meducktion" | "deducktion";
 type LibraryGameId = PlayableGameId | ExternalGameId;
 type AppTab = "games" | "leaderboard" | "profile";
+type ThemeMode = "classic" | "sakura";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
 type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun";
@@ -611,6 +612,8 @@ function PlayerAvatar({ small = false, avatarId }: { small?: boolean; avatarId: 
 
 function AppHome({
   activeTab,
+  theme,
+  onThemeToggle,
   onTabChange,
   onSelect,
   highScores,
@@ -629,6 +632,8 @@ function AppHome({
   leaderboards,
 }: {
   activeTab: AppTab;
+  theme: ThemeMode;
+  onThemeToggle: () => void;
   onTabChange: (tab: AppTab) => void;
   onSelect: (game: LibraryGameId) => void;
   highScores: HighScores;
@@ -657,9 +662,12 @@ function AppHome({
     <main className="app-shell">
       <header className="app-header">
         <div className="wordmark"><span className="brand-dot">G</span><span><b>GAME GARDEN</b><small>ゲームガーデン</small></span></div>
-        <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
-          <PlayerAvatar small avatarId={avatarId} />
-        </button>
+        <div className="header-actions">
+          <button className="theme-toggle" onClick={onThemeToggle} aria-label="Toggle Sakura Mode" aria-pressed={theme === "sakura"}><b>桜</b><span>{theme === "sakura" ? "PINK" : "MODE"}</span></button>
+          <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
+            <PlayerAvatar small avatarId={avatarId} />
+          </button>
+        </div>
       </header>
 
       <div className="app-content">
@@ -778,6 +786,7 @@ export default function Home() {
   const [highScores, setHighScores] = useState<HighScores>({});
   const [profileName, setProfileName] = useState("Player One");
   const [avatarId, setAvatarId] = useState<AvatarId>("play");
+  const [theme, setTheme] = useState<ThemeMode>("classic");
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
@@ -790,9 +799,14 @@ export default function Home() {
       const savedScores = window.localStorage.getItem("pocket-play-scores");
       const savedName = window.localStorage.getItem("pocket-play-name");
       const savedAvatar = window.localStorage.getItem("game-garden-avatar");
+      const savedTheme = window.localStorage.getItem("game-garden-theme");
       if (savedScores) setHighScores(JSON.parse(savedScores));
       if (savedName) setProfileName(savedName);
       if (isAvatarId(savedAvatar)) setAvatarId(savedAvatar);
+      if (savedTheme === "sakura") {
+        setTheme("sakura");
+        document.documentElement.dataset.theme = "sakura";
+      } else delete document.documentElement.dataset.theme;
     } catch { /* Device storage may be unavailable. */ }
     window.addEventListener("hashchange", onPopState);
     return () => window.removeEventListener("hashchange", onPopState);
@@ -879,6 +893,16 @@ export default function Home() {
   const updateAvatar = useCallback((nextAvatar: AvatarId) => {
     setAvatarId(nextAvatar);
     try { window.localStorage.setItem("game-garden-avatar", nextAvatar); } catch { /* Device storage may be unavailable. */ }
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => {
+      const next: ThemeMode = current === "sakura" ? "classic" : "sakura";
+      if (next === "sakura") document.documentElement.dataset.theme = "sakura";
+      else delete document.documentElement.dataset.theme;
+      try { window.localStorage.setItem("game-garden-theme", next); } catch { /* Device storage may be unavailable. */ }
+      return next;
+    });
   }, []);
 
   const saveProfile = useCallback(async () => {
@@ -981,8 +1005,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} />;
-  }, [game, highScores, profileName, avatarId, recordScore, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} />;
+  }, [game, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards]);
 
   return view;
 }

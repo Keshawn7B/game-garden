@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root { --red:#e60012; --red-dark:#a8000d; --black:#111; --paper:#f6f3ed; --white:#fff; --gray:#777; --line:#d8d3ca; }
+:root[data-theme="sakura"] { --red:#e4316b;--red-dark:#a30f40;--paper:#fff4f8;--gray:#765d67;--line:#edc8d5; }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
 body { margin:0; color:var(--black); background:var(--paper); font-family:var(--font-japanese), sans-serif; }
@@ -47,6 +48,12 @@ footer { min-height:95px; padding:25px clamp(24px,6vw,90px); display:flex;justif
 .app-header { height:76px;padding:0 clamp(18px,5vw,56px);display:flex;align-items:center;justify-content:space-between;background:var(--black);color:white;border-bottom:5px solid var(--red);position:sticky;top:0;z-index:20; }
 .app-header .brand-dot { box-shadow:3px 3px 0 white; }
 .header-profile { padding:0;border:0;background:transparent;cursor:pointer; }
+.header-actions { display:flex;align-items:center;gap:17px; }
+.theme-toggle { min-width:58px;height:43px;padding:3px 8px;display:grid;grid-template-columns:auto auto;gap:5px;align-items:center;border:2px solid white;background:var(--black);color:white;cursor:pointer;box-shadow:3px 3px 0 var(--red); }
+.theme-toggle b { color:#ff91b7;font-family:var(--font-japanese),sans-serif;font-size:20px;line-height:1; }
+.theme-toggle span { font-size:6px;font-weight:900;letter-spacing:.12em; }
+.theme-toggle[aria-pressed="true"] { background:var(--red);box-shadow:3px 3px 0 white; }
+.theme-toggle[aria-pressed="true"] b { color:white; }
 .player-avatar { width:82px;height:82px;display:grid;place-items:center;border:3px solid var(--black);border-radius:50%;background:radial-gradient(circle at 66% 28%,white 0 7%,transparent 8%),linear-gradient(135deg,var(--red) 0 51%,white 51% 67%,var(--black) 67%);box-shadow:5px 5px 0 var(--black);color:white;overflow:hidden; }
 .player-avatar b { display:grid;place-items:center;width:41px;height:41px;border:2px solid white;border-radius:50%;background:var(--red);font-size:19px;font-weight:900;text-shadow:1px 1px 0 var(--black); }
 .player-avatar img { width:100%;height:100%;object-fit:cover; }
@@ -61,6 +68,13 @@ footer { min-height:95px; padding:25px clamp(24px,6vw,90px); display:flex;justif
 .avatar-style-ninja { background:linear-gradient(145deg,#111 0 48%,#ef001b 49% 62%,#2b2b2b 63%); }
 .avatar-style-sun { background:radial-gradient(circle,#ef001b 0 32%,#fff 33% 56%,#111 57%); }
 .player-avatar[class*="avatar-style-"] b { background:rgba(0,0,0,.48); }
+:root[data-theme="sakura"] .app-shell,:root[data-theme="sakura"] .game-menu-shell,:root[data-theme="sakura"] .game-shell { background-image:radial-gradient(ellipse at 18% 12%,rgba(255,142,178,.15) 0 2px,transparent 3px),radial-gradient(ellipse at 76% 31%,rgba(228,49,107,.11) 0 3px,transparent 4px),linear-gradient(90deg,rgba(104,22,52,.025) 1px,transparent 1px),linear-gradient(rgba(104,22,52,.025) 1px,transparent 1px);background-size:57px 57px,83px 83px,30px 30px,30px 30px;background-color:var(--paper); }
+:root[data-theme="sakura"] .app-shell::before { content:"桜";position:fixed;right:-22px;top:92px;z-index:0;color:rgba(228,49,107,.055);font-family:var(--font-japanese),sans-serif;font-size:190px;font-weight:900;line-height:1;pointer-events:none; }
+:root[data-theme="sakura"] .app-content,:root[data-theme="sakura"] .bottom-nav { position:relative;z-index:1; }
+:root[data-theme="sakura"] .active-attempt,:root[data-theme="sakura"] .order-status { background:#fff0f6; }
+:root[data-theme="sakura"] .picker-panel { background:#f8e9ef; }
+:root[data-theme="sakura"] .result-panel { background:#ffe2ec; }
+:root[data-theme="sakura"] .score-list-heading span:last-child,:root[data-theme="sakura"] .bottom-nav button.active span { color:#ff91b7; }
 .avatar-small { width:43px;height:43px;border:2px solid white;box-shadow:3px 3px 0 var(--red); }
 .avatar-small b { width:26px;height:26px;font-size:12px; }
 .app-content { width:min(960px,100%);margin:0 auto; }
