@@ -330,7 +330,7 @@ function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () =
       <header className="game-topbar menu-topbar">
         <button className="back-button" onClick={onBack}>← Games</button>
         <div className="wordmark small-wordmark"><span className="brand-dot" /> POCKET PLAY</div>
-        <span className="menu-header-jp">ゲームメニュー</span>
+        <button className="menu-close" onClick={onBack} aria-label="Close game menu">×</button>
       </header>
       <section className="game-menu">
         <div className="menu-card">
