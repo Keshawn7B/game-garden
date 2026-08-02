@@ -43,22 +43,22 @@ const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: stri
   profile: { label: "PLAYER", japanese: "プロフィール", glyph: "人" },
 };
 
-const AVATARS: { id: AvatarId; glyph: string; label: string }[] = [
-  { id: "play", glyph: "遊", label: "Play" },
-  { id: "sakura", glyph: "桜", label: "Sakura" },
-  { id: "fox", glyph: "狐", label: "Fox" },
-  { id: "koi", glyph: "鯉", label: "Koi" },
-  { id: "moon", glyph: "月", label: "Moon" },
-  { id: "crane", glyph: "鶴", label: "Crane" },
-  { id: "dragon", glyph: "龍", label: "Dragon" },
-  { id: "cat", glyph: "猫", label: "Cat" },
-  { id: "ninja", glyph: "忍", label: "Ninja" },
-  { id: "sun", glyph: "日", label: "Sun" },
-  { id: "pink-blossom", glyph: "花", label: "Pink blossom" },
-  { id: "pink-heart", glyph: "愛", label: "Pink heart" },
-  { id: "pink-bunny", glyph: "兎", label: "Pink bunny" },
-  { id: "pink-fan", glyph: "扇", label: "Pink fan" },
-  { id: "pink-peach", glyph: "桃", label: "Pink peach" },
+const AVATARS: { id: AvatarId; glyph?: string; label: string }[] = [
+  { id: "play", glyph: "遊", label: "Play kanji" },
+  { id: "sakura", label: "Sakura bloom" },
+  { id: "fox", label: "Fox mask" },
+  { id: "koi", label: "Koi fish" },
+  { id: "moon", label: "Crescent moon" },
+  { id: "crane", label: "Flying crane" },
+  { id: "dragon", glyph: "龍", label: "Dragon kanji" },
+  { id: "cat", label: "Lucky cat" },
+  { id: "ninja", label: "Ninja mask" },
+  { id: "sun", label: "Rising sun" },
+  { id: "pink-blossom", label: "Pink blossom" },
+  { id: "pink-heart", label: "Pink heart" },
+  { id: "pink-bunny", label: "Pink bunny" },
+  { id: "pink-fan", label: "Pink fan" },
+  { id: "pink-peach", label: "Pink peach" },
 ];
 
 function isAvatarId(value: unknown): value is AvatarId {
@@ -722,7 +722,7 @@ async function saveCloudScore(user: User, gameId: PlayableGameId, score: number,
 
 function AvatarGlyph({ avatarId, className = "" }: { avatarId: AvatarId; className?: string }) {
   const avatar = AVATARS.find((option) => option.id === avatarId) ?? AVATARS[0];
-  return <span className={`${className} avatar-style-${avatar.id}`} aria-hidden="true"><b>{avatar.glyph}</b></span>;
+  return <span className={`${className} avatar-style-${avatar.id}`} aria-hidden="true">{avatar.glyph && <b className="avatar-mark">{avatar.glyph}</b>}</span>;
 }
 
 function PlayerAvatar({ small = false, avatarId }: { small?: boolean; avatarId: AvatarId }) {
