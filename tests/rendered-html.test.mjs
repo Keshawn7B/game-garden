@@ -22,11 +22,16 @@ test("server-renders the Pocket Play game hub", async () => {
   assert.match(html, /Order Match/);
   assert.match(html, /Number Hunt/);
   assert.match(html, /Memory Flip/);
+  assert.match(html, /App navigation/);
+  assert.match(html, /Ranks/);
+  assert.match(html, /Profile/);
+  assert.match(html, /og-app-v2\.png/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
 test("routes every game through a start menu", async () => {
   const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(source, /codebreaker-menu/);
   assert.match(source, /order-menu/);
   assert.match(source, /number-menu/);
@@ -40,4 +45,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function OrderMatch/);
   assert.match(source, /switchObject/);
   assert.match(source, /Check order/);
+  assert.match(source, /pocket-play-scores/);
+  assert.match(source, /function AppHome/);
+  assert.match(source, /function PlayerAvatar/);
+  assert.match(source, /activeTab === "leaderboard"/);
+  assert.match(source, /activeTab === "profile"/);
+  assert.match(styles, /game-covers\.png/);
+  assert.match(styles, /\.bottom-nav/);
 });

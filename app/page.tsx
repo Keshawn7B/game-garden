@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory";
-type GameId = "hub" | PlayableGameId | `${PlayableGameId}-menu`;
+type AppTab = "games" | "leaderboard" | "profile";
+type GameId = AppTab | PlayableGameId | `${PlayableGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
+type HighScores = Partial<Record<PlayableGameId, number>>;
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
   { id: "coral", label: "Coral", hex: "#ff6b4a" },
@@ -72,7 +74,7 @@ function Peg({ color, small = false, hidden = false }: { color?: ColorId; small?
   );
 }
 
-function Codebreaker({ onBack }: { onBack: () => void }) {
+function Codebreaker({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
   const [secret, setSecret] = useState<ColorId[]>(makeSecret);
   const [current, setCurrent] = useState<ColorId[]>([]);
   const [guesses, setGuesses] = useState<{ colors: ColorId[]; exact: number; close: number }[]>([]);
@@ -88,6 +90,7 @@ function Codebreaker({ onBack }: { onBack: () => void }) {
   const submit = () => {
     if (current.length !== 4 || won || lost) return;
     const result = scoreGuess(current, secret);
+    if (result.exact === 4) onScore(guesses.length + 1);
     setGuesses((previous) => [...previous, { colors: current, ...result }]);
     setCurrent([]);
   };
@@ -174,7 +177,7 @@ function Codebreaker({ onBack }: { onBack: () => void }) {
   );
 }
 
-function OrderMatch({ onBack }: { onBack: () => void }) {
+function OrderMatch({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
   const [round, setRound] = useState(makeOrderRound);
   const [selected, setSelected] = useState<number | null>(null);
   const [checks, setChecks] = useState<number[]>([]);
@@ -209,6 +212,7 @@ function OrderMatch({ onBack }: { onBack: () => void }) {
   const checkOrder = () => {
     if (won || lost) return;
     const matches = round.objects.filter((color, index) => color === round.target[index]).length;
+    if (matches === 4) onScore(checks.length + 1);
     setChecks((previous) => [...previous, matches]);
   };
 
@@ -271,7 +275,7 @@ function OrderMatch({ onBack }: { onBack: () => void }) {
   );
 }
 
-function NumberHunt({ onBack }: { onBack: () => void }) {
+function NumberHunt({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
   const [target, setTarget] = useState(() => Math.floor(Math.random() * 100) + 1);
   const [value, setValue] = useState(50);
   const [history, setHistory] = useState<number[]>([]);
@@ -286,7 +290,10 @@ function NumberHunt({ onBack }: { onBack: () => void }) {
   };
 
   const submit = () => {
-    if (!won && !lost) setHistory((items) => [...items, value]);
+    if (!won && !lost) {
+      if (value === target) onScore(history.length + 1);
+      setHistory((items) => [...items, value]);
+    }
   };
 
   const message = latest == null ? "Make your first guess" : won ? "You found it!" : lost ? `It was ${target}` : latest < target ? "Go higher ↑" : "Go lower ↓";
@@ -321,7 +328,7 @@ function NumberHunt({ onBack }: { onBack: () => void }) {
   );
 }
 
-function MemoryGame({ onBack }: { onBack: () => void }) {
+function MemoryGame({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
   const makeDeck = useCallback(() => shuffle([...MEMORY_SYMBOLS, ...MEMORY_SYMBOLS]).map((symbol, index) => ({ id: `${symbol}-${index}`, symbol })), []);
   const [cards, setCards] = useState(makeDeck);
   const [open, setOpen] = useState<number[]>([]);
@@ -344,7 +351,11 @@ function MemoryGame({ onBack }: { onBack: () => void }) {
       setMoves((count) => count + 1);
       if (cards[next[0]].symbol === cards[next[1]].symbol) {
         window.setTimeout(() => {
-          setMatched((items) => [...items, ...next]);
+          setMatched((items) => {
+            const nextMatched = [...items, ...next];
+            if (nextMatched.length === cards.length) onScore(moves + 1);
+            return nextMatched;
+          });
           setOpen([]);
         }, 450);
       } else window.setTimeout(() => setOpen([]), 750);
@@ -453,7 +464,7 @@ function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () =
       <section className="game-menu">
         <div className="menu-card">
           <button className="menu-close" onClick={onBack} aria-label="Close game menu">×</button>
-          <span className={`app-icon menu-game-icon theme-${details.color}`}><i>{details.glyph}</i></span>
+          <span className={`game-cover menu-game-cover art-${game}`}><i>{details.glyph}</i></span>
           <p className="menu-japanese">{details.japanese}</p>
           <h1>{details.title}</h1>
           <div className="menu-meta"><span>1 Player</span><span>{details.category}</span></div>
@@ -468,63 +479,174 @@ function GameMenu({ game, onPlay, onBack }: { game: PlayableGameId; onPlay: () =
   );
 }
 
-function Hub({ onSelect }: { onSelect: (game: PlayableGameId) => void }) {
-  const games = [
-    { id: "codebreaker" as const, number: "01", name: "Codebreaker", blurb: "Crack the hidden color sequence in eight guesses.", meta: "LOGIC", color: "coral", glyph: "••••" },
-    { id: "order" as const, number: "02", name: "Order Match", blurb: "Switch colored objects into the hidden correct order.", meta: "LOGIC", color: "order", glyph: "↔" },
-    { id: "number" as const, number: "03", name: "Number Hunt", blurb: "Chase the secret number with higher and lower clues.", meta: "QUICK PLAY", color: "blue", glyph: "42" },
-    { id: "memory" as const, number: "04", name: "Memory Flip", blurb: "Flip the tiles and find every matching pair.", meta: "MEMORY", color: "violet", glyph: "✦" },
-  ];
+const GAMES: { id: PlayableGameId; number: string; name: string; japanese: string; meta: string }[] = [
+  { id: "codebreaker", number: "01", name: "Codebreaker", japanese: "コードブレイカー", meta: "LOGIC" },
+  { id: "order", number: "02", name: "Order Match", japanese: "並べ替え", meta: "LOGIC" },
+  { id: "number", number: "03", name: "Number Hunt", japanese: "数字探し", meta: "QUICK" },
+  { id: "memory", number: "04", name: "Memory Flip", japanese: "記憶", meta: "MEMORY" },
+];
+
+function formatScore(game: PlayableGameId, score?: number) {
+  if (score == null) return "—";
+  const unit = game === "memory" ? "moves" : game === "order" ? "checks" : "guesses";
+  return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
+}
+
+function PlayerAvatar({ small = false }: { small?: boolean }) {
+  return <span className={`player-avatar ${small ? "avatar-small" : ""}`} aria-hidden="true"><b>遊</b></span>;
+}
+
+function AppHome({
+  activeTab,
+  onTabChange,
+  onSelect,
+  highScores,
+  profileName,
+  onProfileNameChange,
+}: {
+  activeTab: AppTab;
+  onTabChange: (tab: AppTab) => void;
+  onSelect: (game: PlayableGameId) => void;
+  highScores: HighScores;
+  profileName: string;
+  onProfileNameChange: (name: string) => void;
+}) {
+  const completedGames = Object.keys(highScores).length;
 
   return (
-    <main className="hub-shell">
-      <nav className="hub-nav">
+    <main className="app-shell">
+      <header className="app-header">
         <div className="wordmark"><span className="brand-dot">P</span><span><b>POCKET PLAY</b><small>ポケットプレイ</small></span></div>
-        <span className="header-jp">ゲーム</span>
-      </nav>
+        <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
+          <PlayerAvatar small />
+        </button>
+      </header>
 
-      <section className="collection library-only">
-        <div className="section-heading"><h1>Games <span>ゲーム</span></h1></div>
-        <div className="app-shelf">
-          {games.map((game) => (
-            <button className="app-item" key={game.id} onClick={() => onSelect(game.id)}>
-              <span className={`app-icon theme-${game.color}`}><i>{game.glyph}</i><b>{game.number}</b></span>
-              <strong>{game.name}</strong>
-            </button>
-          ))}
-        </div>
-      </section>
+      <div className="app-content">
+        {activeTab === "games" && (
+          <section className="app-panel games-panel">
+            <div className="app-title"><div><p>PLAY</p><h1>Games <span>ゲーム</span></h1></div><strong>{GAMES.length}<small>GAMES</small></strong></div>
+            <div className="game-app-grid">
+              {GAMES.map((game) => (
+                <button className="game-app-card" key={game.id} onClick={() => onSelect(game.id)}>
+                  <span className={`game-cover art-${game.id}`}><i>{game.number}</i></span>
+                  <span className="game-card-copy">
+                    <strong>{game.name}</strong>
+                    <small>{game.japanese}</small>
+                    <em>{highScores[game.id] == null ? game.meta : `BEST · ${formatScore(game.id, highScores[game.id])}`}</em>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeTab === "leaderboard" && (
+          <section className="app-panel rank-panel">
+            <div className="app-title"><div><p>LOCAL</p><h1>Leaderboard <span>ランキング</span></h1></div></div>
+            <div className="player-rank-card">
+              <span className="rank-number">01</span><PlayerAvatar />
+              <div><strong>{profileName || "Player One"}</strong><small>THIS DEVICE</small></div>
+              <b>{completedGames}<small>BESTS</small></b>
+            </div>
+            <div className="score-list">
+              <div className="score-list-heading"><span>High scores</span><span>ハイスコア</span></div>
+              {GAMES.map((game) => (
+                <div className="score-row" key={game.id}>
+                  <span className={`score-art art-${game.id}`} />
+                  <div><strong>{game.name}</strong><small>{game.meta}</small></div>
+                  <b className={highScores[game.id] == null ? "no-score" : ""}>{formatScore(game.id, highScores[game.id])}</b>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeTab === "profile" && (
+          <section className="app-panel profile-panel">
+            <div className="profile-card">
+              <PlayerAvatar />
+              <p>PLAYER PROFILE <span>プロフィール</span></p>
+              <input
+                value={profileName}
+                maxLength={18}
+                onChange={(event) => onProfileNameChange(event.target.value)}
+                aria-label="Player name"
+                placeholder="Player One"
+              />
+              <span className="local-badge">LOCAL PLAYER</span>
+            </div>
+            <div className="profile-stats">
+              <div><strong>{completedGames}</strong><span>HIGH SCORES</span></div>
+              <div><strong>{GAMES.length}</strong><span>GAMES</span></div>
+            </div>
+            <div className="profile-scores">
+              <h2>Your best <span>自己ベスト</span></h2>
+              {GAMES.map((game) => <p key={game.id}><span>{game.name}</span><strong>{formatScore(game.id, highScores[game.id])}</strong></p>)}
+            </div>
+          </section>
+        )}
+      </div>
+
+      <nav className="bottom-nav" aria-label="App navigation">
+        <button className={activeTab === "games" ? "active" : ""} onClick={() => onTabChange("games")}><b>遊</b><span>Games</span></button>
+        <button className={activeTab === "leaderboard" ? "active" : ""} onClick={() => onTabChange("leaderboard")}><b>冠</b><span>Ranks</span></button>
+        <button className={activeTab === "profile" ? "active" : ""} onClick={() => onTabChange("profile")}><b>人</b><span>Profile</span></button>
+      </nav>
     </main>
   );
 }
 
 export default function Home() {
-  const [game, setGame] = useState<GameId>("hub");
+  const [game, setGame] = useState<GameId>("games");
+  const [highScores, setHighScores] = useState<HighScores>({});
+  const [profileName, setProfileName] = useState("Player One");
 
   useEffect(() => {
-    const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "hub");
+    const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
     onPopState();
+    try {
+      const savedScores = window.localStorage.getItem("pocket-play-scores");
+      const savedName = window.localStorage.getItem("pocket-play-name");
+      if (savedScores) setHighScores(JSON.parse(savedScores));
+      if (savedName) setProfileName(savedName);
+    } catch { /* Device storage may be unavailable. */ }
     window.addEventListener("hashchange", onPopState);
     return () => window.removeEventListener("hashchange", onPopState);
   }, []);
 
   const selectGame = (next: GameId) => {
     setGame(next);
-    window.location.hash = next === "hub" ? "" : next;
+    window.location.hash = next === "games" ? "" : next;
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const recordScore = useCallback((gameId: PlayableGameId, score: number) => {
+    setHighScores((previous) => {
+      if (previous[gameId] != null && previous[gameId]! <= score) return previous;
+      const next = { ...previous, [gameId]: score };
+      try { window.localStorage.setItem("pocket-play-scores", JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
+      return next;
+    });
+  }, []);
+
+  const updateProfileName = useCallback((name: string) => {
+    setProfileName(name);
+    try { window.localStorage.setItem("pocket-play-name", name); } catch { /* Device storage may be unavailable. */ }
+  }, []);
+
   const view = useMemo(() => {
-    if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={() => selectGame("codebreaker")} onBack={() => selectGame("hub")} />;
-    if (game === "order-menu") return <GameMenu game="order" onPlay={() => selectGame("order")} onBack={() => selectGame("hub")} />;
-    if (game === "number-menu") return <GameMenu game="number" onPlay={() => selectGame("number")} onBack={() => selectGame("hub")} />;
-    if (game === "memory-menu") return <GameMenu game="memory" onPlay={() => selectGame("memory")} onBack={() => selectGame("hub")} />;
-    if (game === "codebreaker") return <Codebreaker onBack={() => selectGame("codebreaker-menu")} />;
-    if (game === "order") return <OrderMatch onBack={() => selectGame("order-menu")} />;
-    if (game === "number") return <NumberHunt onBack={() => selectGame("number-menu")} />;
-    if (game === "memory") return <MemoryGame onBack={() => selectGame("memory-menu")} />;
-    return <Hub onSelect={(selected) => selectGame(`${selected}-menu`)} />;
-  }, [game]);
+    if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={() => selectGame("codebreaker")} onBack={() => selectGame("games")} />;
+    if (game === "order-menu") return <GameMenu game="order" onPlay={() => selectGame("order")} onBack={() => selectGame("games")} />;
+    if (game === "number-menu") return <GameMenu game="number" onPlay={() => selectGame("number")} onBack={() => selectGame("games")} />;
+    if (game === "memory-menu") return <GameMenu game="memory" onPlay={() => selectGame("memory")} onBack={() => selectGame("games")} />;
+    if (game === "codebreaker") return <Codebreaker onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
+    if (game === "order") return <OrderMatch onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
+    if (game === "number") return <NumberHunt onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
+    if (game === "memory") return <MemoryGame onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
+    const activeTab: AppTab = game === "leaderboard" || game === "profile" ? game : "games";
+    return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} onProfileNameChange={updateProfileName} />;
+  }, [game, highScores, profileName, recordScore, updateProfileName]);
 
   return view;
 }
