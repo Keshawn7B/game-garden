@@ -11,9 +11,27 @@ type LibraryGameId = PlayableGameId | ExternalGameId;
 type AppTab = "games" | "leaderboard" | "profile";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
+type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun";
 type HighScores = Partial<Record<PlayableGameId, number>>;
-type LeaderboardEntry = { uid: string; name: string; photoURL: string; score: number };
+type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
+
+const AVATARS: { id: AvatarId; glyph: string; label: string }[] = [
+  { id: "play", glyph: "遊", label: "Play" },
+  { id: "sakura", glyph: "桜", label: "Sakura" },
+  { id: "fox", glyph: "狐", label: "Fox" },
+  { id: "koi", glyph: "鯉", label: "Koi" },
+  { id: "moon", glyph: "月", label: "Moon" },
+  { id: "crane", glyph: "鶴", label: "Crane" },
+  { id: "dragon", glyph: "龍", label: "Dragon" },
+  { id: "cat", glyph: "猫", label: "Cat" },
+  { id: "ninja", glyph: "忍", label: "Ninja" },
+  { id: "sun", glyph: "日", label: "Sun" },
+];
+
+function isAvatarId(value: unknown): value is AvatarId {
+  return typeof value === "string" && AVATARS.some((avatar) => avatar.id === value);
+}
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
   { id: "coral", label: "Coral", hex: "#ff6b4a" },
@@ -563,28 +581,32 @@ function friendlyAuthError(error: unknown) {
   return error instanceof Error ? error.message : "Could not sign in.";
 }
 
-async function saveCloudScore(user: User, gameId: PlayableGameId, score: number, profileName: string) {
+async function saveCloudScore(user: User, gameId: PlayableGameId, score: number, profileName: string, avatarId: AvatarId) {
   const entryRef = doc(db, "leaderboards", gameId, "entries", user.uid);
   const profileRef = doc(db, "users", user.uid);
   await runTransaction(db, async (transaction) => {
     const current = await transaction.get(entryRef);
     const previousScore = current.exists() ? Number(current.data().score) : Number.POSITIVE_INFINITY;
     const bestScore = Math.min(previousScore, score);
-    if (bestScore < previousScore) {
-      transaction.set(entryRef, {
-        uid: user.uid,
-        name: profileName.trim() || user.displayName || "Player One",
-        photoURL: user.photoURL || "",
-        score: bestScore,
-        updatedAt: serverTimestamp(),
-      });
-    }
-    transaction.set(profileRef, { highScores: { [gameId]: bestScore }, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(entryRef, {
+      uid: user.uid,
+      name: profileName.trim() || user.displayName || "Player One",
+      photoURL: "",
+      avatarId,
+      score: bestScore,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    transaction.set(profileRef, { highScores: { [gameId]: bestScore }, avatarId, updatedAt: serverTimestamp() }, { merge: true });
   });
 }
 
-function PlayerAvatar({ small = false, user }: { small?: boolean; user?: User | null }) {
-  return <span className={`player-avatar ${small ? "avatar-small" : ""}`} aria-hidden="true">{user?.photoURL ? <img src={user.photoURL} alt="" referrerPolicy="no-referrer" /> : <b>遊</b>}</span>;
+function AvatarGlyph({ avatarId, className = "" }: { avatarId: AvatarId; className?: string }) {
+  const avatar = AVATARS.find((option) => option.id === avatarId) ?? AVATARS[0];
+  return <span className={`${className} avatar-style-${avatar.id}`} aria-hidden="true"><b>{avatar.glyph}</b></span>;
+}
+
+function PlayerAvatar({ small = false, avatarId }: { small?: boolean; avatarId: AvatarId }) {
+  return <AvatarGlyph avatarId={avatarId} className={`player-avatar ${small ? "avatar-small" : ""}`} />;
 }
 
 function AppHome({
@@ -593,7 +615,9 @@ function AppHome({
   onSelect,
   highScores,
   profileName,
+  avatarId,
   onProfileNameChange,
+  onAvatarChange,
   onProfileSave,
   firebaseUser,
   authLoading,
@@ -609,7 +633,9 @@ function AppHome({
   onSelect: (game: LibraryGameId) => void;
   highScores: HighScores;
   profileName: string;
+  avatarId: AvatarId;
   onProfileNameChange: (name: string) => void;
+  onAvatarChange: (avatarId: AvatarId) => void;
   onProfileSave: () => void;
   firebaseUser: User | null;
   authLoading: boolean;
@@ -632,7 +658,7 @@ function AppHome({
       <header className="app-header">
         <div className="wordmark"><span className="brand-dot">G</span><span><b>GAME GARDEN</b><small>ゲームガーデン</small></span></div>
         <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
-          <PlayerAvatar small user={firebaseUser} />
+          <PlayerAvatar small avatarId={avatarId} />
         </button>
       </header>
 
@@ -659,7 +685,7 @@ function AppHome({
           <section className="app-panel rank-panel">
             <div className="app-title"><div><p>GLOBAL</p><h1>Leaderboard <span>ランキング</span></h1></div></div>
             <div className="player-rank-card">
-              <span className="rank-number">YOU</span><PlayerAvatar user={firebaseUser} />
+              <span className="rank-number">YOU</span><PlayerAvatar avatarId={avatarId} />
               <div><strong>{profileName || "Player One"}</strong><small>{firebaseUser ? "CLOUD PROFILE" : "GUEST PLAYER"}</small></div>
               <b>{completedGames}<small>BESTS</small></b>
             </div>
@@ -670,7 +696,7 @@ function AppHome({
               {activeRanks.length ? activeRanks.map((entry, index) => (
                 <div className="global-rank-row" key={entry.uid}>
                   <strong>{String(index + 1).padStart(2, "0")}</strong>
-                  <span className="rank-avatar">{entry.photoURL ? <img src={entry.photoURL} alt="" referrerPolicy="no-referrer" /> : "遊"}</span>
+                  <AvatarGlyph avatarId={isAvatarId(entry.avatarId) ? entry.avatarId : "play"} className="rank-avatar" />
                   <span>{entry.name}</span>
                   <b>{formatScore(rankGame, entry.score)}</b>
                 </div>
@@ -692,8 +718,15 @@ function AppHome({
         {activeTab === "profile" && (
           <section className="app-panel profile-panel">
             <div className="profile-card">
-              <PlayerAvatar user={firebaseUser} />
+              <PlayerAvatar avatarId={avatarId} />
               <p>PLAYER PROFILE <span>プロフィール</span></p>
+              <div className="avatar-picker" role="group" aria-label="Choose a profile picture">
+                {AVATARS.map((avatar) => (
+                  <button key={avatar.id} className={avatarId === avatar.id ? "selected" : ""} onClick={() => onAvatarChange(avatar.id)} aria-label={`${avatar.label} profile picture`} aria-pressed={avatarId === avatar.id}>
+                    <AvatarGlyph avatarId={avatar.id} className="avatar-option" />
+                  </button>
+                ))}
+              </div>
               <input
                 value={profileName}
                 maxLength={18}
@@ -744,6 +777,7 @@ export default function Home() {
   const [game, setGame] = useState<GameId>("games");
   const [highScores, setHighScores] = useState<HighScores>({});
   const [profileName, setProfileName] = useState("Player One");
+  const [avatarId, setAvatarId] = useState<AvatarId>("play");
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
@@ -755,8 +789,10 @@ export default function Home() {
     try {
       const savedScores = window.localStorage.getItem("pocket-play-scores");
       const savedName = window.localStorage.getItem("pocket-play-name");
+      const savedAvatar = window.localStorage.getItem("game-garden-avatar");
       if (savedScores) setHighScores(JSON.parse(savedScores));
       if (savedName) setProfileName(savedName);
+      if (isAvatarId(savedAvatar)) setAvatarId(savedAvatar);
     } catch { /* Device storage may be unavailable. */ }
     window.addEventListener("hashchange", onPopState);
     return () => window.removeEventListener("hashchange", onPopState);
@@ -775,6 +811,8 @@ export default function Home() {
         const profile = await getDoc(profileRef);
         const data = profile.data();
         const cloudName = typeof data?.displayName === "string" ? data.displayName : user.displayName || "Player One";
+        const savedAvatar = window.localStorage.getItem("game-garden-avatar");
+        const cloudAvatar: AvatarId = isAvatarId(data?.avatarId) ? data.avatarId : isAvatarId(savedAvatar) ? savedAvatar : "play";
         const cloudScores = data?.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {};
         const savedScores = window.localStorage.getItem("pocket-play-scores");
         const localScores = savedScores ? JSON.parse(savedScores) as HighScores : {};
@@ -784,17 +822,20 @@ export default function Home() {
           const cloud = cloudScores[gameId];
           if (local != null && (cloud == null || local < cloud)) {
             mergedScores[gameId] = local;
-            await saveCloudScore(user, gameId, local, cloudName);
+            await saveCloudScore(user, gameId, local, cloudName, cloudAvatar);
           }
         }
         setProfileName(cloudName);
+        setAvatarId(cloudAvatar);
         setHighScores(mergedScores);
         window.localStorage.setItem("pocket-play-name", cloudName);
         window.localStorage.setItem("pocket-play-scores", JSON.stringify(mergedScores));
+        window.localStorage.setItem("game-garden-avatar", cloudAvatar);
         await setDoc(profileRef, {
           uid: user.uid,
           displayName: cloudName,
           photoURL: user.photoURL || "",
+          avatarId: cloudAvatar,
           updatedAt: serverTimestamp(),
           ...(profile.exists() ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
@@ -827,12 +868,17 @@ export default function Home() {
       try { window.localStorage.setItem("pocket-play-scores", JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
       return next;
     });
-    if (firebaseUser) void saveCloudScore(firebaseUser, gameId, score, profileName).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
-  }, [firebaseUser, profileName]);
+    if (firebaseUser) void saveCloudScore(firebaseUser, gameId, score, profileName, avatarId).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
+  }, [firebaseUser, profileName, avatarId]);
 
   const updateProfileName = useCallback((name: string) => {
     setProfileName(name);
     try { window.localStorage.setItem("pocket-play-name", name); } catch { /* Device storage may be unavailable. */ }
+  }, []);
+
+  const updateAvatar = useCallback((nextAvatar: AvatarId) => {
+    setAvatarId(nextAvatar);
+    try { window.localStorage.setItem("game-garden-avatar", nextAvatar); } catch { /* Device storage may be unavailable. */ }
   }, []);
 
   const saveProfile = useCallback(async () => {
@@ -845,6 +891,7 @@ export default function Home() {
         uid: firebaseUser.uid,
         displayName,
         photoURL: firebaseUser.photoURL || "",
+        avatarId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
       await updateProfile(firebaseUser, { displayName });
@@ -853,17 +900,19 @@ export default function Home() {
         batch.set(doc(db, "leaderboards", gameId, "entries", firebaseUser.uid), {
           uid: firebaseUser.uid,
           name: displayName,
-          photoURL: firebaseUser.photoURL || "",
+          photoURL: "",
+          avatarId,
           score,
           updatedAt: serverTimestamp(),
         }, { merge: true });
       }
       await batch.commit();
       window.localStorage.setItem("pocket-play-name", displayName);
+      window.localStorage.setItem("game-garden-avatar", avatarId);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Could not save the profile.");
     }
-  }, [firebaseUser, highScores, profileName]);
+  }, [firebaseUser, highScores, profileName, avatarId]);
 
   const signIn = useCallback(async () => {
     setAuthLoading(true);
@@ -902,6 +951,7 @@ export default function Home() {
         uid: credential.user.uid,
         displayName,
         photoURL: "",
+        avatarId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
@@ -911,7 +961,7 @@ export default function Home() {
     } finally {
       setAuthLoading(false);
     }
-  }, [profileName]);
+  }, [profileName, avatarId]);
 
   const signOutProfile = useCallback(() => {
     void signOut(auth).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not sign out."));
@@ -931,8 +981,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} onProfileNameChange={updateProfileName} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} />;
-  }, [game, highScores, profileName, recordScore, updateProfileName, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards]);
+    return <AppHome activeTab={activeTab} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} />;
+  }, [game, highScores, profileName, avatarId, recordScore, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards]);
 
   return view;
 }

@@ -61,6 +61,10 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /Create account/);
   assert.match(source, /signInWithEmailAndPassword/);
   assert.match(source, /createUserWithEmailAndPassword/);
+  assert.match(source, /Choose a profile picture/);
+  assert.match(source, /avatar-style-/);
+  const avatarOptions = source.match(/const AVATARS[\s\S]*?\n\];/)?.[0] ?? "";
+  assert.equal((avatarOptions.match(/glyph: "/g) ?? []).length, 10);
   assert.match(source, /onAuthStateChanged/);
   assert.match(source, /saveCloudScore/);
   assert.match(source, /<p>GLOBAL<\/p><h1>Leaderboard/);
@@ -74,4 +78,5 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.global-rank-list/);
   assert.match(firebaseSource, /game-garden-658de/);
   assert.match(firestoreRules, /request\.auth\.uid == userId/);
+  assert.match(firestoreRules, /'sakura'.*'dragon'.*'sun'/);
 });
