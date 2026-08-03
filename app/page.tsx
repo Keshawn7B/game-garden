@@ -95,6 +95,7 @@ type NumberOnlineState = {
 
 const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
+const PREMIUM_ACCESS_CODE = "SOKEY";
 const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: string }> = {
   games: { label: "ARCADE", japanese: "ゲーム", glyph: "遊" },
   leaderboard: { label: "RANKS", japanese: "ランキング", glyph: "冠" },
@@ -128,6 +129,10 @@ const AVATARS: { id: AvatarId; glyph?: string; label: string; premium?: boolean 
 
 function isAvatarId(value: unknown): value is AvatarId {
   return typeof value === "string" && AVATARS.some((avatar) => avatar.id === value);
+}
+
+function isPremiumAvatar(value: AvatarId) {
+  return AVATARS.some((avatar) => avatar.id === value && avatar.premium);
 }
 
 function friendCodeFor(uid: string) {
@@ -1916,6 +1921,8 @@ function AppHome({
   onCloseInvite,
   onJoinLobby,
   onOpenChat,
+  premiumUnlocked,
+  onUnlockPremium,
 }: {
   activeTab: AppTab;
   theme: ThemeMode;
@@ -1949,6 +1956,8 @@ function AppHome({
   onCloseInvite: (invite: GameInvite) => Promise<void>;
   onJoinLobby: (gameId: PlayableGameId, roomCode?: string) => void;
   onOpenChat: (friend: FriendEntry) => void;
+  premiumUnlocked: boolean;
+  onUnlockPremium: (code: string) => Promise<string>;
 }) {
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
@@ -1964,6 +1973,9 @@ function AppHome({
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
   const [friendSearch, setFriendSearch] = useState("");
+  const [premiumCode, setPremiumCode] = useState("");
+  const [premiumMessage, setPremiumMessage] = useState("");
+  const [premiumBusy, setPremiumBusy] = useState(false);
   const activeRanks = leaderboards[rankGame] ?? [];
   const liveIncoming = incomingInvites.filter(inviteIsLive);
   const liveOutgoing = outgoingInvites.filter(inviteIsLive);
@@ -1973,6 +1985,18 @@ function AppHome({
   const displayedFriends = [...friends]
     .filter((friend) => friend.name.toLowerCase().includes(friendSearch.trim().toLowerCase()))
     .sort((left, right) => Number(Boolean(right.isOnline)) - Number(Boolean(left.isOnline)) || left.name.localeCompare(right.name));
+
+  const submitPremiumCode = async () => {
+    setPremiumBusy(true);
+    setPremiumMessage("");
+    try {
+      const message = await onUnlockPremium(premiumCode);
+      setPremiumMessage(message);
+      if (message.startsWith("Premium unlocked")) setPremiumCode("");
+    } finally {
+      setPremiumBusy(false);
+    }
+  };
 
   const submitFriend = async () => {
     setFriendBusy(true);
@@ -2133,10 +2157,18 @@ function AppHome({
             <div className="profile-card">
               <PlayerAvatar avatarId={avatarId} />
               <p>PLAYER PROFILE <span>プロフィール</span></p>
-              <div className="avatar-collection-label premium-collection-label"><span>✦ PREMIUM COLLECTION</span><small>伝説のアバター</small></div>
-              <div className="avatar-picker premium-avatar-picker" role="group" aria-label="Choose a premium profile picture">
+              <div className={`premium-access-card ${premiumUnlocked ? "unlocked" : "locked"}`}>
+                <div className="premium-access-heading"><span>{premiumUnlocked ? "認" : "鍵"}</span><div><small>PREMIUM ACCESS</small><strong>{premiumUnlocked ? "Legendary collection unlocked" : "Enter your access code"}</strong></div><b>{premiumUnlocked ? "ACTIVE" : "LOCKED"}</b></div>
+                {premiumUnlocked ? <p>This account can use every legendary profile picture.</p> : firebaseUser && !firebaseUser.isAnonymous ? <>
+                  <p>Premium access is tied to this account and follows you across devices.</p>
+                  <div className="premium-code-form"><input value={premiumCode} maxLength={12} onChange={(event) => setPremiumCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && premiumCode) void submitPremiumCode(); }} placeholder="ACCESS CODE" aria-label="Premium access code" autoComplete="off" /><button onClick={() => void submitPremiumCode()} disabled={!premiumCode || premiumBusy}>{premiumBusy ? "Checking…" : "Unlock"}</button></div>
+                </> : <p>Sign in or create an account before entering a premium access code.</p>}
+                {premiumMessage && <p className="premium-access-message" role="status">{premiumMessage}</p>}
+              </div>
+              <div className="avatar-collection-label premium-collection-label"><span>✦ PREMIUM COLLECTION</span><small>{premiumUnlocked ? "伝説のアバター" : "ACCOUNT ACCESS REQUIRED"}</small></div>
+              <div className={`avatar-picker premium-avatar-picker ${premiumUnlocked ? "" : "locked"}`} role="group" aria-label="Choose a premium profile picture">
                 {AVATARS.filter((avatar) => avatar.premium).map((avatar) => (
-                  <button key={avatar.id} className={avatarId === avatar.id ? "selected" : ""} onClick={() => onAvatarChange(avatar.id)} aria-label={`${avatar.label} premium profile picture`} aria-pressed={avatarId === avatar.id}>
+                  <button key={avatar.id} className={`${avatarId === avatar.id ? "selected" : ""} ${premiumUnlocked ? "" : "locked"}`} onClick={() => onAvatarChange(avatar.id)} aria-label={`${avatar.label} premium profile picture${premiumUnlocked ? "" : ", locked"}`} aria-pressed={avatarId === avatar.id} disabled={!premiumUnlocked}>
                     <AvatarGlyph avatarId={avatar.id} className="avatar-option" />
                   </button>
                 ))}
@@ -2174,14 +2206,13 @@ function AppHome({
                 </>}
               </div>
             </div>
-            <div className="profile-stats">
-              <div><strong>{completedGames}</strong><span>HIGH SCORES</span></div>
-              <div><strong>{GAMES.length}</strong><span>GAMES</span></div>
-            </div>
-            <div className="profile-scores">
-              <h2>Your best <span>自己ベスト</span></h2>
-              {scoredGames.map((game) => <p key={game.id}><span>{game.name}</span><strong>{formatScore(game.scoreGame, highScores[game.scoreGame])}</strong></p>)}
-            </div>
+            <details className="profile-stats-menu">
+              <summary><span><small>PLAYER DATA · プレイヤーデータ</small><strong>Stats &amp; high scores</strong></span><span className="stats-summary-counts"><b>{completedGames}</b> BESTS <b>{GAMES.length}</b> GAMES</span><i>⌄</i></summary>
+              <div className="profile-stats-dropdown">
+                <div className="profile-stats-compact"><div><strong>{completedGames}</strong><span>HIGH SCORES</span></div><div><strong>{GAMES.length}</strong><span>GAMES</span></div></div>
+                <div className="profile-score-dropdown"><h2>Your best <span>自己ベスト</span></h2>{scoredGames.map((game) => <p key={game.id}><span>{game.name}</span><strong>{formatScore(game.scoreGame, highScores[game.scoreGame])}</strong></p>)}</div>
+              </div>
+            </details>
           </section>
         )}
 
@@ -2311,6 +2342,7 @@ export default function Home() {
   const [presenceNow, setPresenceNow] = useState<number | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatTargetUid, setChatTargetUid] = useState<string | null>(null);
+  const [premiumUnlocked, setPremiumUnlocked] = useState(false);
 
   useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
@@ -2323,7 +2355,7 @@ export default function Home() {
         const savedTheme = window.localStorage.getItem("game-garden-theme");
         if (savedScores) setHighScores(JSON.parse(savedScores));
         if (savedName) setProfileName(savedName);
-        if (isAvatarId(savedAvatar)) setAvatarId(savedAvatar);
+        if (isAvatarId(savedAvatar) && !isPremiumAvatar(savedAvatar)) setAvatarId(savedAvatar);
         if (savedTheme === "sakura") {
           setTheme("sakura");
           document.documentElement.dataset.theme = "sakura";
@@ -2351,6 +2383,8 @@ export default function Home() {
         setActiveRoom(null);
         setChatOpen(false);
         setChatTargetUid(null);
+        setPremiumUnlocked(false);
+        setAvatarId((current) => isPremiumAvatar(current) ? "play" : current);
         return;
       }
 
@@ -2358,13 +2392,15 @@ export default function Home() {
         const savedGuestName = window.localStorage.getItem("game-garden-guest-name") || `Guest ${user.uid.slice(0, 4).toUpperCase()}`;
         const savedAvatar = window.localStorage.getItem("game-garden-avatar");
         setProfileName(savedGuestName);
-        if (isAvatarId(savedAvatar)) setAvatarId(savedAvatar);
+        if (isAvatarId(savedAvatar) && !isPremiumAvatar(savedAvatar)) setAvatarId(savedAvatar);
         setFriends([]);
         setFriendProfiles({});
         setIncomingInvites([]);
         setOutgoingInvites([]);
         setChatOpen(false);
         setChatTargetUid(null);
+        setPremiumUnlocked(false);
+        setAvatarId((current) => isPremiumAvatar(current) ? "play" : current);
         return;
       }
 
@@ -2372,9 +2408,11 @@ export default function Home() {
         const profileRef = doc(db, "users", user.uid);
         const profile = await getDoc(profileRef);
         const data = profile.data();
+        const hasPremiumAccess = data?.premiumUnlocked === true;
         const cloudName = typeof data?.displayName === "string" ? data.displayName : user.displayName || "Player One";
         const savedAvatar = window.localStorage.getItem("game-garden-avatar");
-        const cloudAvatar: AvatarId = isAvatarId(data?.avatarId) ? data.avatarId : isAvatarId(savedAvatar) ? savedAvatar : "play";
+        const avatarCandidate: AvatarId = isAvatarId(data?.avatarId) ? data.avatarId : isAvatarId(savedAvatar) ? savedAvatar : "play";
+        const cloudAvatar: AvatarId = isPremiumAvatar(avatarCandidate) && !hasPremiumAccess ? "play" : avatarCandidate;
         const cloudScores = data?.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {};
         const savedScores = window.localStorage.getItem("pocket-play-scores");
         const localScores = savedScores ? JSON.parse(savedScores) as HighScores : {};
@@ -2389,6 +2427,7 @@ export default function Home() {
         }
         setProfileName(cloudName);
         setAvatarId(cloudAvatar);
+        setPremiumUnlocked(hasPremiumAccess);
         setHighScores(mergedScores);
         window.localStorage.setItem("pocket-play-name", cloudName);
         window.localStorage.setItem("pocket-play-scores", JSON.stringify(mergedScores));
@@ -2398,6 +2437,7 @@ export default function Home() {
           displayName: cloudName,
           photoURL: user.photoURL || "",
           avatarId: cloudAvatar,
+          premiumUnlocked: hasPremiumAccess,
           updatedAt: serverTimestamp(),
           ...(profile.exists() ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
@@ -2526,9 +2566,30 @@ export default function Home() {
   }, []);
 
   const updateAvatar = useCallback((nextAvatar: AvatarId) => {
+    if (isPremiumAvatar(nextAvatar) && !premiumUnlocked) {
+      setAuthError("Enter a premium access code before choosing a legendary avatar.");
+      return;
+    }
     setAvatarId(nextAvatar);
     try { window.localStorage.setItem("game-garden-avatar", nextAvatar); } catch { /* Device storage may be unavailable. */ }
-  }, []);
+  }, [premiumUnlocked]);
+
+  const unlockPremium = useCallback(async (rawCode: string) => {
+    if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before unlocking premium access.";
+    if (rawCode.trim().toUpperCase() !== PREMIUM_ACCESS_CODE) return "That premium code is not valid.";
+    try {
+      await setDoc(doc(db, "users", firebaseUser.uid), {
+        premiumUnlocked: true,
+        premiumUnlockedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      setPremiumUnlocked(true);
+      setAuthError("");
+      return "Premium unlocked for this account.";
+    } catch {
+      return "Could not unlock premium access. Try again.";
+    }
+  }, [firebaseUser]);
 
   const toggleTheme = useCallback(() => {
     setTheme((current) => {
@@ -2543,6 +2604,7 @@ export default function Home() {
   const saveProfile = useCallback(async () => {
     if (!firebaseUser || firebaseUser.isAnonymous) return;
     const displayName = profileName.trim() || firebaseUser.displayName || "Player One";
+    const savedAvatar = isPremiumAvatar(avatarId) && !premiumUnlocked ? "play" : avatarId;
     setProfileName(displayName);
     setAuthError("");
     try {
@@ -2550,10 +2612,11 @@ export default function Home() {
         uid: firebaseUser.uid,
         displayName,
         photoURL: firebaseUser.photoURL || "",
-        avatarId,
+        avatarId: savedAvatar,
+        premiumUnlocked,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      await syncPublicProfile(firebaseUser, displayName, avatarId, highScores);
+      await syncPublicProfile(firebaseUser, displayName, savedAvatar, highScores);
       await updateProfile(firebaseUser, { displayName });
       const batch = writeBatch(db);
       for (const [gameId, score] of Object.entries(highScores) as [PlayableGameId, number][]) {
@@ -2561,18 +2624,19 @@ export default function Home() {
           uid: firebaseUser.uid,
           name: displayName,
           photoURL: "",
-          avatarId,
+          avatarId: savedAvatar,
           score,
           updatedAt: serverTimestamp(),
         }, { merge: true });
       }
       await batch.commit();
       window.localStorage.setItem("pocket-play-name", displayName);
-      window.localStorage.setItem("game-garden-avatar", avatarId);
+      setAvatarId(savedAvatar);
+      window.localStorage.setItem("game-garden-avatar", savedAvatar);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Could not save the profile.");
     }
-  }, [firebaseUser, highScores, profileName, avatarId]);
+  }, [firebaseUser, highScores, profileName, avatarId, premiumUnlocked]);
 
   const signIn = useCallback(async () => {
     setAuthLoading(true);
@@ -2912,8 +2976,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
 
   return <>{view}<FriendsChat user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onOpen={() => setChatOpen(true)} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} /></>;
 }

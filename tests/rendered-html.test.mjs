@@ -165,6 +165,16 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /premium-avatars\.webp/);
   assert.match(styles, /\.avatar-premium/);
   assert.match(styles, /\.premium-avatar-picker/);
+  assert.match(source, /const PREMIUM_ACCESS_CODE = "SOKEY"/);
+  assert.match(source, /premiumUnlocked/);
+  assert.match(source, /onUnlockPremium/);
+  assert.match(source, /Premium unlocked for this account/);
+  assert.match(source, /className="premium-code-form"/);
+  assert.match(source, /<details className="profile-stats-menu">/);
+  assert.match(source, /Stats &amp; high scores/);
+  assert.match(styles, /\.premium-access-card/);
+  assert.match(styles, /\.premium-avatar-picker button\.locked::after/);
+  assert.match(styles, /\.profile-stats-menu/);
   assert.match(styles, /\.theme-toggle\[aria-pressed="true"\][^}]*linear-gradient\(#0d0d0d,#0d0d0d\) padding-box/);
   assert.match(styles, /\.friend-link-actions/);
   assert.match(styles, /\.friends-panel \.app-title h1[^}]*color:var\(--red\)/);
@@ -235,6 +245,9 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(styles, /data-theme="sakura"[^}]*\.bottom-nav[^}]*position:relative/);
   assert.match(firebaseSource, /game-garden-658de/);
   assert.match(firestoreRules, /request\.auth\.uid == userId/);
+  assert.match(firestoreRules, /premiumUnlocked is bool/);
+  assert.match(firestoreRules, /validAccountAvatar/);
+  assert.match(firestoreRules, /isPremiumAvatar/);
   assert.match(firestoreRules, /publicProfiles/);
   assert.match(firestoreRules, /highScores is map/);
   assert.match(firestoreRules, /users\/\{userId\}\/friends/);

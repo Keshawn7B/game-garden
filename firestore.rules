@@ -3,7 +3,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
-      allow read, create, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && (!request.resource.data.keys().hasAny(['premiumUnlocked']) || request.resource.data.premiumUnlocked is bool)
+        && (!request.resource.data.keys().hasAny(['premiumUnlockedAt']) || request.resource.data.premiumUnlockedAt is timestamp);
     }
 
     match /users/{userId}/friends/{friendId} {
@@ -15,7 +19,7 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 18
-        && validAvatar(request.resource.data.avatarId);
+        && validAccountAvatar(friendId, request.resource.data.avatarId);
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
@@ -32,7 +36,7 @@ service cloud.firestore {
         && request.resource.data.highScores is map
         && (!request.resource.data.keys().hasAny(['online']) || request.resource.data.online is bool)
         && (!request.resource.data.keys().hasAny(['lastActiveAt']) || request.resource.data.lastActiveAt is timestamp)
-        && validAvatar(request.resource.data.avatarId);
+        && validAccountAvatar(userId, request.resource.data.avatarId);
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
@@ -195,7 +199,7 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 18
-        && validAvatar(request.resource.data.avatarId)
+        && validAccountAvatar(userId, request.resource.data.avatarId)
         && request.resource.data.score is int
         && request.resource.data.score >= 1
         && request.resource.data.score <= 10000;
@@ -377,6 +381,17 @@ service cloud.firestore {
 
     function validAvatar(avatarId) {
       return avatarId in ['play', 'sakura', 'fox', 'koi', 'moon', 'crane', 'dragon', 'cat', 'ninja', 'sun', 'pink-blossom', 'pink-heart', 'pink-bunny', 'pink-fan', 'pink-peach', 'premium-shogun', 'premium-kitsune', 'premium-empress', 'premium-dragon', 'premium-koi', 'premium-ronin'];
+    }
+
+    function isPremiumAvatar(avatarId) {
+      return avatarId in ['premium-shogun', 'premium-kitsune', 'premium-empress', 'premium-dragon', 'premium-koi', 'premium-ronin'];
+    }
+
+    function validAccountAvatar(userId, avatarId) {
+      return validAvatar(avatarId)
+        && (!isPremiumAvatar(avatarId)
+          || (exists(/databases/$(database)/documents/users/$(userId))
+            && get(/databases/$(database)/documents/users/$(userId)).data.premiumUnlocked == true));
     }
   }
 }
