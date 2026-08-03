@@ -866,33 +866,76 @@ function MemoryGame({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
 }
 
 type TicMark = "" | "X" | "O";
+type CpuDifficulty = "easy" | "normal" | "hard";
 const TIC_LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
-const TIC_CPU_RANDOM_MOVE_CHANCE = 0.55;
+const CPU_DIFFICULTIES: { id: CpuDifficulty; label: string; japanese: string; hint: string }[] = [
+  { id: "easy", label: "Easy", japanese: "初級", hint: "Relaxed" },
+  { id: "normal", label: "Normal", japanese: "中級", hint: "Balanced" },
+  { id: "hard", label: "Hard", japanese: "上級", hint: "Sharp" },
+];
 
 function ticWinner(board: TicMark[]) {
   for (const [a, b, c] of TIC_LINES) if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
   return "";
 }
 
-function cpuTicMove(board: TicMark[]) {
+function CpuDifficultyPicker({ difficulty, onChange, gameName }: { difficulty: CpuDifficulty; onChange: (difficulty: CpuDifficulty) => void; gameName: string }) {
+  return (
+    <div className="cpu-difficulty" aria-label={`${gameName} CPU difficulty`}>
+      <div><span>CPU LEVEL</span><small>難易度</small></div>
+      <div className="difficulty-options">
+        {CPU_DIFFICULTIES.map((level) => <button key={level.id} className={difficulty === level.id ? "active" : ""} onClick={() => onChange(level.id)} aria-pressed={difficulty === level.id}><span>{level.label}</span><small>{level.japanese} · {level.hint}</small></button>)}
+      </div>
+    </div>
+  );
+}
+
+function ticMinimax(board: TicMark[], maximizing: boolean, depth = 0): number {
+  const winner = ticWinner(board);
+  if (winner === "O") return 10 - depth;
+  if (winner === "X") return depth - 10;
+  const open = board.map((mark, index) => mark ? -1 : index).filter((index) => index >= 0);
+  if (!open.length) return 0;
+  if (maximizing) return Math.max(...open.map((index) => ticMinimax(board.map((mark, cell) => cell === index ? "O" : mark), false, depth + 1)));
+  return Math.min(...open.map((index) => ticMinimax(board.map((mark, cell) => cell === index ? "X" : mark), true, depth + 1)));
+}
+
+function cpuTicMove(board: TicMark[], difficulty: CpuDifficulty) {
   const open = board.map((mark, index) => mark ? -1 : index).filter((index) => index >= 0);
   const randomMove = () => open[Math.floor(Math.random() * open.length)];
   const winning = open.find((index) => ticWinner(board.map((cell, cellIndex) => cellIndex === index ? "O" : cell)) === "O");
-  if (winning != null) return winning;
-  if (Math.random() < TIC_CPU_RANDOM_MOVE_CHANCE) return randomMove();
   const blocking = open.find((index) => ticWinner(board.map((cell, cellIndex) => cellIndex === index ? "X" : cell)) === "X");
-  if (blocking != null) return blocking;
-  if (!board[4]) return 4;
-  return randomMove();
+  if (difficulty === "easy") {
+    if (winning != null && Math.random() < 0.55) return winning;
+    if (blocking != null && Math.random() < 0.25) return blocking;
+    return randomMove();
+  }
+  if (difficulty === "normal") {
+    if (winning != null) return winning;
+    if (blocking != null && Math.random() < 0.78) return blocking;
+    if (Math.random() < 0.28) return randomMove();
+    if (!board[4]) return 4;
+    const openCorner = [0, 2, 6, 8].filter((index) => !board[index]);
+    return openCorner.length ? openCorner[Math.floor(Math.random() * openCorner.length)] : randomMove();
+  }
+  let bestMove = open[0];
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const index of open) {
+    const score = ticMinimax(board.map((mark, cell) => cell === index ? "O" : mark), false);
+    if (score > bestScore) { bestScore = score; bestMove = index; }
+  }
+  return bestMove;
 }
 
 function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
   const [board, setBoard] = useState<TicMark[]>(Array(9).fill(""));
   const [turn, setTurn] = useState<TicMark>("X");
+  const [difficulty, setDifficulty] = useState<CpuDifficulty>("normal");
   const winner = ticWinner(board);
   const draw = !winner && board.every(Boolean);
 
   const reset = () => { setBoard(Array(9).fill("")); setTurn("X"); };
+  const changeDifficulty = (nextDifficulty: CpuDifficulty) => { setDifficulty(nextDifficulty); reset(); };
   const play = (index: number) => {
     if (board[index] || winner || draw) return;
     const next = board.map((cell, cellIndex) => cellIndex === index ? turn : cell);
@@ -906,7 +949,7 @@ function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
       onScore(next.filter((mark) => mark === "X").length);
       return;
     }
-    const cpuIndex = cpuTicMove(next);
+    const cpuIndex = cpuTicMove(next, difficulty);
     setBoard(cpuIndex == null ? next : next.map((cell, cellIndex) => cellIndex === cpuIndex ? "O" : cell));
   };
 
@@ -914,9 +957,10 @@ function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
     <main className="game-shell simple-game-shell">
       <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={reset} aria-label="Restart tic tac toe">↻</button></header>
       <section className="simple-game tic-game">
-        <p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
+        <p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : `VS CPU · ${difficulty.toUpperCase()}`}</p>
         <h1>Tic Tac Toe</h1>
         <p>Make three in a row before your opponent.</p>
+        {mode === "solo" && <CpuDifficultyPicker difficulty={difficulty} onChange={changeDifficulty} gameName="Tic Tac Toe" />}
         {!winner && !draw && <TurnBanner mode={mode} currentPlayer={turn === "X" ? 0 : 1} />}
         <div className="tic-board" aria-label="Tic tac toe board">
           {board.map((mark, index) => <button key={index} className={mark ? `tic-${mark.toLowerCase()}` : ""} onClick={() => play(index)} aria-label={`Square ${index + 1}${mark ? `: ${mark}` : ""}`}>{mark}</button>)}
@@ -933,8 +977,11 @@ type ConnectWin = { player: 1 | 2; cells: number[] };
 const CONNECT_ROWS = 6;
 const CONNECT_COLUMNS = 7;
 const CONNECT_COLUMN_ORDER = [3, 2, 4, 1, 5, 0, 6];
-const CONNECT_CPU_RANDOM_MOVE_CHANCE = 0.45;
-const CONNECT_CPU_BLOCK_CHANCE = 0.55;
+const CONNECT_CPU_LEVELS: Record<CpuDifficulty, { winChance: number; blockChance: number; randomChance: number; depth: number; noise: number }> = {
+  easy: { winChance: 0.65, blockChance: 0.28, randomChance: 0.78, depth: 1, noise: 110 },
+  normal: { winChance: 1, blockChance: 0.72, randomChance: 0.38, depth: 2, noise: 22 },
+  hard: { winChance: 1, blockChance: 1, randomChance: 0, depth: 4, noise: 0 },
+};
 const CONNECT_WINDOWS: number[][] = (() => {
   const windows: number[][] = [];
   for (let row = 0; row < CONNECT_ROWS; row += 1) {
@@ -1023,19 +1070,21 @@ function connectMinimax(board: ConnectPiece[], depth: number, alpha: number, bet
   return best;
 }
 
-function connectCpuMove(board: ConnectPiece[]) {
+function connectCpuMove(board: ConnectPiece[], difficulty: CpuDifficulty) {
+  const settings = CONNECT_CPU_LEVELS[difficulty];
   const openColumns = CONNECT_COLUMN_ORDER.filter((column) => !board[column]);
+  if (!openColumns.length) return 0;
   const winning = openColumns.find((column) => connectWinner(dropConnectPiece(board, column, 2)!.board)?.player === 2);
-  if (winning != null) return winning;
+  if (winning != null && Math.random() < settings.winChance) return winning;
   const blocking = openColumns.find((column) => connectWinner(dropConnectPiece(board, column, 1)!.board)?.player === 1);
-  if (blocking != null && Math.random() < CONNECT_CPU_BLOCK_CHANCE) return blocking;
-  if (Math.random() < CONNECT_CPU_RANDOM_MOVE_CHANCE) return openColumns[Math.floor(Math.random() * openColumns.length)];
+  if (blocking != null && Math.random() < settings.blockChance) return blocking;
+  if (Math.random() < settings.randomChance) return openColumns[Math.floor(Math.random() * openColumns.length)];
 
   let bestColumn = openColumns[0] ?? 0;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const column of openColumns) {
     const move = dropConnectPiece(board, column, 2)!;
-    const score = connectMinimax(move.board, 2, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, false) + Math.random() * 24;
+    const score = connectMinimax(move.board, settings.depth, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, false) + (Math.random() - 0.5) * settings.noise;
     if (score > bestScore) {
       bestScore = score;
       bestColumn = column;
@@ -1052,6 +1101,7 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
   const [hoveredColumn, setHoveredColumn] = useState<number | null>(null);
   const [matchScore, setMatchScore] = useState<[number, number]>([0, 0]);
   const [round, setRound] = useState(1);
+  const [difficulty, setDifficulty] = useState<CpuDifficulty>("normal");
   const winner = useMemo(() => connectWinner(board), [board]);
   const winningCells = useMemo(() => new Set(winner?.cells ?? []), [winner]);
   const draw = !winner && board.every(Boolean);
@@ -1077,6 +1127,11 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
     setHoveredColumn(null);
   };
 
+  const changeDifficulty = (nextDifficulty: CpuDifficulty) => {
+    setDifficulty(nextDifficulty);
+    resetMatch();
+  };
+
   const playColumn = useCallback((column: number) => {
     if (winner || draw || cpuThinking) return;
     const move = dropConnectPiece(board, column, turn);
@@ -1098,7 +1153,7 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
   useEffect(() => {
     if (!cpuThinking) return;
     const timer = window.setTimeout(() => {
-      const move = dropConnectPiece(board, connectCpuMove(board), 2);
+      const move = dropConnectPiece(board, connectCpuMove(board, difficulty), 2);
       if (!move) return;
       const nextWinner = connectWinner(move.board);
       setBoard(move.board);
@@ -1108,7 +1163,7 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
       else setTurn(1);
     }, 460);
     return () => window.clearTimeout(timer);
-  }, [board, cpuThinking]);
+  }, [board, cpuThinking, difficulty]);
 
   const turnName = mode === "solo" ? turn === 1 ? "YOUR TURN" : "CPU THINKING" : `PLAYER ${turn}'S TURN`;
   const resultTitle = winner ? mode === "solo" ? winner.player === 1 ? "You connected four!" : "CPU connected four." : `Player ${winner.player} wins!` : draw ? "Board locked. Draw game." : turnName;
@@ -1117,12 +1172,13 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
     <main className="game-shell simple-game-shell connect-game-shell">
       <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={resetMatch} aria-label="Restart Connect Four match">↻</button></header>
       <section className="connect-game">
-        <div className="connect-heading"><div><p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p><h1>Connect Four</h1><p>Build a line across, down, or diagonally before your opponent.</p></div><span><b>四</b><small>四目並べ</small></span></div>
+        <div className="connect-heading"><div><p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : `VS CPU · ${difficulty.toUpperCase()}`}</p><h1>Connect Four</h1><p>Build a line across, down, or diagonally before your opponent.</p></div><span><b>四</b><small>四目並べ</small></span></div>
+        {mode === "solo" && <CpuDifficultyPicker difficulty={difficulty} onChange={changeDifficulty} gameName="Connect Four" />}
         {mode === "multi" && !winner && !draw && <TurnBanner mode={mode} currentPlayer={turn === 1 ? 0 : 1} scores={matchScore} />}
         <div className="connect-scoreboard" aria-label="Match score">
           <div className={`connect-player player-one ${turn === 1 && !winner ? "is-active" : ""} ${winner?.player === 1 ? "is-winner" : ""}`}><i /><span><small>{mode === "solo" ? "YOU" : "PLAYER 1"}</small><strong>{matchScore[0]}</strong></span></div>
           <div className="connect-round"><small>ROUND</small><strong>{String(round).padStart(2, "0")}</strong><span>{moves} MOVES</span></div>
-          <div className={`connect-player player-two ${turn === 2 && !winner ? "is-active" : ""} ${winner?.player === 2 ? "is-winner" : ""}`}><span><small>{mode === "solo" ? "CPU" : "PLAYER 2"}</small><strong>{matchScore[1]}</strong></span><i /></div>
+          <div className={`connect-player player-two ${turn === 2 && !winner ? "is-active" : ""} ${winner?.player === 2 ? "is-winner" : ""}`}><span><small>{mode === "solo" ? `CPU · ${difficulty.toUpperCase()}` : "PLAYER 2"}</small><strong>{matchScore[1]}</strong></span><i /></div>
         </div>
         <div className={`connect-stage ${winner ? "has-winner" : ""}`}>
           <div className="connect-column-controls" aria-label="Choose a column">
