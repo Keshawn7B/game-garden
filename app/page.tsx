@@ -734,6 +734,7 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
   const winningCells = useMemo(() => new Set(winner?.cells ?? []), [winner]);
   const draw = !winner && board.every(Boolean);
   const cpuThinking = mode === "solo" && turn === 2 && !winner && !draw;
+  const previewDrop = useMemo(() => hoveredColumn == null ? null : dropConnectPiece(board, hoveredColumn, turn)?.index ?? null, [board, hoveredColumn, turn]);
 
   const resetRound = () => {
     setBoard(emptyConnectBoard());
@@ -806,7 +807,11 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
             {Array.from({ length: CONNECT_COLUMNS }, (_, column) => <button key={column} className={hoveredColumn === column ? "is-preview" : ""} disabled={Boolean(board[column]) || Boolean(winner) || draw || cpuThinking} onMouseEnter={() => setHoveredColumn(column)} onMouseLeave={() => setHoveredColumn(null)} onFocus={() => setHoveredColumn(column)} onBlur={() => setHoveredColumn(null)} onClick={() => playColumn(column)} aria-label={`Drop a piece in column ${column + 1}`}><span>▼</span><b>{column + 1}</b></button>)}
           </div>
           <div className="connect-board" role="grid" aria-label="Connect Four board">
-            {board.map((piece, index) => <span role="gridcell" aria-label={`Row ${Math.floor(index / CONNECT_COLUMNS) + 1}, column ${(index % CONNECT_COLUMNS) + 1}${piece ? `: ${mode === "solo" && piece === 2 ? "CPU" : `Player ${piece}`} piece` : ": empty"}`} className={`connect-cell ${piece ? `piece-${piece}` : ""} ${index === lastDrop ? "last-drop" : ""} ${winningCells.has(index) ? "winning-piece" : ""}`} key={index}><i /></span>)}
+            {board.map((piece, index) => {
+              const column = index % CONNECT_COLUMNS;
+              const occupant = piece ? mode === "solo" && piece === 2 ? "CPU" : `Player ${piece}` : "empty";
+              return <button type="button" role="gridcell" disabled={Boolean(board[column]) || Boolean(winner) || draw || cpuThinking} onMouseEnter={() => setHoveredColumn(column)} onMouseLeave={() => setHoveredColumn(null)} onFocus={() => setHoveredColumn(column)} onBlur={() => setHoveredColumn(null)} onClick={() => playColumn(column)} aria-label={`Drop in column ${column + 1}. Row ${Math.floor(index / CONNECT_COLUMNS) + 1} is ${occupant}.`} className={`connect-cell ${piece ? `piece-${piece}` : ""} ${index === lastDrop ? "last-drop" : ""} ${winningCells.has(index) ? "winning-piece" : ""} ${index === previewDrop ? `preview-slot preview-${turn}` : ""}`} key={index}><i /></button>;
+            })}
           </div>
           <div className="connect-feet" aria-hidden="true"><i /><i /></div>
         </div>

@@ -80,6 +80,8 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function ConnectFour/);
   assert.match(source, /function connectCpuMove/);
   assert.match(source, /connect-column-controls/);
+  assert.match(source, /<button type="button" role="gridcell"/);
+  assert.match(source, /preview-slot preview-/);
   assert.match(source, /winning-piece/);
   assert.match(source, /function RockPaperScissors/);
   assert.match(source, /type RpsRound/);
@@ -152,6 +154,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.tic-board/);
   assert.match(styles, /\.connect-board/);
   assert.match(styles, /@keyframes connectDrop/);
+  assert.doesNotMatch(styles, /72%\{transform:translateY\(8px\)/);
   assert.match(styles, /\.rps-choices/);
   assert.match(styles, /\.rps-arena/);
   assert.match(styles, /@keyframes rpsWinnerPop/);
