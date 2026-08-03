@@ -53,9 +53,18 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /VERSUS<small>2 PLAYERS/);
   assert.match(source, /function TurnBanner/);
   assert.match(source, /function GameLobby/);
+  assert.match(source, /type GameRoom/);
+  assert.match(source, /roomCodeFromUrl/);
+  assert.match(source, /makeRoomCode/);
+  assert.match(source, /signInAnonymously/);
+  assert.match(source, /CREATE ROOM/);
+  assert.match(source, /JOIN ROOM/);
+  assert.match(source, /SHARE LINK/);
+  assert.match(source, /COPY LINK/);
+  assert.match(source, /searchParams\.set\("room"/);
   assert.match(source, /VERSUS LOBBY · 対戦ロビー/);
   assert.match(source, /Invite friends/);
-  assert.match(source, /Accept Invite/);
+  assert.match(source, />Accept<\/button>/);
   assert.match(source, /Start Versus/);
   assert.match(source, /onJoinLobby/);
   assert.match(source, /`\$\{gameId\}-lobby`/);
@@ -132,6 +141,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.game-lobby/);
   assert.match(styles, /\.lobby-players/);
   assert.match(styles, /\.lobby-friends/);
+  assert.match(styles, /\.lobby-entry-grid/);
+  assert.match(styles, /\.room-share-card/);
   assert.match(styles, /\.tic-board/);
   assert.match(styles, /\.rps-choices/);
   assert.match(styles, /\.rps-arena/);
@@ -173,6 +184,9 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /users\/\{userId\}\/friends/);
   assert.match(firestoreRules, /invites\/\{inviteId\}/);
   assert.match(firestoreRules, /validNewInvite/);
+  assert.match(firestoreRules, /rooms\/\{roomCode\}/);
+  assert.match(firestoreRules, /validNewRoom/);
+  assert.match(firestoreRules, /validRoomCode/);
   assert.match(firestoreRules, /affectedKeys\(\)\.hasOnly/);
   assert.match(firestoreRules, /'sakura'.*'dragon'.*'pink-blossom'.*'pink-peach'/);
 });

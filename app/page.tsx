@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
@@ -30,6 +30,22 @@ type GameInvite = {
   gameId: PlayableGameId;
   gameName: string;
   status: InviteStatus;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+  expiresAt?: Timestamp;
+  roomCode?: string;
+};
+type GameRoom = {
+  code: string;
+  gameId: PlayableGameId;
+  gameName: string;
+  hostUid: string;
+  hostName: string;
+  hostAvatar: AvatarId;
+  guestUid?: string;
+  guestName?: string;
+  guestAvatar?: AvatarId;
+  status: "open" | "ready";
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   expiresAt?: Timestamp;
@@ -75,8 +91,19 @@ function friendCodeFromUrl() {
   return /^[A-Z0-9]{8}$/.test(code) ? code : "";
 }
 
-function inviteIdFor(fromUid: string, toUid: string, gameId: PlayableGameId) {
-  return `${fromUid}--${toUid}--${gameId}`;
+function roomCodeFromUrl() {
+  if (typeof window === "undefined") return "";
+  const code = new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
+  return /^[A-Z2-9]{6}$/.test(code) ? code : "";
+}
+
+function makeRoomCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+}
+
+function inviteIdFor(fromUid: string, toUid: string, gameId: PlayableGameId, roomCode?: string) {
+  return `${fromUid}--${toUid}--${gameId}${roomCode ? `--${roomCode}` : ""}`;
 }
 
 function inviteIsLive(invite: GameInvite) {
@@ -897,55 +924,87 @@ function GameLobby({
   game,
   firebaseUser,
   profileName,
-  avatarId,
   friends,
-  incomingInvites,
   outgoingInvites,
+  roomCode,
+  room,
+  onCreateRoom,
+  onJoinRoom,
+  onLeaveRoom,
   onSendInvite,
-  onRespondInvite,
   onCancelInvite,
-  onCloseInvite,
   onStart,
   onBack,
   onOpenFriends,
-  onOpenProfile,
 }: {
   game: PlayableGameId;
   firebaseUser: User | null;
   profileName: string;
-  avatarId: AvatarId;
   friends: FriendEntry[];
-  incomingInvites: GameInvite[];
   outgoingInvites: GameInvite[];
-  onSendInvite: (friend: FriendEntry, gameId: PlayableGameId) => Promise<string>;
-  onRespondInvite: (invite: GameInvite, response: "accepted" | "declined") => Promise<void>;
+  roomCode: string;
+  room: GameRoom | null;
+  onCreateRoom: (gameId: PlayableGameId, guestName: string) => Promise<string>;
+  onJoinRoom: (code: string, guestName: string) => Promise<string>;
+  onLeaveRoom: () => Promise<void>;
+  onSendInvite: (friend: FriendEntry, gameId: PlayableGameId, roomCode: string) => Promise<string>;
   onCancelInvite: (invite: GameInvite) => Promise<void>;
-  onCloseInvite: (invite: GameInvite) => Promise<void>;
   onStart: () => void;
   onBack: () => void;
   onOpenFriends: () => void;
-  onOpenProfile: () => void;
 }) {
   const details = GAME_MENUS[game];
   const [busyFriend, setBusyFriend] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState(false);
+  const [guestName, setGuestName] = useState(firebaseUser?.isAnonymous ? profileName : "Guest");
+  const [joinCode, setJoinCode] = useState(roomCode);
   const [message, setMessage] = useState("");
-  const activeInvites = [...outgoingInvites, ...incomingInvites]
-    .filter((invite, index, all) => invite.gameId === game && (inviteIsLive(invite) || invite.status === "accepted") && all.findIndex((item) => item.id === invite.id) === index)
-    .sort((left, right) => Number(right.status === "accepted") - Number(left.status === "accepted"));
-  const activeInvite = activeInvites[0];
-  const isHost = Boolean(activeInvite && firebaseUser && activeInvite.fromUid === firebaseUser.uid);
-  const opponent = activeInvite ? {
-    name: isHost ? activeInvite.toName : activeInvite.fromName,
-    avatarId: isHost ? activeInvite.toAvatar : activeInvite.fromAvatar,
-  } : null;
-  const roomReady = activeInvite?.status === "accepted";
-  const incomingRequest = activeInvite?.status === "pending" && !isHost;
+  const isHost = Boolean(room && firebaseUser && room.hostUid === firebaseUser.uid);
+  const roomReady = room?.status === "ready" && Boolean(room.guestUid);
+  const activeInvite = outgoingInvites.find((invite) => invite.gameId === game && invite.roomCode === room?.code && (inviteIsLive(invite) || invite.status === "accepted"));
+
+  const createRoom = async () => {
+    setBusyAction(true);
+    setMessage("");
+    try { setMessage(await onCreateRoom(game, guestName)); }
+    finally { setBusyAction(false); }
+  };
+
+  const joinRoom = async () => {
+    setBusyAction(true);
+    setMessage("");
+    try { setMessage(await onJoinRoom(joinCode, guestName)); }
+    finally { setBusyAction(false); }
+  };
 
   const inviteFriend = async (friend: FriendEntry) => {
+    if (!room) return;
     setBusyFriend(friend.uid);
     setMessage("");
-    setMessage(await onSendInvite(friend, game));
+    setMessage(await onSendInvite(friend, game, room.code));
     setBusyFriend(null);
+  };
+
+  const makeRoomLink = () => {
+    if (!room) return "";
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", room.code);
+    url.hash = `${room.gameId}-lobby`;
+    return url.toString();
+  };
+
+  const copyRoomLink = async () => {
+    try {
+      await navigator.clipboard.writeText(makeRoomLink());
+      setMessage("Invite link copied.");
+    } catch { setMessage("Could not copy the link."); }
+  };
+
+  const shareRoomLink = async () => {
+    const url = makeRoomLink();
+    if (!navigator.share) { await copyRoomLink(); return; }
+    try { await navigator.share({ title: `${details.title} · Game Garden`, text: `Join my ${details.title} room.`, url }); }
+    catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) await copyRoomLink(); }
   };
 
   return (
@@ -960,38 +1019,26 @@ function GameLobby({
           <button className="menu-close" onClick={onBack} aria-label="Close versus lobby">×</button>
           <div className="lobby-heading">
             <span className={`game-cover lobby-game-cover art-${game}`}><i>{details.glyph}</i></span>
-            <div><p>VERSUS LOBBY · 対戦ロビー</p><h1>{details.title}</h1><span>Invite a friend before the match starts.</span></div>
+            <div><p>VERSUS LOBBY · 対戦ロビー</p><h1>{details.title}</h1><span>Create a room or join with a six-character code.</span></div>
           </div>
 
-          <div className="lobby-players" aria-label="Lobby players">
-            <div className="lobby-player ready"><AvatarGlyph avatarId={avatarId} className="lobby-avatar" /><span><small>PLAYER 1</small><strong>{profileName || "Player One"}</strong><em>READY</em></span></div>
-            <b>VS</b>
-            <div className={`lobby-player ${roomReady ? "ready" : "waiting"}`}>
-              {opponent ? <AvatarGlyph avatarId={opponent.avatarId} className="lobby-avatar" /> : <span className="lobby-empty-avatar">?</span>}
-              <span><small>PLAYER 2</small><strong>{opponent?.name || "Invite a friend"}</strong><em>{roomReady ? "READY" : activeInvite ? "WAITING" : "OPEN"}</em></span>
-            </div>
-          </div>
-
-          {!firebaseUser ? (
-            <div className="lobby-empty-state"><strong>Sign in to invite friends.</strong><span>Your profile and friend list will appear here.</span><button className="primary-button" onClick={onOpenProfile}>Open Profile</button></div>
-          ) : activeInvite ? (
-            <div className="lobby-room">
-              <div><small>ROOM</small><strong>#{activeInvite.id.slice(-8).toUpperCase()}</strong><span>{roomReady ? `${opponent?.name} is ready.` : incomingRequest ? `${opponent?.name} invited you.` : `Waiting for ${opponent?.name}.`}</span></div>
-              {incomingRequest ? (
-                <div className="lobby-room-actions"><button className="primary-button" onClick={() => void onRespondInvite(activeInvite, "accepted")}>Accept Invite</button><button className="secondary-button" onClick={() => void onRespondInvite(activeInvite, "declined")}>Decline</button></div>
-              ) : roomReady ? (
-                <div className="lobby-room-actions"><button className="primary-button" onClick={onStart}>Start Versus</button><button className="secondary-button" onClick={() => void onCloseInvite(activeInvite)}>Leave Lobby</button></div>
-              ) : (
-                <button className="secondary-button lobby-cancel" onClick={() => void onCancelInvite(activeInvite)}>Cancel Invite</button>
-              )}
-            </div>
-          ) : friends.length ? (
-            <div className="lobby-friends">
-              <div className="lobby-section-title"><span>Invite friends</span><span>友達を招待</span></div>
-              {friends.map((friend) => <div className="lobby-friend" key={friend.uid}><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="lobby-friend-avatar" /><strong>{friend.name}</strong><button onClick={() => void inviteFriend(friend)} disabled={busyFriend !== null}>{busyFriend === friend.uid ? "SENDING…" : "INVITE"}</button></div>)}
+          {!room ? (
+            <div className="lobby-entry-grid">
+              <div className="lobby-entry-card"><b>主</b><small>HOST</small><h2>Create room</h2><span>Get a code and invite link instantly.</span>{(!firebaseUser || firebaseUser.isAnonymous) && <input value={guestName} maxLength={18} onChange={(event) => setGuestName(event.target.value)} placeholder="Guest name" aria-label="Guest name" />}<button className="primary-button" disabled={busyAction || guestName.trim().length < 2} onClick={() => void createRoom()}>{busyAction ? "CREATING…" : "CREATE ROOM"}</button></div>
+              <div className="lobby-entry-card"><b>入</b><small>JOIN</small><h2>Enter code</h2><span>No account is required to join.</span>{(!firebaseUser || firebaseUser.isAnonymous) && <input value={guestName} maxLength={18} onChange={(event) => setGuestName(event.target.value)} placeholder="Guest name" aria-label="Guest name for joining" />}<input className="room-code-input" value={joinCode} maxLength={6} onChange={(event) => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ""))} placeholder="ABC234" aria-label="Room code" /><button className="secondary-button" disabled={busyAction || joinCode.length !== 6 || guestName.trim().length < 2} onClick={() => void joinRoom()}>{busyAction ? "JOINING…" : "JOIN ROOM"}</button></div>
             </div>
           ) : (
-            <div className="lobby-empty-state"><strong>Your friend list is empty.</strong><span>Add a friend with their Game Garden link or code.</span><button className="primary-button" onClick={onOpenFriends}>Add Friends</button></div>
+            <>
+              <div className="room-share-card"><div><small>ROOM CODE</small><strong>{room.code}</strong><span>{roomReady ? "Two players ready" : "Waiting for player two"}</span></div><div><button onClick={() => void shareRoomLink()}>SHARE LINK</button><button onClick={() => void copyRoomLink()}>COPY LINK</button></div></div>
+              <div className="lobby-players" aria-label="Lobby players">
+                <div className="lobby-player ready"><AvatarGlyph avatarId={room.hostAvatar} className="lobby-avatar" /><span><small>HOST</small><strong>{room.hostName}</strong><em>READY</em></span></div>
+                <b>VS</b>
+                <div className={`lobby-player ${roomReady ? "ready" : "waiting"}`}>{room.guestUid && room.guestAvatar ? <AvatarGlyph avatarId={room.guestAvatar} className="lobby-avatar" /> : <span className="lobby-empty-avatar">?</span>}<span><small>GUEST</small><strong>{room.guestName || "Waiting for guest"}</strong><em>{roomReady ? "READY" : "OPEN"}</em></span></div>
+              </div>
+              {isHost && !roomReady && friends.length > 0 && !firebaseUser?.isAnonymous && <div className="lobby-friends"><div className="lobby-section-title"><span>Invite friends</span><span>友達を招待</span></div>{friends.map((friend) => <div className="lobby-friend" key={friend.uid}><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="lobby-friend-avatar" /><strong>{friend.name}</strong><button onClick={() => void inviteFriend(friend)} disabled={busyFriend !== null || Boolean(activeInvite)}>{busyFriend === friend.uid ? "SENDING…" : activeInvite?.toUid === friend.uid ? "SENT" : "INVITE"}</button></div>)}</div>}
+              {isHost && !roomReady && !friends.length && !firebaseUser?.isAnonymous && <div className="lobby-empty-state"><strong>Share the link or invite a friend.</strong><span>Your friend list is currently empty.</span><button className="primary-button" onClick={onOpenFriends}>Add Friends</button></div>}
+              <div className="lobby-room-actions room-footer-actions">{roomReady && <button className="primary-button" onClick={onStart}>Start Versus</button>}{activeInvite && inviteIsLive(activeInvite) && <button className="secondary-button" onClick={() => void onCancelInvite(activeInvite)}>Cancel Friend Invite</button>}<button className="secondary-button" onClick={() => void onLeaveRoom()}>Leave Room</button></div>
+            </>
           )}
           {message && <p className="lobby-message" role="status">{message}</p>}
         </div>
@@ -1155,7 +1202,7 @@ function AppHome({
   onRespondInvite: (invite: GameInvite, response: "accepted" | "declined") => Promise<void>;
   onCancelInvite: (invite: GameInvite) => Promise<void>;
   onCloseInvite: (invite: GameInvite) => Promise<void>;
-  onJoinLobby: (gameId: PlayableGameId) => void;
+  onJoinLobby: (gameId: PlayableGameId, roomCode?: string) => void;
 }) {
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
@@ -1260,7 +1307,7 @@ function AppHome({
         </button>
         <div className="header-context" aria-label={`${currentHeader.label} section`}><span>{currentHeader.glyph}</span><div><small>{currentHeader.japanese}</small><strong>{currentHeader.label}</strong></div></div>
         <div className="header-actions">
-          {firebaseUser && <span className="header-online"><i />ONLINE</span>}
+          {firebaseUser && <span className="header-online"><i />{firebaseUser.isAnonymous ? "GUEST" : "ONLINE"}</span>}
           {liveIncoming.length > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${liveIncoming.length} pending game invites`}><b>招</b><span>{liveIncoming.length}</span></button>}
           <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
@@ -1350,10 +1397,10 @@ function AppHome({
                 placeholder="Player One"
               />
               {firebaseUser?.email && <small className="profile-email">{firebaseUser.email}</small>}
-              <span className="local-badge">{firebaseUser ? "CLOUD PROFILE" : "GUEST PROFILE"}</span>
+              <span className="local-badge">{firebaseUser && !firebaseUser.isAnonymous ? "CLOUD PROFILE" : "GUEST PROFILE"}</span>
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <div className="profile-actions">
-                {firebaseUser ? <><button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button></> : <>
+                {firebaseUser && !firebaseUser.isAnonymous ? <><button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button></> : <>
                   <div className="email-auth-fields">
                     <input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="Email address" aria-label="Email address" autoComplete="email" />
                     <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="Password" aria-label="Password" autoComplete="current-password" minLength={6} />
@@ -1381,7 +1428,7 @@ function AppHome({
         {activeTab === "friends" && (
           <section className="app-panel friends-panel">
             <div className="app-title"><div><p>SOCIAL</p><h1>Friends <span>友達</span></h1></div><strong>{friends.length}<small>FRIENDS</small></strong></div>
-            {!firebaseUser ? (
+            {!firebaseUser || firebaseUser.isAnonymous ? (
               <div className="friends-signin-card">
                 <AvatarGlyph avatarId="pink-blossom" className="friend-hero-avatar" />
                 <h2>Sign in to add friends.</h2>
@@ -1394,7 +1441,7 @@ function AppHome({
                   <div className="invite-card incoming-invite" key={invite.id}>
                     <AvatarGlyph avatarId={invite.fromAvatar} className="invite-avatar" />
                     <div><small>INVITED YOU · {inviteTimeLeft(invite)}</small><strong>{invite.fromName}</strong><span>{invite.gameName} · Online match</span></div>
-                    <div className="invite-actions"><button className="primary-button" onClick={() => void onRespondInvite(invite, "accepted").then(() => onJoinLobby(invite.gameId))}>Accept</button><button className="secondary-button" onClick={() => void onRespondInvite(invite, "declined")}>Decline</button></div>
+                    <div className="invite-actions"><button className="primary-button" onClick={() => void onRespondInvite(invite, "accepted").then(() => onJoinLobby(invite.gameId, invite.roomCode))}>Accept</button><button className="secondary-button" onClick={() => void onRespondInvite(invite, "declined")}>Decline</button></div>
                   </div>
                 ))}
                 {readyInvites.map((invite) => {
@@ -1402,8 +1449,8 @@ function AppHome({
                   return (
                     <div className="invite-card ready-invite" key={invite.id}>
                       <AvatarGlyph avatarId={isHost ? invite.toAvatar : invite.fromAvatar} className="invite-avatar" />
-                      <div><small>ROOM READY · #{invite.id.slice(-8).toUpperCase()}</small><strong>{invite.gameName}</strong><span>You + {isHost ? invite.toName : invite.fromName}</span></div>
-                      <div className="invite-actions ready-actions"><button className="primary-button" onClick={() => onJoinLobby(invite.gameId)}>Join Lobby</button><button className="invite-close" onClick={() => void onCloseInvite(invite)} aria-label={`Close ${invite.gameName} room`}>×</button></div>
+                      <div><small>ROOM READY · #{invite.roomCode || invite.id.slice(-8).toUpperCase()}</small><strong>{invite.gameName}</strong><span>You + {isHost ? invite.toName : invite.fromName}</span></div>
+                      <div className="invite-actions ready-actions"><button className="primary-button" onClick={() => onJoinLobby(invite.gameId, invite.roomCode)}>Join Lobby</button><button className="invite-close" onClick={() => void onCloseInvite(invite)} aria-label={`Close ${invite.gameName} room`}>×</button></div>
                     </div>
                   );
                 })}
@@ -1477,6 +1524,8 @@ function AppHome({
 export default function Home() {
   const [game, setGame] = useState<GameId>("games");
   const [friendLinkCode] = useState(friendCodeFromUrl);
+  const [roomCode, setRoomCode] = useState(roomCodeFromUrl);
+  const [activeRoom, setActiveRoom] = useState<GameRoom | null>(null);
   const [gameMode, setGameMode] = useState<GameMode>("solo");
   const [highScores, setHighScores] = useState<HighScores>({});
   const [profileName, setProfileName] = useState("Player One");
@@ -1527,6 +1576,19 @@ export default function Home() {
         setFriendProfiles({});
         setIncomingInvites([]);
         setOutgoingInvites([]);
+        setActiveRoom(null);
+        return;
+      }
+
+      if (user.isAnonymous) {
+        const savedGuestName = window.localStorage.getItem("game-garden-guest-name") || `Guest ${user.uid.slice(0, 4).toUpperCase()}`;
+        const savedAvatar = window.localStorage.getItem("game-garden-avatar");
+        setProfileName(savedGuestName);
+        if (isAvatarId(savedAvatar)) setAvatarId(savedAvatar);
+        setFriends([]);
+        setFriendProfiles({});
+        setIncomingInvites([]);
+        setOutgoingInvites([]);
         return;
       }
 
@@ -1571,14 +1633,27 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || firebaseUser.isAnonymous) return;
     return onSnapshot(collection(db, "users", firebaseUser.uid, "friends"), (snapshot) => {
       setFriends(snapshot.docs.map((friend) => friend.data() as FriendEntry).sort((a, b) => a.name.localeCompare(b.name)));
     }, () => setAuthError("Could not load the friend list."));
   }, [firebaseUser]);
 
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || !roomCode) return;
+    return onSnapshot(doc(db, "rooms", roomCode), (snapshot) => {
+      if (!snapshot.exists()) {
+        setActiveRoom(null);
+        return;
+      }
+      const nextRoom = snapshot.data() as GameRoom;
+      const isParticipant = nextRoom.hostUid === firebaseUser.uid || nextRoom.guestUid === firebaseUser.uid;
+      setActiveRoom(isParticipant ? nextRoom : null);
+    }, () => setAuthError("Could not load that room."));
+  }, [firebaseUser, roomCode]);
+
+  useEffect(() => {
+    if (!firebaseUser || firebaseUser.isAnonymous) return;
     const byNewest = (left: GameInvite, right: GameInvite) => (right.updatedAt?.toMillis() ?? 0) - (left.updatedAt?.toMillis() ?? 0);
     const incomingUnsubscribe = onSnapshot(query(collection(db, "invites"), where("toUid", "==", firebaseUser.uid)), (snapshot) => {
       setIncomingInvites(snapshot.docs.map((invite) => ({ ...invite.data(), id: invite.id } as GameInvite)).sort(byNewest));
@@ -1632,7 +1707,7 @@ export default function Home() {
       try { window.localStorage.setItem("pocket-play-scores", JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
       return next;
     });
-    if (firebaseUser) void saveCloudScore(firebaseUser, gameId, score, profileName, avatarId).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
+    if (firebaseUser && !firebaseUser.isAnonymous) void saveCloudScore(firebaseUser, gameId, score, profileName, avatarId).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
   }, [firebaseUser, profileName, avatarId]);
 
   const updateProfileName = useCallback((name: string) => {
@@ -1656,7 +1731,7 @@ export default function Home() {
   }, []);
 
   const saveProfile = useCallback(async () => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || firebaseUser.isAnonymous) return;
     const displayName = profileName.trim() || firebaseUser.displayName || "Player One";
     setProfileName(displayName);
     setAuthError("");
@@ -1744,7 +1819,7 @@ export default function Home() {
   }, []);
 
   const addFriend = useCallback(async (rawCode: string) => {
-    if (!firebaseUser) return "Sign in before adding friends.";
+    if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before adding friends.";
     const code = rawCode.trim().toUpperCase();
     if (code === friendCodeFor(firebaseUser.uid)) return "That is your own friend code.";
     try {
@@ -1768,17 +1843,112 @@ export default function Home() {
   }, [firebaseUser]);
 
   const removeFriend = useCallback((friendUid: string) => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || firebaseUser.isAnonymous) return;
     void deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid)).catch(() => setAuthError("Could not remove that friend."));
   }, [firebaseUser]);
 
-  const sendInvite = useCallback(async (friend: FriendEntry, gameId: PlayableGameId) => {
+  const roomIdentity = useCallback(async (requestedName: string) => {
+    let user = auth.currentUser;
+    if (!user) user = (await signInAnonymously(auth)).user;
+    const preferredName = user.isAnonymous ? requestedName.trim().slice(0, 18) : (profileName.trim() || user.displayName || "Player One").slice(0, 18);
+    const name = preferredName.length >= 2 ? preferredName : user.isAnonymous ? `Guest ${user.uid.slice(0, 4).toUpperCase()}` : "Player One";
+    if (user.isAnonymous) {
+      window.localStorage.setItem("game-garden-guest-name", name);
+      setProfileName(name);
+    }
+    return { user, name };
+  }, [profileName]);
+
+  const rememberRoom = useCallback((code: string, gameId: PlayableGameId) => {
+    setRoomCode(code);
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", code);
+    url.hash = `${gameId}-lobby`;
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    setGame(`${gameId}-lobby`);
+  }, []);
+
+  const createRoom = useCallback(async (gameId: PlayableGameId, requestedName: string) => {
+    try {
+      const { user, name } = await roomIdentity(requestedName);
+      const gameDetails = GAMES.find((item) => item.id === gameId)!;
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const code = makeRoomCode();
+        const roomRef = doc(db, "rooms", code);
+        if ((await getDoc(roomRef)).exists()) continue;
+        const nextRoom: Omit<GameRoom, "createdAt" | "updatedAt" | "expiresAt"> = { code, gameId, gameName: gameDetails.name, hostUid: user.uid, hostName: name, hostAvatar: avatarId, status: "open" };
+        await setDoc(roomRef, { ...nextRoom, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + INVITE_LIFETIME_MS) });
+        setActiveRoom(nextRoom);
+        rememberRoom(code, gameId);
+        return `Room ${code} is ready to share.`;
+      }
+      return "Could not find an open room code. Try again.";
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not create the room.");
+      return "Could not create the room.";
+    }
+  }, [avatarId, rememberRoom, roomIdentity]);
+
+  const joinRoom = useCallback(async (rawCode: string, requestedName: string) => {
+    const code = rawCode.trim().toUpperCase();
+    if (!/^[A-Z2-9]{6}$/.test(code)) return "Enter a valid six-character room code.";
+    try {
+      const { user, name } = await roomIdentity(requestedName);
+      const roomRef = doc(db, "rooms", code);
+      const snapshot = await getDoc(roomRef);
+      if (!snapshot.exists()) return "That room was not found.";
+      const foundRoom = snapshot.data() as GameRoom;
+      if ((foundRoom.expiresAt?.toMillis() ?? 0) <= Date.now()) return "That room has expired.";
+      if (foundRoom.hostUid !== user.uid && foundRoom.guestUid && foundRoom.guestUid !== user.uid) return "That room already has two players.";
+      if (foundRoom.hostUid !== user.uid && foundRoom.guestUid !== user.uid) {
+        await updateDoc(roomRef, { guestUid: user.uid, guestName: name, guestAvatar: avatarId, status: "ready", updatedAt: serverTimestamp() });
+      }
+      const joinedRoom: GameRoom = foundRoom.hostUid === user.uid ? foundRoom : { ...foundRoom, guestUid: user.uid, guestName: name, guestAvatar: avatarId, status: "ready" };
+      setActiveRoom(joinedRoom);
+      rememberRoom(code, foundRoom.gameId);
+      return `Joined room ${code}.`;
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not join the room.");
+      return "Could not join the room.";
+    }
+  }, [avatarId, rememberRoom, roomIdentity]);
+
+  const leaveRoom = useCallback(async () => {
+    const user = auth.currentUser;
+    const code = roomCode;
+    try {
+      if (user && code) {
+        const roomRef = doc(db, "rooms", code);
+        const snapshot = await getDoc(roomRef);
+        if (snapshot.exists()) {
+          const data = snapshot.data() as GameRoom;
+          if (data.hostUid === user.uid || data.guestUid === user.uid) await deleteDoc(roomRef);
+        }
+        const relatedInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.roomCode === code && all.findIndex((item) => item.id === invite.id) === index);
+        for (const invite of relatedInvites) {
+          if (invite.status === "pending" && invite.fromUid === user.uid) await updateDoc(doc(db, "invites", invite.id), { status: "cancelled", respondedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          else if (invite.status !== "pending") await deleteDoc(doc(db, "invites", invite.id));
+        }
+      }
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not close the room.");
+    } finally {
+      setActiveRoom(null);
+      setRoomCode("");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("room");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  }, [incomingInvites, outgoingInvites, roomCode]);
+
+  const sendInvite = useCallback(async (friend: FriendEntry, gameId: PlayableGameId, activeRoomCode = "") => {
     if (!firebaseUser) return "Sign in before sending an invite.";
-    const duplicate = outgoingInvites.find((invite) => invite.toUid === friend.uid && invite.gameId === gameId && (inviteIsLive(invite) || invite.status === "accepted"));
+    if (firebaseUser.isAnonymous) return "Create an account to invite saved friends, or share the room link.";
+    const duplicate = outgoingInvites.find((invite) => invite.toUid === friend.uid && invite.gameId === gameId && invite.roomCode === (activeRoomCode || undefined) && (inviteIsLive(invite) || invite.status === "accepted"));
     if (duplicate?.status === "accepted") return `Your ${duplicate.gameName} room with ${friend.name} is already ready.`;
     if (duplicate) return `${friend.name} already has that invitation.`;
     const gameDetails = GAMES.find((game) => game.id === gameId)!;
-    const inviteId = inviteIdFor(firebaseUser.uid, friend.uid, gameId);
+    const inviteId = inviteIdFor(firebaseUser.uid, friend.uid, gameId, activeRoomCode);
     try {
       await setDoc(doc(db, "invites", inviteId), {
         fromUid: firebaseUser.uid,
@@ -1793,6 +1963,7 @@ export default function Home() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         expiresAt: Timestamp.fromMillis(Date.now() + INVITE_LIFETIME_MS),
+        ...(activeRoomCode ? { roomCode: activeRoomCode } : {}),
       });
       return `Invitation sent to ${friend.name}.`;
     } catch (error) {
@@ -1834,6 +2005,13 @@ export default function Home() {
   const view = useMemo(() => {
     const playFromMenu = (gameId: PlayableGameId, mode: GameMode) => {
       if (mode === "multi") {
+        if (activeRoom && activeRoom.gameId !== gameId) {
+          setActiveRoom(null);
+          setRoomCode("");
+          const url = new URL(window.location.href);
+          url.searchParams.delete("room");
+          window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        }
         selectGame(`${gameId}-lobby`);
         return;
       }
@@ -1841,7 +2019,7 @@ export default function Home() {
       selectGame(gameId);
     };
     const lobbyGame = SCORE_GAME_IDS.find((gameId) => game === `${gameId}-lobby`);
-    if (lobbyGame) return <GameLobby game={lobbyGame} firebaseUser={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onStart={() => { setGameMode("multi"); selectGame(lobbyGame); }} onBack={() => selectGame(`${lobbyGame}-menu`)} onOpenFriends={() => selectGame("friends")} onOpenProfile={() => selectGame("profile")} />;
+    if (lobbyGame) return <GameLobby game={lobbyGame} firebaseUser={firebaseUser} profileName={profileName} friends={visibleFriends} outgoingInvites={outgoingInvites} roomCode={roomCode} room={activeRoom?.gameId === lobbyGame ? activeRoom : null} onCreateRoom={createRoom} onJoinRoom={joinRoom} onLeaveRoom={leaveRoom} onSendInvite={sendInvite} onCancelInvite={cancelInvite} onStart={() => { setGameMode("multi"); selectGame(lobbyGame); }} onBack={() => selectGame(`${lobbyGame}-menu`)} onOpenFriends={() => selectGame("friends")} />;
     if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={(mode) => playFromMenu("codebreaker", mode)} onBack={() => selectGame("games")} />;
     if (game === "order-menu") return <GameMenu game="order" onPlay={(mode) => playFromMenu("order", mode)} onBack={() => selectGame("games")} />;
     if (game === "number-menu") return <GameMenu game="number" onPlay={(mode) => playFromMenu("number", mode)} onBack={() => selectGame("games")} />;
@@ -1861,8 +2039,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId) => selectGame(`${gameId}-lobby`)} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, sendInvite, respondInvite, cancelInvite, closeInvite]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, sendInvite, respondInvite, cancelInvite, closeInvite]);
 
   return view;
 }

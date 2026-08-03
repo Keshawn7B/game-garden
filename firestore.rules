@@ -65,6 +65,27 @@ service cloud.firestore {
         && (resource.data.status != 'pending' || resource.data.expiresAt <= request.time);
     }
 
+    match /rooms/{roomCode} {
+      allow read: if request.auth != null
+        && validRoomCode(roomCode);
+      allow create: if validNewRoom(roomCode, request.resource.data);
+      allow update: if request.auth != null
+        && resource.data.status == 'open'
+        && resource.data.expiresAt > request.time
+        && !resource.data.keys().hasAny(['guestUid', 'guestName', 'guestAvatar'])
+        && request.auth.uid != resource.data.hostUid
+        && request.resource.data.guestUid == request.auth.uid
+        && request.resource.data.guestName is string
+        && request.resource.data.guestName.size() >= 2
+        && request.resource.data.guestName.size() <= 18
+        && validAvatar(request.resource.data.guestAvatar)
+        && request.resource.data.status == 'ready'
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'status', 'updatedAt']);
+      allow delete: if request.auth != null
+        && (request.auth.uid == resource.data.hostUid || request.auth.uid == resource.data.guestUid);
+    }
+
     match /leaderboards/{gameId}/entries/{userId} {
       allow read: if true;
       allow create: if validScore(gameId, userId);
@@ -95,13 +116,19 @@ service cloud.firestore {
         && invite.updatedAt == request.time
         && invite.expiresAt is timestamp
         && invite.expiresAt > request.time
-        && invite.keys().hasOnly(['fromUid', 'fromName', 'fromAvatar', 'toUid', 'toName', 'toAvatar', 'gameId', 'gameName', 'status', 'createdAt', 'updatedAt', 'expiresAt'])
+        && invite.keys().hasOnly(['fromUid', 'fromName', 'fromAvatar', 'toUid', 'toName', 'toAvatar', 'gameId', 'gameName', 'status', 'createdAt', 'updatedAt', 'expiresAt', 'roomCode'])
         && exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(invite.toUid))
+        && (!invite.keys().hasAny(['roomCode'])
+          || (validRoomCode(invite.roomCode)
+            && exists(/databases/$(database)/documents/rooms/$(invite.roomCode))
+            && get(/databases/$(database)/documents/rooms/$(invite.roomCode)).data.hostUid == request.auth.uid
+            && get(/databases/$(database)/documents/rooms/$(invite.roomCode)).data.gameId == invite.gameId))
         && validInviteShape(inviteId, invite);
     }
 
     function validInviteShape(inviteId, invite) {
-      return inviteId == invite.fromUid + '--' + invite.toUid + '--' + invite.gameId
+      return ((!invite.keys().hasAny(['roomCode']) && inviteId == invite.fromUid + '--' + invite.toUid + '--' + invite.gameId)
+          || (invite.keys().hasAny(['roomCode']) && validRoomCode(invite.roomCode) && inviteId == invite.fromUid + '--' + invite.toUid + '--' + invite.gameId + '--' + invite.roomCode))
         && invite.fromUid is string
         && invite.toUid is string
         && invite.fromUid != invite.toUid
@@ -118,6 +145,28 @@ service cloud.firestore {
         && invite.createdAt is timestamp
         && invite.updatedAt is timestamp
         && invite.expiresAt is timestamp;
+    }
+
+    function validNewRoom(roomCode, room) {
+      return request.auth != null
+        && validRoomCode(roomCode)
+        && room.code == roomCode
+        && request.auth.uid == room.hostUid
+        && room.hostName is string
+        && room.hostName.size() >= 2
+        && room.hostName.size() <= 18
+        && validAvatar(room.hostAvatar)
+        && validInviteGame(room.gameId, room.gameName)
+        && room.status == 'open'
+        && room.createdAt == request.time
+        && room.updatedAt == request.time
+        && room.expiresAt is timestamp
+        && room.expiresAt > request.time
+        && room.keys().hasOnly(['code', 'gameId', 'gameName', 'hostUid', 'hostName', 'hostAvatar', 'status', 'createdAt', 'updatedAt', 'expiresAt']);
+    }
+
+    function validRoomCode(roomCode) {
+      return roomCode is string && roomCode.matches('^[A-Z2-9]{6}$');
     }
 
     function validInviteGame(gameId, gameName) {
