@@ -140,7 +140,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /ROOM READY/);
   assert.match(source, /nav-invite-badge/);
   assert.match(source, /const HEADER_META/);
-  assert.match(source, /className="header-title-logo"/);
+  assert.match(source, /header-title-logo/);
+  assert.match(source, /function HeaderLogo/);
+  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 10);
+  assert.match(source, /<button className="header-brand"[\s\S]*?<HeaderLogo \/>/);
+  assert.doesNotMatch(source, /wordmark small-wordmark/);
   assert.match(source, /className="header-context"/);
   assert.match(source, /className="app-error-banner"/);
   assert.match(styles, /\.invite-center/);
@@ -149,6 +153,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.header-online/);
   assert.match(styles, /game-garden-logo-red\.png/);
   assert.match(styles, /game-garden-logo-pink\.png/);
+  assert.match(styles, /\.game-header-logo/);
   assert.equal((styles.match(/\.hub-nav\{height:65px/g) ?? []).length, 1);
   assert.match(styles, /data-theme="sakura"/);
   assert.match(styles, /content:"桜"/);

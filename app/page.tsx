@@ -206,7 +206,7 @@ function Codebreaker({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
     <main className="game-shell codebreaker-shell">
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
+        <HeaderLogo compact />
         <button className="icon-button" onClick={reset} aria-label="Start a new code">↻</button>
       </header>
 
@@ -332,7 +332,7 @@ function OrderMatch({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
     <main className="game-shell order-shell">
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
+        <HeaderLogo compact />
         <button className="icon-button" onClick={reset} aria-label="Start a new order">↻</button>
       </header>
 
@@ -420,7 +420,7 @@ function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
     <main className="game-shell number-shell">
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
+        <HeaderLogo compact />
         <button className="icon-button" onClick={reset} aria-label="Start a new number game">↻</button>
       </header>
       <section className="number-game">
@@ -493,7 +493,7 @@ function MemoryGame({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
     <main className="game-shell memory-shell">
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
+        <HeaderLogo compact />
         <button className="icon-button" onClick={reset} aria-label="Shuffle and restart">↻</button>
       </header>
       <section className="memory-game">
@@ -566,7 +566,7 @@ function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
 
   return (
     <main className="game-shell simple-game-shell">
-      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div><button className="icon-button" onClick={reset} aria-label="Restart tic tac toe">↻</button></header>
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={reset} aria-label="Restart tic tac toe">↻</button></header>
       <section className="simple-game tic-game">
         <p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
         <h1>Tic Tac Toe</h1>
@@ -629,7 +629,7 @@ function RockPaperScissors({ mode, onBack, onScore }: { mode: GameMode; onBack: 
 
   return (
     <main className="game-shell simple-game-shell">
-      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div><button className="icon-button" onClick={reset} aria-label="Restart rock paper scissors">↻</button></header>
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={reset} aria-label="Restart rock paper scissors">↻</button></header>
       <section className="simple-game rps-game">
         <p className="eyebrow">QUICK · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
         <h1>Rock Paper Scissors</h1>
@@ -687,7 +687,7 @@ function DiceRace({ mode, onBack, onScore }: { mode: GameMode; onBack: () => voi
 
   return (
     <main className="game-shell simple-game-shell">
-      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div><button className="icon-button" onClick={reset} aria-label="Restart dice race">↻</button></header>
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={reset} aria-label="Restart dice race">↻</button></header>
       <section className="simple-game dice-game">
         <p className="eyebrow">LUCK · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
         <h1>Dice Race</h1>
@@ -840,7 +840,7 @@ function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode
     <main className="game-menu-shell">
       <header className="game-topbar menu-topbar">
         <button className="back-button" onClick={onBack}>← Games</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
+        <HeaderLogo compact />
         <span className="menu-header-spacer" aria-hidden="true" />
       </header>
       <section className="game-menu">
@@ -926,7 +926,7 @@ function GameLobby({
     <main className="game-menu-shell game-lobby-shell">
       <header className="game-topbar menu-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
+        <HeaderLogo compact />
         <span className="menu-header-spacer" aria-hidden="true" />
       </header>
       <section className="game-lobby">
@@ -985,7 +985,7 @@ function EmbeddedGame({ game, onBack }: { game: ExternalGameId; onBack: () => vo
     <main className="embedded-game-shell">
       <header className="game-topbar embedded-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
-        <div className="wordmark small-wordmark"><span className="brand-dot" /> {details.title.toUpperCase()}</div>
+        <HeaderLogo compact />
         <a className="icon-button embedded-open" href={details.url} target="_blank" rel="noreferrer" aria-label={`Open ${details.title} in a new tab`}>↗</a>
       </header>
       <iframe className="embedded-game" src={details.url} title={details.title} allow="fullscreen" />
@@ -1060,6 +1060,10 @@ function AvatarGlyph({ avatarId, className = "" }: { avatarId: AvatarId; classNa
 
 function PlayerAvatar({ small = false, avatarId }: { small?: boolean; avatarId: AvatarId }) {
   return <AvatarGlyph avatarId={avatarId} className={`player-avatar ${small ? "avatar-small" : ""}`} />;
+}
+
+function HeaderLogo({ compact = false }: { compact?: boolean }) {
+  return <span className={`header-title-logo ${compact ? "game-header-logo" : ""}`} role="img" aria-label="Game Garden" />;
 }
 
 function AppHome({
@@ -1226,7 +1230,7 @@ function AppHome({
     <main className="app-shell">
       <header className="app-header">
         <button className="header-brand" onClick={() => onTabChange("games")} aria-label="Open Game Garden games">
-          <span className="header-title-logo" aria-hidden="true" />
+          <HeaderLogo />
         </button>
         <div className="header-context" aria-label={`${currentHeader.label} section`}><span>{currentHeader.glyph}</span><div><small>{currentHeader.japanese}</small><strong>{currentHeader.label}</strong></div></div>
         <div className="header-actions">
