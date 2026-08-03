@@ -131,7 +131,7 @@ span[class*="avatar-style-"]>.avatar-mark { position:relative;z-index:2;width:au
 .art-codebreaker { background-position:0 0; }.art-order { background-position:100% 0; }.art-number { background-position:0 100%; }.art-memory { background-position:100% 100%; }
 .art-tictactoe,.art-rps,.art-dice { position:relative;overflow:hidden;background-size:cover;background-position:center; }
 .art-tictactoe { background-image:url('/game-tictactoe.jpg'); }
-.art-connect4 { background-color:var(--red);background-image:radial-gradient(circle at 22% 24%,white 0 8%,var(--black) 8.5% 10.5%,transparent 11%),radial-gradient(circle at 40% 42%,white 0 8%,var(--black) 8.5% 10.5%,transparent 11%),radial-gradient(circle at 58% 60%,white 0 8%,var(--black) 8.5% 10.5%,transparent 11%),radial-gradient(circle at 76% 78%,white 0 8%,var(--black) 8.5% 10.5%,transparent 11%),linear-gradient(135deg,var(--red) 0 58%,var(--black) 58% 100%);background-size:cover;background-position:center; }
+.art-connect4 { background-color:var(--red);background-image:url('/game-connect4.png');background-size:cover;background-position:center; }
 .art-rps { background-image:url('/game-rps.jpg'); }
 .art-dice { background-image:url('/game-dice.jpg'); }
 .art-meducktion { background-image:url('/meducktion-icon.webp');background-size:cover;background-position:center; }

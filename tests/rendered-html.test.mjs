@@ -131,6 +131,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /deducktion-cover-title">DEDUCKTION/);
   assert.match(source, /name: "Deducktion"[\s\S]*?meta: "CARD GAME"/);
   assert.match(styles, /game-covers\.png/);
+  assert.match(styles, /game-connect4\.png/);
   assert.match(styles, /\.bottom-nav/);
   assert.match(styles, /\.theme-toggle[^}]*box-shadow:none/);
   assert.match(styles, /\.theme-toggle[^}]*linear-gradient\(135deg,#ff001e/);
