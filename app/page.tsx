@@ -811,6 +811,7 @@ function MemoryGame({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
 
 type TicMark = "" | "X" | "O";
 const TIC_LINES = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+const TIC_CPU_RANDOM_MOVE_CHANCE = 0.55;
 
 function ticWinner(board: TicMark[]) {
   for (const [a, b, c] of TIC_LINES) if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
@@ -819,13 +820,14 @@ function ticWinner(board: TicMark[]) {
 
 function cpuTicMove(board: TicMark[]) {
   const open = board.map((mark, index) => mark ? -1 : index).filter((index) => index >= 0);
-  for (const mark of ["O", "X"] as TicMark[]) {
-    const winning = open.find((index) => ticWinner(board.map((cell, cellIndex) => cellIndex === index ? mark : cell)) === mark);
-    if (winning != null) return winning;
-  }
+  const randomMove = () => open[Math.floor(Math.random() * open.length)];
+  const winning = open.find((index) => ticWinner(board.map((cell, cellIndex) => cellIndex === index ? "O" : cell)) === "O");
+  if (winning != null) return winning;
+  if (Math.random() < TIC_CPU_RANDOM_MOVE_CHANCE) return randomMove();
+  const blocking = open.find((index) => ticWinner(board.map((cell, cellIndex) => cellIndex === index ? "X" : cell)) === "X");
+  if (blocking != null) return blocking;
   if (!board[4]) return 4;
-  const corners = open.filter((index) => [0, 2, 6, 8].includes(index));
-  return (corners.length ? corners : open)[Math.floor(Math.random() * (corners.length ? corners.length : open.length))];
+  return randomMove();
 }
 
 function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
@@ -875,6 +877,8 @@ type ConnectWin = { player: 1 | 2; cells: number[] };
 const CONNECT_ROWS = 6;
 const CONNECT_COLUMNS = 7;
 const CONNECT_COLUMN_ORDER = [3, 2, 4, 1, 5, 0, 6];
+const CONNECT_CPU_RANDOM_MOVE_CHANCE = 0.45;
+const CONNECT_CPU_BLOCK_CHANCE = 0.55;
 const CONNECT_WINDOWS: number[][] = (() => {
   const windows: number[][] = [];
   for (let row = 0; row < CONNECT_ROWS; row += 1) {
@@ -968,13 +972,14 @@ function connectCpuMove(board: ConnectPiece[]) {
   const winning = openColumns.find((column) => connectWinner(dropConnectPiece(board, column, 2)!.board)?.player === 2);
   if (winning != null) return winning;
   const blocking = openColumns.find((column) => connectWinner(dropConnectPiece(board, column, 1)!.board)?.player === 1);
-  if (blocking != null) return blocking;
+  if (blocking != null && Math.random() < CONNECT_CPU_BLOCK_CHANCE) return blocking;
+  if (Math.random() < CONNECT_CPU_RANDOM_MOVE_CHANCE) return openColumns[Math.floor(Math.random() * openColumns.length)];
 
   let bestColumn = openColumns[0] ?? 0;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const column of openColumns) {
     const move = dropConnectPiece(board, column, 2)!;
-    const score = connectMinimax(move.board, 4, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, false);
+    const score = connectMinimax(move.board, 2, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, false) + Math.random() * 24;
     if (score > bestScore) {
       bestScore = score;
       bestColumn = column;

@@ -97,8 +97,12 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /Swap Roles/);
   assert.match(source, /Fewest guesses wins/);
   assert.match(source, /function TicTacToe/);
+  assert.match(source, /TIC_CPU_RANDOM_MOVE_CHANCE = 0\.55/);
   assert.match(source, /function ConnectFour/);
   assert.match(source, /function connectCpuMove/);
+  assert.match(source, /CONNECT_CPU_RANDOM_MOVE_CHANCE = 0\.45/);
+  assert.match(source, /CONNECT_CPU_BLOCK_CHANCE = 0\.55/);
+  assert.match(source, /connectMinimax\(move\.board, 2,/);
   assert.match(source, /connect-column-controls/);
   assert.match(source, /<button type="button" role="gridcell"/);
   assert.match(source, /preview-slot preview-/);
