@@ -14,7 +14,7 @@ type ThemeMode = "classic" | "sakura";
 type GameMode = "solo" | "multi";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu` | `${PlayableGameId}-lobby`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
-type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun" | "pink-blossom" | "pink-heart" | "pink-bunny" | "pink-fan" | "pink-peach";
+type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun" | "pink-blossom" | "pink-heart" | "pink-bunny" | "pink-fan" | "pink-peach" | "premium-shogun" | "premium-kitsune" | "premium-empress" | "premium-dragon" | "premium-koi" | "premium-ronin";
 type HighScores = Partial<Record<PlayableGameId, number>>;
 type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
@@ -78,7 +78,7 @@ const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: stri
   profile: { label: "PLAYER", japanese: "プロフィール", glyph: "人" },
 };
 
-const AVATARS: { id: AvatarId; glyph?: string; label: string }[] = [
+const AVATARS: { id: AvatarId; glyph?: string; label: string; premium?: boolean }[] = [
   { id: "play", glyph: "遊", label: "Play kanji" },
   { id: "sakura", label: "Sakura bloom" },
   { id: "fox", label: "Fox mask" },
@@ -94,6 +94,12 @@ const AVATARS: { id: AvatarId; glyph?: string; label: string }[] = [
   { id: "pink-bunny", label: "Pink bunny" },
   { id: "pink-fan", label: "Pink fan" },
   { id: "pink-peach", label: "Pink peach" },
+  { id: "premium-shogun", label: "Crimson Shogun", premium: true },
+  { id: "premium-kitsune", label: "Celestial Kitsune", premium: true },
+  { id: "premium-empress", label: "Sakura Empress", premium: true },
+  { id: "premium-dragon", label: "Onyx Dragon", premium: true },
+  { id: "premium-koi", label: "Legendary Koi", premium: true },
+  { id: "premium-ronin", label: "Moon Ronin", premium: true },
 ];
 
 function isAvatarId(value: unknown): value is AvatarId {
@@ -1621,7 +1627,7 @@ async function saveCloudScore(user: User, gameId: PlayableGameId, score: number,
 
 function AvatarGlyph({ avatarId, className = "" }: { avatarId: AvatarId; className?: string }) {
   const avatar = AVATARS.find((option) => option.id === avatarId) ?? AVATARS[0];
-  return <span className={`${className} avatar-style-${avatar.id}`} aria-hidden="true">{avatar.glyph && <b className="avatar-mark">{avatar.glyph}</b>}</span>;
+  return <span className={`${className} avatar-style-${avatar.id} ${avatar.premium ? "avatar-premium" : ""}`} aria-hidden="true">{avatar.glyph && <b className="avatar-mark">{avatar.glyph}</b>}</span>;
 }
 
 function PlayerAvatar({ small = false, avatarId }: { small?: boolean; avatarId: AvatarId }) {
@@ -1875,8 +1881,17 @@ function AppHome({
             <div className="profile-card">
               <PlayerAvatar avatarId={avatarId} />
               <p>PLAYER PROFILE <span>プロフィール</span></p>
-              <div className="avatar-picker" role="group" aria-label="Choose a profile picture">
-                {AVATARS.map((avatar) => (
+              <div className="avatar-collection-label premium-collection-label"><span>✦ PREMIUM COLLECTION</span><small>伝説のアバター</small></div>
+              <div className="avatar-picker premium-avatar-picker" role="group" aria-label="Choose a premium profile picture">
+                {AVATARS.filter((avatar) => avatar.premium).map((avatar) => (
+                  <button key={avatar.id} className={avatarId === avatar.id ? "selected" : ""} onClick={() => onAvatarChange(avatar.id)} aria-label={`${avatar.label} premium profile picture`} aria-pressed={avatarId === avatar.id}>
+                    <AvatarGlyph avatarId={avatar.id} className="avatar-option" />
+                  </button>
+                ))}
+              </div>
+              <div className="avatar-collection-label"><span>CLASSIC COLLECTION</span><small>スタンダード</small></div>
+              <div className="avatar-picker classic-avatar-picker" role="group" aria-label="Choose a profile picture">
+                {AVATARS.filter((avatar) => !avatar.premium).map((avatar) => (
                   <button key={avatar.id} className={avatarId === avatar.id ? "selected" : ""} onClick={() => onAvatarChange(avatar.id)} aria-label={`${avatar.label} profile picture`} aria-pressed={avatarId === avatar.id}>
                     <AvatarGlyph avatarId={avatar.id} className="avatar-option" />
                   </button>

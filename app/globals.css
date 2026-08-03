@@ -78,6 +78,11 @@ footer { min-height:95px; padding:25px clamp(24px,6vw,90px); display:flex;justif
 .avatar-style-pink-bunny { background:linear-gradient(145deg,#fff 0 34%,#ff9fbe 35% 68%,#df2d69 69%); }
 .avatar-style-pink-fan { background:repeating-conic-gradient(from -25deg,#fff 0 12deg,#ff79a6 13deg 25deg,#c91e58 26deg 38deg); }
 .avatar-style-pink-peach { background:radial-gradient(ellipse at 50% 63%,#ff8eb3 0 37%,transparent 38%),linear-gradient(145deg,#fff1f6 0 48%,#d82864 49%); }
+.avatar-style-premium-shogun,.avatar-style-premium-kitsune,.avatar-style-premium-empress,.avatar-style-premium-dragon,.avatar-style-premium-koi,.avatar-style-premium-ronin { background-image:url('/premium-avatars.webp');background-repeat:no-repeat;background-size:300% 200%; }
+.avatar-style-premium-shogun { background-position:0 0; }.avatar-style-premium-kitsune { background-position:50% 0; }.avatar-style-premium-empress { background-position:100% 0; }
+.avatar-style-premium-dragon { background-position:0 100%; }.avatar-style-premium-koi { background-position:50% 100%; }.avatar-style-premium-ronin { background-position:100% 100%; }
+.avatar-premium { border-color:#e7b638!important;box-shadow:0 0 0 2px #fff2a8,0 0 0 4px #7d4d00,0 0 17px rgba(255,190,47,.78)!important; }
+.avatar-premium::after { content:"♛"!important;right:4%;top:3%;z-index:4!important;width:28%;height:28%;display:grid;place-items:center;border:1px solid #6c3c00;border-radius:50%;background:linear-gradient(145deg,#fff5a8,#e9a51a 55%,#8c5100);color:#2a1700;font-size:clamp(7px,2vw,13px);font-weight:900;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.7);text-shadow:0 1px 0 #fff4a3; }
 .player-avatar[class*="avatar-style-"] b { background:transparent; }
 [class*="avatar-style-"] { position:relative;isolation:isolate; }
 span[class*="avatar-style-"]>.avatar-mark { position:relative;z-index:2;width:auto;height:auto;border:0;border-radius:0;background:transparent;text-shadow:1px 1px 0 #000; }
@@ -166,6 +171,12 @@ span[class*="avatar-style-"]>.avatar-mark { position:relative;z-index:2;width:au
 .avatar-picker { width:min(460px,100%);margin:8px 0 28px;padding:4px 2px 7px;display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:15px; }
 .avatar-picker button { aspect-ratio:1;padding:6px;border:2px solid var(--black);background:white;cursor:pointer;box-shadow:3px 3px 0 var(--black); }
 .avatar-picker button.selected { border-color:var(--red);outline:3px solid var(--red);outline-offset:2px;transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--black); }
+.avatar-collection-label { width:min(460px,100%);margin:16px 0 0;padding:8px 11px;display:flex;align-items:center;justify-content:space-between;border:2px solid var(--black);background:var(--black);color:white;font-size:7px;font-weight:900;letter-spacing:.13em; }
+.avatar-collection-label small { color:var(--red);font-size:7px;letter-spacing:.09em; }.premium-collection-label { margin-top:2px;border-color:#91610a;background:linear-gradient(100deg,#171006,#352006 55%,#171006);color:#ffd86b;box-shadow:4px 4px 0 #8b5700; }.premium-collection-label small { color:#fff0a5; }
+.premium-avatar-picker { width:min(520px,100%);grid-template-columns:repeat(6,minmax(52px,1fr));margin-bottom:20px;padding:10px 8px 11px;border:2px solid #9d6a0c;background:radial-gradient(circle at 50% -30%,rgba(255,223,112,.25),transparent 55%),#171006;box-shadow:5px 5px 0 #8b5700; }
+.premium-avatar-picker button { padding:4px;border-color:#d7a52f;background:linear-gradient(145deg,#fff2a6,#a76808);box-shadow:0 0 0 2px #5f3600,0 4px 10px rgba(0,0,0,.55);transition:transform .15s,filter .15s; }
+.premium-avatar-picker button:hover { transform:translateY(-4px) scale(1.04);filter:brightness(1.1); }.premium-avatar-picker button.selected { border-color:#ffe88b;outline-color:#f6bd32;box-shadow:0 0 0 3px #5d3300,0 0 20px #ffcb43; }
+.classic-avatar-picker { margin-top:8px; }
 .avatar-option { width:100%;height:100%;display:grid;place-items:center;border-radius:50%;overflow:hidden;color:white; }
 .avatar-option b { display:grid;place-items:center;width:62%;height:62%;border:1px solid white;border-radius:50%;background:rgba(0,0,0,.48);font-size:clamp(13px,4vw,23px);text-shadow:1px 1px 0 #000; }
 .profile-actions { width:min(360px,100%);margin-top:20px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px; }

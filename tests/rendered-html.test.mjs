@@ -140,7 +140,8 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /game-garden-theme/);
   assert.match(source, /avatar-style-/);
   const avatarOptions = source.match(/const AVATARS[\s\S]*?\n\];/)?.[0] ?? "";
-  assert.equal((avatarOptions.match(/id: "/g) ?? []).length, 15);
+  assert.equal((avatarOptions.match(/id: "/g) ?? []).length, 21);
+  assert.equal((avatarOptions.match(/premium: true/g) ?? []).length, 6);
   assert.equal((avatarOptions.match(/glyph: "/g) ?? []).length, 2);
   assert.match(source, /avatar\.glyph && <b className="avatar-mark">/);
   assert.match(source, /className="header-profile"/);
@@ -161,6 +162,9 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.theme-toggle[^}]*linear-gradient\(135deg,#ff001e/);
   assert.match(styles, /\.avatar-style-fox::before/);
   assert.match(styles, /\.avatar-style-pink-heart::before/);
+  assert.match(styles, /premium-avatars\.webp/);
+  assert.match(styles, /\.avatar-premium/);
+  assert.match(styles, /\.premium-avatar-picker/);
   assert.match(styles, /\.theme-toggle\[aria-pressed="true"\][^}]*linear-gradient\(#0d0d0d,#0d0d0d\) padding-box/);
   assert.match(styles, /\.friend-link-actions/);
   assert.match(styles, /\.friends-panel \.app-title h1[^}]*color:var\(--red\)/);
