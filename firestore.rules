@@ -70,20 +70,59 @@ service cloud.firestore {
         && validRoomCode(roomCode);
       allow create: if validNewRoom(roomCode, request.resource.data);
       allow update: if request.auth != null
-        && resource.data.status == 'open'
-        && resource.data.expiresAt > request.time
-        && !resource.data.keys().hasAny(['guestUid', 'guestName', 'guestAvatar'])
-        && request.auth.uid != resource.data.hostUid
-        && request.resource.data.guestUid == request.auth.uid
-        && request.resource.data.guestName is string
-        && request.resource.data.guestName.size() >= 2
-        && request.resource.data.guestName.size() <= 18
-        && validAvatar(request.resource.data.guestAvatar)
-        && request.resource.data.status == 'ready'
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'status', 'updatedAt']);
+        && (
+          (resource.data.status == 'open'
+            && resource.data.expiresAt > request.time
+            && !resource.data.keys().hasAny(['guestUid', 'guestName', 'guestAvatar'])
+            && request.auth.uid != resource.data.hostUid
+            && request.resource.data.guestUid == request.auth.uid
+            && request.resource.data.guestName is string
+            && request.resource.data.guestName.size() >= 2
+            && request.resource.data.guestName.size() <= 18
+            && validAvatar(request.resource.data.guestAvatar)
+            && request.resource.data.status == 'ready'
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'status', 'updatedAt']))
+          ||
+          (resource.data.status == 'ready'
+            && request.auth.uid == resource.data.hostUid
+            && resource.data.keys().hasAll(['guestUid'])
+            && request.resource.data.status == 'playing'
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
       allow delete: if request.auth != null
         && (request.auth.uid == resource.data.hostUid || request.auth.uid == resource.data.guestUid);
+    }
+
+    match /rooms/{roomCode}/numberHunt/{documentId} {
+      allow read: if roomParticipant(roomCode)
+        && (documentId == 'state' || resource.data.keeperUid == request.auth.uid);
+      allow create: if roomParticipant(roomCode)
+        && (
+          (documentId == 'state'
+            && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid
+            && validNumberState(roomCode, request.resource.data))
+          ||
+          (documentId.matches('^secret-[12]$')
+            && request.resource.data.keeperUid == request.auth.uid
+            && request.resource.data.value is int
+            && request.resource.data.value >= 1
+            && request.resource.data.value <= 100
+            && request.resource.data.round in [1, 2])
+        );
+      allow update: if roomParticipant(roomCode)
+        && (
+          (documentId == 'state' && validNumberState(roomCode, request.resource.data))
+          ||
+          (documentId.matches('^secret-[12]$')
+            && resource.data.keeperUid == request.auth.uid
+            && request.resource.data.keeperUid == request.auth.uid
+            && request.resource.data.value is int
+            && request.resource.data.value >= 1
+            && request.resource.data.value <= 100)
+        );
+      allow delete: if roomParticipant(roomCode);
     }
 
     match /leaderboards/{gameId}/entries/{userId} {
@@ -167,6 +206,32 @@ service cloud.firestore {
 
     function validRoomCode(roomCode) {
       return roomCode is string && roomCode.matches('^[A-Z2-9]{6}$');
+    }
+
+    function roomParticipant(roomCode) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/rooms/$(roomCode))
+        && (get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid == request.auth.uid
+          || get(/databases/$(database)/documents/rooms/$(roomCode)).data.guestUid == request.auth.uid);
+    }
+
+    function validNumberState(roomCode, state) {
+      return state.gameId == 'number'
+        && state.roomCode == roomCode
+        && state.round in [1, 2]
+        && state.phase in ['setting', 'guessing', 'pending', 'round-result', 'match-result']
+        && state.keeperUid is string
+        && state.guesserUid is string
+        && state.keeperUid != state.guesserUid
+        && state.keeperName is string
+        && state.guesserName is string
+        && state.guesses is list
+        && state.guesses.size() <= 7
+        && state.scores is list
+        && state.scores.size() == 2
+        && state.revealedSecrets is list
+        && state.revealedSecrets.size() == 2
+        && state.lastClue in ['none', 'higher', 'lower', 'correct'];
     }
 
     function validInviteGame(gameId, gameName) {

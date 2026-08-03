@@ -67,7 +67,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /VERSUS LOBBY · 対戦ロビー/);
   assert.match(source, /Invite friends/);
   assert.match(source, />Accept<\/button>/);
-  assert.match(source, /Start Versus/);
+  assert.match(source, /Start Online Versus/);
   assert.match(source, /onJoinLobby/);
   assert.match(source, /`\$\{gameId\}-lobby`/);
   assert.match(source, /mode=\{gameMode\}/);
@@ -77,6 +77,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /<div className="menu-card">\s*<button className="menu-close"/);
   assert.match(source, /function OrderMatch/);
   assert.match(source, /function NumberHunt/);
+  assert.match(source, /function OnlineNumberHunt/);
+  assert.match(source, /NumberOnlineState/);
+  assert.match(source, /YOUR PRIVATE SCREEN/);
+  assert.match(source, /Waiting for clue/);
+  assert.match(source, /status: "playing"/);
   assert.match(source, /type NumberVersusPhase/);
   assert.match(source, /Choose the secret/);
   assert.match(source, /SECRET LOCKED/);
@@ -163,6 +168,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.number-versus-progress/);
   assert.match(styles, /\.number-role-card/);
   assert.match(styles, /\.number-match-scores/);
+  assert.match(styles, /\.online-match-heading/);
+  assert.match(styles, /@keyframes onlinePulse/);
   assert.match(styles, /\.connect-board/);
   assert.match(styles, /@keyframes connectDrop/);
   assert.doesNotMatch(styles, /72%\{transform:translateY\(8px\)/);
@@ -183,7 +190,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /const HEADER_META/);
   assert.match(source, /header-title-logo/);
   assert.match(source, /function HeaderLogo/);
-  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 11);
+  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 12);
   assert.match(source, /<button className="header-brand"[\s\S]*?<HeaderLogo \/>/);
   assert.doesNotMatch(source, /wordmark small-wordmark/);
   assert.match(source, /className="header-context"/);
@@ -209,6 +216,9 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /rooms\/\{roomCode\}/);
   assert.match(firestoreRules, /validNewRoom/);
   assert.match(firestoreRules, /validRoomCode/);
+  assert.match(firestoreRules, /numberHunt/);
+  assert.match(firestoreRules, /validNumberState/);
+  assert.match(firestoreRules, /roomParticipant/);
   assert.match(firestoreRules, /affectedKeys\(\)\.hasOnly/);
   assert.match(firestoreRules, /'sakura'.*'dragon'.*'pink-blossom'.*'pink-peach'/);
 });

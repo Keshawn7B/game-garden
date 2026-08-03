@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
@@ -45,10 +45,28 @@ type GameRoom = {
   guestUid?: string;
   guestName?: string;
   guestAvatar?: AvatarId;
-  status: "open" | "ready";
+  status: "open" | "ready" | "playing";
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   expiresAt?: Timestamp;
+};
+type NumberOnlineState = {
+  gameId: "number";
+  roomCode: string;
+  round: 1 | 2;
+  phase: "setting" | "guessing" | "pending" | "round-result" | "match-result";
+  keeperUid: string;
+  keeperName: string;
+  guesserUid: string;
+  guesserName: string;
+  guesses: number[];
+  pendingGuess: number | null;
+  lastGuess: number | null;
+  lastClue: "none" | "higher" | "lower" | "correct";
+  scores: [number | null, number | null];
+  revealedSecrets: [number | null, number | null];
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 };
 
 const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -553,6 +571,164 @@ function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
             <div className="guess-trail">{Array.from({ length: guessLimit }, (_, index) => <span key={index} className={history[index] === target ? "trail-win" : ""}>{history[index] ?? "·"}</span>)}</div>
           </>
         )}
+      </section>
+    </main>
+  );
+}
+
+function OnlineNumberHunt({ room, user, onLeave }: { room: GameRoom; user: User; onLeave: () => Promise<void> }) {
+  const [match, setMatch] = useState<NumberOnlineState | null>(null);
+  const [value, setValue] = useState(50);
+  const [keeperSecret, setKeeperSecret] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const resolving = useRef("");
+  const stateRef = useMemo(() => doc(db, "rooms", room.code, "numberHunt", "state"), [room.code]);
+
+  useEffect(() => onSnapshot(stateRef, (snapshot) => {
+    if (snapshot.exists()) setMatch(snapshot.data() as NumberOnlineState);
+  }, () => setError("The online match lost connection.")), [stateRef]);
+
+  useEffect(() => {
+    if (!match || match.keeperUid !== user.uid) return;
+    const secretRef = doc(db, "rooms", room.code, "numberHunt", `secret-${match.round}`);
+    return onSnapshot(secretRef, (snapshot) => {
+      if (snapshot.exists() && snapshot.data().keeperUid === user.uid) setKeeperSecret(Number(snapshot.data().value));
+    }, () => setError("Could not load your private secret."));
+  }, [match, room.code, user.uid]);
+
+  useEffect(() => {
+    if (!match || match.phase !== "pending" || match.keeperUid !== user.uid || match.pendingGuess == null || keeperSecret == null) return;
+    const token = `${match.round}-${match.guesses.length}-${match.pendingGuess}`;
+    if (resolving.current === token) return;
+    resolving.current = token;
+    const clue: NumberOnlineState["lastClue"] = match.pendingGuess === keeperSecret ? "correct" : match.pendingGuess < keeperSecret ? "higher" : "lower";
+    const guesses = [...match.guesses, match.pendingGuess];
+    const roundFinished = clue === "correct" || guesses.length >= 7;
+    const scores: [number | null, number | null] = [...match.scores];
+    const revealedSecrets: [number | null, number | null] = [...match.revealedSecrets];
+    if (roundFinished) {
+      const guesserIndex = match.guesserUid === room.hostUid ? 0 : 1;
+      scores[guesserIndex] = clue === "correct" ? guesses.length : 8;
+      revealedSecrets[match.round - 1] = keeperSecret;
+    }
+    void updateDoc(stateRef, {
+      phase: roundFinished ? match.round === 1 ? "round-result" : "match-result" : "guessing",
+      guesses,
+      pendingGuess: null,
+      lastGuess: match.pendingGuess,
+      lastClue: clue,
+      scores,
+      revealedSecrets,
+      updatedAt: serverTimestamp(),
+    }).catch(() => {
+      resolving.current = "";
+      setError("Could not send the clue to your opponent.");
+    });
+  }, [keeperSecret, match, room.hostUid, stateRef, user.uid]);
+
+  const adjustValue = (amount: number) => setValue((number) => Math.min(100, Math.max(1, number + amount)));
+
+  const lockSecret = async () => {
+    if (!match || match.phase !== "setting" || match.keeperUid !== user.uid) return;
+    setError("");
+    const batch = writeBatch(db);
+    batch.set(doc(db, "rooms", room.code, "numberHunt", `secret-${match.round}`), { keeperUid: user.uid, round: match.round, value, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    batch.update(stateRef, { phase: "guessing", pendingGuess: null, lastGuess: null, lastClue: "none", guesses: [], updatedAt: serverTimestamp() });
+    try {
+      await batch.commit();
+      setKeeperSecret(value);
+      setValue(50);
+    } catch { setError("Could not lock your secret."); }
+  };
+
+  const submitGuess = async () => {
+    if (!match || match.phase !== "guessing" || match.guesserUid !== user.uid) return;
+    setError("");
+    try { await updateDoc(stateRef, { phase: "pending", pendingGuess: value, updatedAt: serverTimestamp() }); }
+    catch { setError("Could not send your guess."); }
+  };
+
+  const startRoundTwo = async () => {
+    if (!match || match.phase !== "round-result" || user.uid !== room.guestUid) return;
+    setKeeperSecret(null);
+    setValue(50);
+    try {
+      await updateDoc(stateRef, {
+        round: 2,
+        phase: "setting",
+        keeperUid: room.guestUid,
+        keeperName: room.guestName,
+        guesserUid: room.hostUid,
+        guesserName: room.hostName,
+        guesses: [],
+        pendingGuess: null,
+        lastGuess: null,
+        lastClue: "none",
+        updatedAt: serverTimestamp(),
+      });
+    } catch { setError("Could not start round two."); }
+  };
+
+  const restartMatch = async () => {
+    if (user.uid !== room.hostUid || !room.guestUid || !room.guestName) return;
+    setKeeperSecret(null);
+    setValue(50);
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "rooms", room.code, "numberHunt", "secret-1"));
+    batch.delete(doc(db, "rooms", room.code, "numberHunt", "secret-2"));
+    batch.set(stateRef, {
+      gameId: "number",
+      roomCode: room.code,
+      round: 1,
+      phase: "setting",
+      keeperUid: room.hostUid,
+      keeperName: room.hostName,
+      guesserUid: room.guestUid,
+      guesserName: room.guestName,
+      guesses: [],
+      pendingGuess: null,
+      lastGuess: null,
+      lastClue: "none",
+      scores: [null, null],
+      revealedSecrets: [null, null],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    try { await batch.commit(); }
+    catch { setError("Could not restart the match."); }
+  };
+
+  const scoreLabel = (score: number | null) => score == null ? "—" : score > 7 ? "MISSED" : `${score} ${score === 1 ? "GUESS" : "GUESSES"}`;
+  const clueMessage = match?.lastClue === "higher" ? "Go higher ↑" : match?.lastClue === "lower" ? "Go lower ↓" : match?.lastClue === "correct" ? "Correct!" : "Make your first guess";
+  const playerOneScore = match?.scores[0] ?? 8;
+  const playerTwoScore = match?.scores[1] ?? 8;
+  const isKeeper = match?.keeperUid === user.uid;
+  const isGuesser = match?.guesserUid === user.uid;
+
+  return (
+    <main className="game-shell number-shell">
+      <header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo compact /><span className="online-room-pill">● {room.code}</span></header>
+      <section className="number-game number-versus number-online">
+        <div className="online-match-heading"><span>LIVE MATCH</span><strong>{room.hostName}</strong><b>VS</b><strong>{room.guestName}</strong></div>
+        {!match ? <div className="number-role-card online-waiting-card"><span className="waiting-pulse">接</span><h1>Connecting match…</h1><p>Synchronizing both players.</p></div> : (
+          <>
+            <div className="number-versus-progress" aria-label={`Round ${match.round} of 2`}><span className={match.round === 1 ? "active" : "complete"}><b>01</b>{room.hostName} HIDES</span><i>交代</i><span className={match.round === 2 ? "active" : ""}><b>02</b>{room.guestName} HIDES</span></div>
+            {match.phase === "setting" && isKeeper ? (
+              <div className="number-role-card secret-setup"><span className="number-role-kanji">秘</span><p className="eyebrow">YOUR PRIVATE SCREEN · SECRET KEEPER</p><h1>Choose the secret.</h1><p>Only your account can read this number. Your opponent is waiting on their own device.</p><div className="number-orb secret-orb"><span>{value}</span></div><input aria-label="Secret number" type="range" min="1" max="100" value={value} onChange={(event) => setValue(Number(event.target.value))} /><div className="number-input-row"><button onClick={() => adjustValue(-1)}>−</button><output>{value}</output><button onClick={() => adjustValue(1)}>+</button></div><button className="primary-button wide-button" onClick={() => void lockSecret()}>Lock Secret <span>→</span></button></div>
+            ) : match.phase === "setting" ? (
+              <div className="number-role-card online-waiting-card"><span className="waiting-pulse">秘</span><p className="eyebrow">OPPONENT CHOOSING</p><h1>{match.keeperName} is setting the secret.</h1><p>Stay on this screen. Your guessing board will open automatically when the number is locked.</p></div>
+            ) : (match.phase === "guessing" || match.phase === "pending") && isGuesser ? (
+              <div className="online-guess-board"><p className="eyebrow">ROUND {match.round} · YOU ARE GUESSING</p><h1>Find {match.keeperName}&apos;s number.</h1><p>You have seven guesses. Every clue arrives live from your opponent&apos;s private number.</p><div className="number-role-strip"><span>{match.keeperName}<small>SECRET KEEPER</small></span><b>LIVE</b><span>YOU<small>GUESSER</small></span></div><div className="number-orb" aria-live="polite"><span>?</span></div><h2>{match.phase === "pending" ? `Checking ${match.pendingGuess}…` : clueMessage}</h2><input aria-label="Your number guess" type="range" min="1" max="100" value={value} onChange={(event) => setValue(Number(event.target.value))} disabled={match.phase === "pending"} /><div className="number-input-row"><button onClick={() => adjustValue(-1)} disabled={match.phase === "pending"}>−</button><output>{value}</output><button onClick={() => adjustValue(1)} disabled={match.phase === "pending"}>+</button></div><button className="primary-button wide-button" disabled={match.phase === "pending"} onClick={() => void submitGuess()}>{match.phase === "pending" ? "Waiting for clue…" : "Send Guess"}</button><div className="guess-trail">{Array.from({ length: 7 }, (_, index) => <span key={index} className={match.guesses[index] === match.revealedSecrets[match.round - 1] ? "trail-win" : ""}>{match.guesses[index] ?? "·"}</span>)}</div></div>
+            ) : (match.phase === "guessing" || match.phase === "pending") ? (
+              <div className="number-role-card online-waiting-card"><span className="waiting-pulse">待</span><p className="eyebrow">LIVE · YOU ARE SECRET KEEPER</p><h1>{match.phase === "pending" ? `Checking ${match.pendingGuess}…` : `Waiting for ${match.guesserName}.`}</h1><p>Your private number is locked. Higher and lower clues are sent automatically when your opponent guesses.</p><div className="keeper-secret-chip"><small>YOUR SECRET</small><strong>{keeperSecret ?? "••"}</strong></div></div>
+            ) : match.phase === "round-result" ? (
+              <div className="number-role-card round-result-card"><span className="number-role-kanji">解</span><p className="eyebrow">ROUND 1 COMPLETE · LIVE</p><h1>{match.scores[1] != null && match.scores[1]! <= 7 ? `${room.guestName} found it!` : `${room.guestName} missed it.`}</h1><div className="round-secret-reveal"><small>{room.hostName}&apos;S NUMBER</small><strong>{match.revealedSecrets[0]}</strong><span>{scoreLabel(match.scores[1])}</span></div>{user.uid === room.guestUid ? <button className="primary-button wide-button" onClick={() => void startRoundTwo()}>Choose My Secret <span>→</span></button> : <p className="online-wait-copy">Waiting for {room.guestName} to start round two…</p>}</div>
+            ) : (
+              <div className="number-role-card number-match-card"><span className="number-role-kanji">勝</span><p className="eyebrow">ONLINE MATCH COMPLETE · 結果</p><h1>{playerOneScore === playerTwoScore ? "Draw match!" : `${playerOneScore < playerTwoScore ? room.hostName : room.guestName} wins!`}</h1><p>Fewest guesses wins. Both secret rounds were synchronized between your devices.</p><div className="number-match-scores"><div className={playerOneScore < playerTwoScore ? "winner" : ""}><small>{room.hostName}</small><strong>{scoreLabel(match.scores[0])}</strong><span>Secret was {match.revealedSecrets[1]}</span></div><b>VS</b><div className={playerTwoScore < playerOneScore ? "winner" : ""}><small>{room.guestName}</small><strong>{scoreLabel(match.scores[1])}</strong><span>Secret was {match.revealedSecrets[0]}</span></div></div>{user.uid === room.hostUid ? <button className="primary-button wide-button" onClick={() => void restartMatch()}>Play Again</button> : <p className="online-wait-copy">Waiting for {room.hostName} to restart the match…</p>}</div>
+            )}
+          </>
+        )}
+        {error && <p className="online-game-error" role="alert">{error}</p>}
       </section>
     </main>
   );
@@ -1258,7 +1434,7 @@ function GameLobby({
   onLeaveRoom: () => Promise<void>;
   onSendInvite: (friend: FriendEntry, gameId: PlayableGameId, roomCode: string) => Promise<string>;
   onCancelInvite: (invite: GameInvite) => Promise<void>;
-  onStart: () => void;
+  onStart: () => Promise<void>;
   onBack: () => void;
   onOpenFriends: () => void;
 }) {
@@ -1346,7 +1522,8 @@ function GameLobby({
               </div>
               {isHost && !roomReady && friends.length > 0 && !firebaseUser?.isAnonymous && <div className="lobby-friends"><div className="lobby-section-title"><span>Invite friends</span><span>友達を招待</span></div>{friends.map((friend) => <div className="lobby-friend" key={friend.uid}><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="lobby-friend-avatar" /><strong>{friend.name}</strong><button onClick={() => void inviteFriend(friend)} disabled={busyFriend !== null || Boolean(activeInvite)}>{busyFriend === friend.uid ? "SENDING…" : activeInvite?.toUid === friend.uid ? "SENT" : "INVITE"}</button></div>)}</div>}
               {isHost && !roomReady && !friends.length && !firebaseUser?.isAnonymous && <div className="lobby-empty-state"><strong>Share the link or invite a friend.</strong><span>Your friend list is currently empty.</span><button className="primary-button" onClick={onOpenFriends}>Add Friends</button></div>}
-              <div className="lobby-room-actions room-footer-actions">{roomReady && <button className="primary-button" onClick={onStart}>Start Versus</button>}{activeInvite && inviteIsLive(activeInvite) && <button className="secondary-button" onClick={() => void onCancelInvite(activeInvite)}>Cancel Friend Invite</button>}<button className="secondary-button" onClick={() => void onLeaveRoom()}>Leave Room</button></div>
+              {!isHost && roomReady && <p className="lobby-message host-start-message" role="status">Both players are ready. Waiting for the host to start.</p>}
+              <div className="lobby-room-actions room-footer-actions">{roomReady && isHost && <button className="primary-button" onClick={() => void onStart()}>Start Online Versus</button>}{activeInvite && inviteIsLive(activeInvite) && <button className="secondary-button" onClick={() => void onCancelInvite(activeInvite)}>Cancel Friend Invite</button>}<button className="secondary-button" onClick={() => void onLeaveRoom()}>Leave Room</button></div>
             </>
           )}
           {message && <p className="lobby-message" role="status">{message}</p>}
@@ -1959,6 +2136,12 @@ export default function Home() {
       const nextRoom = snapshot.data() as GameRoom;
       const isParticipant = nextRoom.hostUid === firebaseUser.uid || nextRoom.guestUid === firebaseUser.uid;
       setActiveRoom(isParticipant ? nextRoom : null);
+      if (isParticipant && nextRoom.status === "playing" && nextRoom.gameId === "number") {
+        setGameMode("multi");
+        setGame("number");
+        window.location.hash = "number";
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     }, () => setAuthError("Could not load that room."));
   }, [firebaseUser, roomCode]);
 
@@ -2223,6 +2406,42 @@ export default function Home() {
     }
   }, [avatarId, rememberRoom, roomIdentity]);
 
+  const startVersus = useCallback(async (gameId: PlayableGameId) => {
+    const user = auth.currentUser;
+    if (gameId !== "number") {
+      setGameMode("multi");
+      setGame(gameId);
+      window.location.hash = gameId;
+      return;
+    }
+    if (!user || !activeRoom || activeRoom.hostUid !== user.uid || !activeRoom.guestUid || !activeRoom.guestName) {
+      setAuthError("The host can start after both online players are ready.");
+      return;
+    }
+    const batch = writeBatch(db);
+    batch.set(doc(db, "rooms", activeRoom.code, "numberHunt", "state"), {
+      gameId: "number",
+      roomCode: activeRoom.code,
+      round: 1,
+      phase: "setting",
+      keeperUid: activeRoom.hostUid,
+      keeperName: activeRoom.hostName,
+      guesserUid: activeRoom.guestUid,
+      guesserName: activeRoom.guestName,
+      guesses: [],
+      pendingGuess: null,
+      lastGuess: null,
+      lastClue: "none",
+      scores: [null, null],
+      revealedSecrets: [null, null],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(doc(db, "rooms", activeRoom.code), { status: "playing", updatedAt: serverTimestamp() });
+    try { await batch.commit(); }
+    catch { setAuthError("Could not start the online match."); }
+  }, [activeRoom]);
+
   const leaveRoom = useCallback(async () => {
     const user = auth.currentUser;
     const code = roomCode;
@@ -2232,7 +2451,16 @@ export default function Home() {
         const snapshot = await getDoc(roomRef);
         if (snapshot.exists()) {
           const data = snapshot.data() as GameRoom;
-          if (data.hostUid === user.uid || data.guestUid === user.uid) await deleteDoc(roomRef);
+          if (data.hostUid === user.uid || data.guestUid === user.uid) {
+            if (data.gameId === "number") {
+              const batch = writeBatch(db);
+              batch.delete(doc(db, "rooms", code, "numberHunt", "state"));
+              batch.delete(doc(db, "rooms", code, "numberHunt", "secret-1"));
+              batch.delete(doc(db, "rooms", code, "numberHunt", "secret-2"));
+              batch.delete(roomRef);
+              await batch.commit();
+            } else await deleteDoc(roomRef);
+          }
         }
         const relatedInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.roomCode === code && all.findIndex((item) => item.id === invite.id) === index);
         for (const invite of relatedInvites) {
@@ -2329,7 +2557,7 @@ export default function Home() {
       selectGame(gameId);
     };
     const lobbyGame = SCORE_GAME_IDS.find((gameId) => game === `${gameId}-lobby`);
-    if (lobbyGame) return <GameLobby game={lobbyGame} firebaseUser={firebaseUser} profileName={profileName} friends={visibleFriends} outgoingInvites={outgoingInvites} roomCode={roomCode} room={activeRoom?.gameId === lobbyGame ? activeRoom : null} onCreateRoom={createRoom} onJoinRoom={joinRoom} onLeaveRoom={leaveRoom} onSendInvite={sendInvite} onCancelInvite={cancelInvite} onStart={() => { setGameMode("multi"); selectGame(lobbyGame); }} onBack={() => selectGame(`${lobbyGame}-menu`)} onOpenFriends={() => selectGame("friends")} />;
+    if (lobbyGame) return <GameLobby game={lobbyGame} firebaseUser={firebaseUser} profileName={profileName} friends={visibleFriends} outgoingInvites={outgoingInvites} roomCode={roomCode} room={activeRoom?.gameId === lobbyGame ? activeRoom : null} onCreateRoom={createRoom} onJoinRoom={joinRoom} onLeaveRoom={leaveRoom} onSendInvite={sendInvite} onCancelInvite={cancelInvite} onStart={() => startVersus(lobbyGame)} onBack={() => selectGame(`${lobbyGame}-menu`)} onOpenFriends={() => selectGame("friends")} />;
     if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={(mode) => playFromMenu("codebreaker", mode)} onBack={() => selectGame("games")} />;
     if (game === "order-menu") return <GameMenu game="order" onPlay={(mode) => playFromMenu("order", mode)} onBack={() => selectGame("games")} />;
     if (game === "number-menu") return <GameMenu game="number" onPlay={(mode) => playFromMenu("number", mode)} onBack={() => selectGame("games")} />;
@@ -2342,7 +2570,7 @@ export default function Home() {
     if (game === "deducktion-menu") return <GameMenu game="deducktion" onPlay={() => selectGame("deducktion")} onBack={() => selectGame("games")} />;
     if (game === "codebreaker") return <Codebreaker mode={gameMode} onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode={gameMode} onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
-    if (game === "number") return <NumberHunt mode={gameMode} onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
+    if (game === "number") return gameMode === "multi" && activeRoom?.gameId === "number" && firebaseUser ? <OnlineNumberHunt room={activeRoom} user={firebaseUser} onLeave={leaveRoom} /> : <NumberHunt mode="solo" onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
     if (game === "memory") return <MemoryGame mode={gameMode} onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
     if (game === "tictactoe") return <TicTacToe mode={gameMode} onBack={() => selectGame("tictactoe-menu")} onScore={(score) => recordScore("tictactoe", score)} />;
     if (game === "connect4") return <ConnectFour mode={gameMode} onBack={() => selectGame("connect4-menu")} onScore={(score) => recordScore("connect4", score)} />;
@@ -2352,7 +2580,7 @@ export default function Home() {
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
     return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, sendInvite, respondInvite, cancelInvite, closeInvite]);
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite]);
 
   return view;
 }
