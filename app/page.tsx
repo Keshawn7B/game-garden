@@ -11,7 +11,7 @@ type LibraryGameId = PlayableGameId | ExternalGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "profile";
 type ThemeMode = "classic" | "sakura";
 type GameMode = "solo" | "multi";
-type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu`;
+type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu` | `${PlayableGameId}-lobby`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
 type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun" | "pink-blossom" | "pink-heart" | "pink-bunny" | "pink-fan" | "pink-peach";
 type HighScores = Partial<Record<PlayableGameId, number>>;
@@ -860,7 +860,114 @@ function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode
             <h2>How to play <span>遊び方</span></h2>
             <ol>{details.rules.map((rule, index) => <li key={rule}><b>{index + 1}</b><span>{rule}</span></li>)}</ol>
           </div>
-          <button className="primary-button menu-start" onClick={() => onPlay(selectedMode)}>Start {supportsLocalMultiplayer && selectedMode === "multi" ? "Versus" : "Game"} <span>→</span></button>
+          <button className="primary-button menu-start" onClick={() => onPlay(selectedMode)}>{supportsLocalMultiplayer && selectedMode === "multi" ? "Open Lobby" : "Start Game"} <span>→</span></button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function GameLobby({
+  game,
+  firebaseUser,
+  profileName,
+  avatarId,
+  friends,
+  incomingInvites,
+  outgoingInvites,
+  onSendInvite,
+  onRespondInvite,
+  onCancelInvite,
+  onCloseInvite,
+  onStart,
+  onBack,
+  onOpenFriends,
+  onOpenProfile,
+}: {
+  game: PlayableGameId;
+  firebaseUser: User | null;
+  profileName: string;
+  avatarId: AvatarId;
+  friends: FriendEntry[];
+  incomingInvites: GameInvite[];
+  outgoingInvites: GameInvite[];
+  onSendInvite: (friend: FriendEntry, gameId: PlayableGameId) => Promise<string>;
+  onRespondInvite: (invite: GameInvite, response: "accepted" | "declined") => Promise<void>;
+  onCancelInvite: (invite: GameInvite) => Promise<void>;
+  onCloseInvite: (invite: GameInvite) => Promise<void>;
+  onStart: () => void;
+  onBack: () => void;
+  onOpenFriends: () => void;
+  onOpenProfile: () => void;
+}) {
+  const details = GAME_MENUS[game];
+  const [busyFriend, setBusyFriend] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const activeInvites = [...outgoingInvites, ...incomingInvites]
+    .filter((invite, index, all) => invite.gameId === game && (inviteIsLive(invite) || invite.status === "accepted") && all.findIndex((item) => item.id === invite.id) === index)
+    .sort((left, right) => Number(right.status === "accepted") - Number(left.status === "accepted"));
+  const activeInvite = activeInvites[0];
+  const isHost = Boolean(activeInvite && firebaseUser && activeInvite.fromUid === firebaseUser.uid);
+  const opponent = activeInvite ? {
+    name: isHost ? activeInvite.toName : activeInvite.fromName,
+    avatarId: isHost ? activeInvite.toAvatar : activeInvite.fromAvatar,
+  } : null;
+  const roomReady = activeInvite?.status === "accepted";
+  const incomingRequest = activeInvite?.status === "pending" && !isHost;
+
+  const inviteFriend = async (friend: FriendEntry) => {
+    setBusyFriend(friend.uid);
+    setMessage("");
+    setMessage(await onSendInvite(friend, game));
+    setBusyFriend(null);
+  };
+
+  return (
+    <main className="game-menu-shell game-lobby-shell">
+      <header className="game-topbar menu-topbar">
+        <button className="back-button" onClick={onBack}>← Game menu</button>
+        <div className="wordmark small-wordmark"><span className="brand-dot" /> GAME GARDEN</div>
+        <span className="menu-header-spacer" aria-hidden="true" />
+      </header>
+      <section className="game-lobby">
+        <div className="lobby-card">
+          <button className="menu-close" onClick={onBack} aria-label="Close versus lobby">×</button>
+          <div className="lobby-heading">
+            <span className={`game-cover lobby-game-cover art-${game}`}><i>{details.glyph}</i></span>
+            <div><p>VERSUS LOBBY · 対戦ロビー</p><h1>{details.title}</h1><span>Invite a friend before the match starts.</span></div>
+          </div>
+
+          <div className="lobby-players" aria-label="Lobby players">
+            <div className="lobby-player ready"><AvatarGlyph avatarId={avatarId} className="lobby-avatar" /><span><small>PLAYER 1</small><strong>{profileName || "Player One"}</strong><em>READY</em></span></div>
+            <b>VS</b>
+            <div className={`lobby-player ${roomReady ? "ready" : "waiting"}`}>
+              {opponent ? <AvatarGlyph avatarId={opponent.avatarId} className="lobby-avatar" /> : <span className="lobby-empty-avatar">?</span>}
+              <span><small>PLAYER 2</small><strong>{opponent?.name || "Invite a friend"}</strong><em>{roomReady ? "READY" : activeInvite ? "WAITING" : "OPEN"}</em></span>
+            </div>
+          </div>
+
+          {!firebaseUser ? (
+            <div className="lobby-empty-state"><strong>Sign in to invite friends.</strong><span>Your profile and friend list will appear here.</span><button className="primary-button" onClick={onOpenProfile}>Open Profile</button></div>
+          ) : activeInvite ? (
+            <div className="lobby-room">
+              <div><small>ROOM</small><strong>#{activeInvite.id.slice(-8).toUpperCase()}</strong><span>{roomReady ? `${opponent?.name} is ready.` : incomingRequest ? `${opponent?.name} invited you.` : `Waiting for ${opponent?.name}.`}</span></div>
+              {incomingRequest ? (
+                <div className="lobby-room-actions"><button className="primary-button" onClick={() => void onRespondInvite(activeInvite, "accepted")}>Accept Invite</button><button className="secondary-button" onClick={() => void onRespondInvite(activeInvite, "declined")}>Decline</button></div>
+              ) : roomReady ? (
+                <div className="lobby-room-actions"><button className="primary-button" onClick={onStart}>Start Versus</button><button className="secondary-button" onClick={() => void onCloseInvite(activeInvite)}>Leave Lobby</button></div>
+              ) : (
+                <button className="secondary-button lobby-cancel" onClick={() => void onCancelInvite(activeInvite)}>Cancel Invite</button>
+              )}
+            </div>
+          ) : friends.length ? (
+            <div className="lobby-friends">
+              <div className="lobby-section-title"><span>Invite friends</span><span>友達を招待</span></div>
+              {friends.map((friend) => <div className="lobby-friend" key={friend.uid}><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="lobby-friend-avatar" /><strong>{friend.name}</strong><button onClick={() => void inviteFriend(friend)} disabled={busyFriend !== null}>{busyFriend === friend.uid ? "SENDING…" : "INVITE"}</button></div>)}
+            </div>
+          ) : (
+            <div className="lobby-empty-state"><strong>Your friend list is empty.</strong><span>Add a friend with their Game Garden link or code.</span><button className="primary-button" onClick={onOpenFriends}>Add Friends</button></div>
+          )}
+          {message && <p className="lobby-message" role="status">{message}</p>}
         </div>
       </section>
     </main>
@@ -986,6 +1093,7 @@ function AppHome({
   onRespondInvite,
   onCancelInvite,
   onCloseInvite,
+  onJoinLobby,
 }: {
   activeTab: AppTab;
   theme: ThemeMode;
@@ -1017,6 +1125,7 @@ function AppHome({
   onRespondInvite: (invite: GameInvite, response: "accepted" | "declined") => Promise<void>;
   onCancelInvite: (invite: GameInvite) => Promise<void>;
   onCloseInvite: (invite: GameInvite) => Promise<void>;
+  onJoinLobby: (gameId: PlayableGameId) => void;
 }) {
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
@@ -1255,7 +1364,7 @@ function AppHome({
                   <div className="invite-card incoming-invite" key={invite.id}>
                     <AvatarGlyph avatarId={invite.fromAvatar} className="invite-avatar" />
                     <div><small>INVITED YOU · {inviteTimeLeft(invite)}</small><strong>{invite.fromName}</strong><span>{invite.gameName} · Online match</span></div>
-                    <div className="invite-actions"><button className="primary-button" onClick={() => void onRespondInvite(invite, "accepted")}>Accept</button><button className="secondary-button" onClick={() => void onRespondInvite(invite, "declined")}>Decline</button></div>
+                    <div className="invite-actions"><button className="primary-button" onClick={() => void onRespondInvite(invite, "accepted").then(() => onJoinLobby(invite.gameId))}>Accept</button><button className="secondary-button" onClick={() => void onRespondInvite(invite, "declined")}>Decline</button></div>
                   </div>
                 ))}
                 {readyInvites.map((invite) => {
@@ -1264,7 +1373,7 @@ function AppHome({
                     <div className="invite-card ready-invite" key={invite.id}>
                       <AvatarGlyph avatarId={isHost ? invite.toAvatar : invite.fromAvatar} className="invite-avatar" />
                       <div><small>ROOM READY · #{invite.id.slice(-8).toUpperCase()}</small><strong>{invite.gameName}</strong><span>You + {isHost ? invite.toName : invite.fromName}</span></div>
-                      <button className="invite-close" onClick={() => void onCloseInvite(invite)} aria-label={`Close ${invite.gameName} room`}>×</button>
+                      <div className="invite-actions ready-actions"><button className="primary-button" onClick={() => onJoinLobby(invite.gameId)}>Join Lobby</button><button className="invite-close" onClick={() => void onCloseInvite(invite)} aria-label={`Close ${invite.gameName} room`}>×</button></div>
                     </div>
                   );
                 })}
@@ -1693,13 +1802,23 @@ export default function Home() {
   })), [friends, friendProfiles]);
 
   const view = useMemo(() => {
-    if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={(mode) => { setGameMode(mode); selectGame("codebreaker"); }} onBack={() => selectGame("games")} />;
-    if (game === "order-menu") return <GameMenu game="order" onPlay={(mode) => { setGameMode(mode); selectGame("order"); }} onBack={() => selectGame("games")} />;
-    if (game === "number-menu") return <GameMenu game="number" onPlay={(mode) => { setGameMode(mode); selectGame("number"); }} onBack={() => selectGame("games")} />;
-    if (game === "memory-menu") return <GameMenu game="memory" onPlay={(mode) => { setGameMode(mode); selectGame("memory"); }} onBack={() => selectGame("games")} />;
-    if (game === "tictactoe-menu") return <GameMenu game="tictactoe" onPlay={(mode) => { setGameMode(mode); selectGame("tictactoe"); }} onBack={() => selectGame("games")} />;
-    if (game === "rps-menu") return <GameMenu game="rps" onPlay={(mode) => { setGameMode(mode); selectGame("rps"); }} onBack={() => selectGame("games")} />;
-    if (game === "dice-menu") return <GameMenu game="dice" onPlay={(mode) => { setGameMode(mode); selectGame("dice"); }} onBack={() => selectGame("games")} />;
+    const playFromMenu = (gameId: PlayableGameId, mode: GameMode) => {
+      if (mode === "multi") {
+        selectGame(`${gameId}-lobby`);
+        return;
+      }
+      setGameMode("solo");
+      selectGame(gameId);
+    };
+    const lobbyGame = SCORE_GAME_IDS.find((gameId) => game === `${gameId}-lobby`);
+    if (lobbyGame) return <GameLobby game={lobbyGame} firebaseUser={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onStart={() => { setGameMode("multi"); selectGame(lobbyGame); }} onBack={() => selectGame(`${lobbyGame}-menu`)} onOpenFriends={() => selectGame("friends")} onOpenProfile={() => selectGame("profile")} />;
+    if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={(mode) => playFromMenu("codebreaker", mode)} onBack={() => selectGame("games")} />;
+    if (game === "order-menu") return <GameMenu game="order" onPlay={(mode) => playFromMenu("order", mode)} onBack={() => selectGame("games")} />;
+    if (game === "number-menu") return <GameMenu game="number" onPlay={(mode) => playFromMenu("number", mode)} onBack={() => selectGame("games")} />;
+    if (game === "memory-menu") return <GameMenu game="memory" onPlay={(mode) => playFromMenu("memory", mode)} onBack={() => selectGame("games")} />;
+    if (game === "tictactoe-menu") return <GameMenu game="tictactoe" onPlay={(mode) => playFromMenu("tictactoe", mode)} onBack={() => selectGame("games")} />;
+    if (game === "rps-menu") return <GameMenu game="rps" onPlay={(mode) => playFromMenu("rps", mode)} onBack={() => selectGame("games")} />;
+    if (game === "dice-menu") return <GameMenu game="dice" onPlay={(mode) => playFromMenu("dice", mode)} onBack={() => selectGame("games")} />;
     if (game === "meducktion-menu") return <GameMenu game="meducktion" onPlay={() => selectGame("meducktion")} onBack={() => selectGame("games")} />;
     if (game === "deducktion-menu") return <GameMenu game="deducktion" onPlay={() => selectGame("deducktion")} onBack={() => selectGame("games")} />;
     if (game === "codebreaker") return <Codebreaker mode={gameMode} onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
@@ -1712,7 +1831,7 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} />;
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId) => selectGame(`${gameId}-lobby`)} />;
   }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, sendInvite, respondInvite, cancelInvite, closeInvite]);
 
   return view;
