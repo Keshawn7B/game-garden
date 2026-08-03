@@ -583,11 +583,12 @@ function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
 }
 
 const RPS_CHOICES = [
-  { id: "rock", symbol: "✊", label: "Rock" },
-  { id: "paper", symbol: "✋", label: "Paper" },
-  { id: "scissors", symbol: "✌", label: "Scissors" },
+  { id: "rock", symbol: "✊", label: "Rock", japanese: "石" },
+  { id: "paper", symbol: "✋", label: "Paper", japanese: "紙" },
+  { id: "scissors", symbol: "✌", label: "Scissors", japanese: "鋏" },
 ] as const;
 type RpsChoice = (typeof RPS_CHOICES)[number]["id"];
+type RpsRound = { player: RpsChoice; opponent: RpsChoice; result: -1 | 0 | 1 };
 
 function rpsWinner(first: RpsChoice, second: RpsChoice) {
   if (first === second) return -1;
@@ -602,14 +603,17 @@ function RockPaperScissors({ mode, onBack, onScore }: { mode: GameMode; onBack: 
   const [scores, setScores] = useState<[number, number]>([0, 0]);
   const [pending, setPending] = useState<RpsChoice | null>(null);
   const [rounds, setRounds] = useState(0);
+  const [lastRound, setLastRound] = useState<RpsRound | null>(null);
+  const [history, setHistory] = useState<RpsRound[]>([]);
   const [message, setMessage] = useState(mode === "multi" ? "Player 1, choose in secret." : "Choose your move.");
   const gameOver = scores[0] >= 3 || scores[1] >= 3;
 
-  const reset = () => { setScores([0, 0]); setPending(null); setRounds(0); setMessage(mode === "multi" ? "Player 1, choose in secret." : "Choose your move."); };
+  const reset = () => { setScores([0, 0]); setPending(null); setRounds(0); setLastRound(null); setHistory([]); setMessage(mode === "multi" ? "Player 1, choose in secret." : "Choose your move."); };
   const choose = (choice: RpsChoice) => {
     if (gameOver) return;
     if (mode === "multi" && !pending) {
       setPending(choice);
+      setLastRound(null);
       setMessage("Choice locked. Pass to Player 2.");
       return;
     }
@@ -623,9 +627,17 @@ function RockPaperScissors({ mode, onBack, onScore }: { mode: GameMode; onBack: 
     setScores(nextScores);
     setRounds((count) => count + 1);
     setPending(null);
+    const completedRound: RpsRound = { player, opponent, result };
+    setLastRound(completedRound);
+    setHistory((previous) => [completedRound, ...previous].slice(0, 5));
     setMessage(result < 0 ? `${playerLabel} ties ${opponentLabel}.` : mode === "multi" ? `Player ${result + 1} wins: ${playerLabel} vs ${opponentLabel}.` : result === 0 ? `${playerLabel} beats ${opponentLabel}.` : `${opponentLabel} beats ${playerLabel}.`);
     if (mode === "solo" && nextScores[0] === 3) onScore(rounds + 1);
   };
+
+  const leftMove = RPS_CHOICES.find((choice) => choice.id === lastRound?.player);
+  const rightMove = RPS_CHOICES.find((choice) => choice.id === lastRound?.opponent);
+  const leftWon = lastRound?.result === 0;
+  const rightWon = lastRound?.result === 1;
 
   return (
     <main className="game-shell simple-game-shell">
@@ -635,8 +647,22 @@ function RockPaperScissors({ mode, onBack, onScore }: { mode: GameMode; onBack: 
         <h1>Rock Paper Scissors</h1>
         <p>First to three points wins the match.</p>
         {!gameOver && <TurnBanner mode={mode} currentPlayer={pending ? 1 : 0} scores={scores} />}
-        <div className="duel-score"><div><span>{mode === "multi" ? "PLAYER 1" : "YOU"}</span><strong>{scores[0]}</strong></div><b>VS</b><div><span>{mode === "multi" ? "PLAYER 2" : "CPU"}</span><strong>{scores[1]}</strong></div></div>
-        <div className="rps-choices">{RPS_CHOICES.map((choice) => <button key={choice.id} onClick={() => choose(choice.id)} disabled={gameOver}><b>{choice.symbol}</b><span>{choice.label}</span></button>)}</div>
+        <div className={`rps-arena ${lastRound ? "has-reveal" : "is-waiting"}`} key={`round-${rounds}-${pending ? "locked" : "open"}`} aria-live="polite">
+          <div className={`rps-fighter fighter-left ${leftWon ? "is-winner" : lastRound && rightWon ? "is-loser" : ""}`}>
+            <span className="rps-fighter-label">{mode === "multi" ? "PLAYER 1" : "YOU"}</span>
+            <div className="rps-hand-shell"><b className="rps-hand">{leftMove?.symbol ?? (pending ? "✓" : "?")}</b><i>{leftMove?.label ?? (pending ? "LOCKED" : "CHOOSE")}</i></div>
+            <div className="rps-score-pips" aria-label={`${scores[0]} points`}>{[0, 1, 2].map((point) => <i className={scores[0] > point ? "filled" : ""} key={point} />)}</div>
+          </div>
+          <div className="rps-impact"><strong>{lastRound ? lastRound.result < 0 ? "相" : leftWon ? "勝" : "敗" : "対"}</strong><span>{lastRound ? lastRound.result < 0 ? "DRAW" : "IMPACT" : "VERSUS"}</span></div>
+          <div className={`rps-fighter fighter-right ${rightWon ? "is-winner" : lastRound && leftWon ? "is-loser" : ""}`}>
+            <span className="rps-fighter-label">{mode === "multi" ? "PLAYER 2" : "CPU"}</span>
+            <div className="rps-hand-shell"><b className="rps-hand">{rightMove?.symbol ?? "?"}</b><i>{rightMove?.label ?? (pending ? "CHOOSE" : "WAITING")}</i></div>
+            <div className="rps-score-pips" aria-label={`${scores[1]} points`}>{[0, 1, 2].map((point) => <i className={scores[1] > point ? "filled" : ""} key={point} />)}</div>
+          </div>
+        </div>
+        <div className="rps-prompt"><span>{pending ? "PLAYER 2 · MAKE YOUR MOVE" : gameOver ? "MATCH COMPLETE" : "CHOOSE YOUR HAND"}</span><i>じゃんけん</i></div>
+        <div className="rps-choices">{RPS_CHOICES.map((choice) => <button className={`rps-choice-card choice-${choice.id}`} key={choice.id} onClick={() => choose(choice.id)} disabled={gameOver} aria-label={`Choose ${choice.label}`}><i aria-hidden="true" /><b>{choice.symbol}</b><span><em>{choice.japanese}</em><strong>{choice.label}</strong></span></button>)}</div>
+        {history.length > 0 && <div className="rps-round-history" aria-label="Recent rounds"><span>RECENT</span>{history.map((round, index) => { const first = RPS_CHOICES.find((choice) => choice.id === round.player)!; const second = RPS_CHOICES.find((choice) => choice.id === round.opponent)!; return <i className={round.result < 0 ? "tie" : round.result === 0 ? "win" : "loss"} key={`${rounds}-${index}`}>{first.symbol}<b>×</b>{second.symbol}</i>; })}</div>}
         <div className="simple-status" role="status"><strong>{gameOver ? scores[0] > scores[1] ? mode === "multi" ? "Player 1 wins!" : "You win!" : mode === "multi" ? "Player 2 wins!" : "CPU wins." : message}</strong><span>{gameOver ? `Final score ${scores[0]}–${scores[1]}.` : `Round ${rounds + 1}`}</span></div>
         {gameOver && <button className="primary-button simple-reset" onClick={reset}>Play again</button>}
       </section>

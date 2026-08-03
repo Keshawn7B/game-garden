@@ -67,6 +67,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function OrderMatch/);
   assert.match(source, /function TicTacToe/);
   assert.match(source, /function RockPaperScissors/);
+  assert.match(source, /type RpsRound/);
+  assert.match(source, /rps-arena \$\{lastRound/);
+  assert.match(source, /className="rps-score-pips"/);
+  assert.match(source, /className="rps-round-history"/);
+  assert.match(source, /じゃんけん/);
   assert.match(source, /function DiceRace/);
   assert.match(source, /switchObject/);
   assert.match(source, /Check order/);
@@ -129,6 +134,9 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.lobby-friends/);
   assert.match(styles, /\.tic-board/);
   assert.match(styles, /\.rps-choices/);
+  assert.match(styles, /\.rps-arena/);
+  assert.match(styles, /@keyframes rpsWinnerPop/);
+  assert.match(styles, /@keyframes rpsImpact/);
   assert.match(styles, /\.dice-racers/);
   assert.match(firestoreRules, /'tictactoe', 'rps', 'dice'/);
   assert.match(source, /friendProfiles/);
