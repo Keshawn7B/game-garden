@@ -30,8 +30,46 @@ service cloud.firestore {
         && request.resource.data.friendCode is string
         && request.resource.data.friendCode.size() == 8
         && request.resource.data.highScores is map
+        && (!request.resource.data.keys().hasAny(['online']) || request.resource.data.online is bool)
+        && (!request.resource.data.keys().hasAny(['lastActiveAt']) || request.resource.data.lastActiveAt is timestamp)
         && validAvatar(request.resource.data.avatarId);
       allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /directChats/{chatId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+      allow create: if validNewDirectChat(chatId, request.resource.data);
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.participants
+        && validDirectChatShape(chatId, request.resource.data)
+        && request.resource.data.userA == resource.data.userA
+        && request.resource.data.userB == resource.data.userB
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userAName', 'userAAvatar', 'userBName', 'userBAvatar', 'lastMessage', 'lastSenderUid', 'lastMessageAt', 'unreadBy', 'updatedAt'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessage', 'lastSenderUid', 'lastMessageAt'])
+          || (request.resource.data.lastSenderUid == request.auth.uid
+            && request.resource.data.lastMessageAt == request.time));
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/directChats/$(chatId)).data.participants;
+        allow create: if request.auth != null
+          && request.auth.uid in getAfter(/databases/$(database)/documents/directChats/$(chatId)).data.participants
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() >= 1
+          && request.resource.data.senderName.size() <= 18
+          && validAvatar(request.resource.data.senderAvatar)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.sentAt == request.time
+          && request.resource.data.keys().hasOnly(['senderUid', 'senderName', 'senderAvatar', 'text', 'sentAt']);
+        allow update, delete: if false;
+      }
     }
 
     match /invites/{inviteId} {
@@ -161,6 +199,45 @@ service cloud.firestore {
         && request.resource.data.score is int
         && request.resource.data.score >= 1
         && request.resource.data.score <= 10000;
+    }
+
+    function otherChatUser(chat) {
+      return chat.userA == request.auth.uid ? chat.userB : chat.userA;
+    }
+
+    function validNewDirectChat(chatId, chat) {
+      return request.auth != null
+        && request.auth.uid in chat.participants
+        && validDirectChatShape(chatId, chat)
+        && chat.lastSenderUid == request.auth.uid
+        && chat.lastMessageAt == request.time
+        && chat.updatedAt == request.time
+        && (exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(otherChatUser(chat)))
+          || exists(/databases/$(database)/documents/users/$(otherChatUser(chat))/friends/$(request.auth.uid)));
+    }
+
+    function validDirectChatShape(chatId, chat) {
+      return chat.keys().hasOnly(['userA', 'userB', 'participants', 'userAName', 'userAAvatar', 'userBName', 'userBAvatar', 'lastMessage', 'lastSenderUid', 'lastMessageAt', 'unreadBy', 'updatedAt'])
+        && chat.userA is string
+        && chat.userB is string
+        && chat.userA != chat.userB
+        && chatId == chat.userA + '--' + chat.userB
+        && chat.participants == [chat.userA, chat.userB]
+        && chat.userAName is string
+        && chat.userAName.size() >= 1
+        && chat.userAName.size() <= 18
+        && chat.userBName is string
+        && chat.userBName.size() >= 1
+        && chat.userBName.size() <= 18
+        && validAvatar(chat.userAAvatar)
+        && validAvatar(chat.userBAvatar)
+        && chat.lastMessage is string
+        && chat.lastMessage.size() >= 1
+        && chat.lastMessage.size() <= 500
+        && chat.lastSenderUid in chat.participants
+        && chat.lastMessageAt is timestamp
+        && chat.unreadBy is map
+        && chat.updatedAt is timestamp;
     }
 
     function validNewInvite(inviteId, invite) {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 import { makeOnlineGameState, OnlineVersusGame, type OnlineGameId } from "./online-games";
 
@@ -18,7 +18,30 @@ type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" 
 type HighScores = Partial<Record<PlayableGameId, number>>;
 type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
-type FriendEntry = { uid: string; name: string; avatarId: AvatarId; highScores?: HighScores };
+type FriendEntry = { uid: string; name: string; avatarId: AvatarId; highScores?: HighScores; online?: boolean; lastActiveAt?: Timestamp; isOnline?: boolean };
+type DirectChatSummary = {
+  id: string;
+  userA: string;
+  userB: string;
+  participants: string[];
+  userAName: string;
+  userAAvatar: AvatarId;
+  userBName: string;
+  userBAvatar: AvatarId;
+  lastMessage: string;
+  lastSenderUid: string;
+  lastMessageAt?: Timestamp;
+  unreadBy?: Record<string, boolean>;
+};
+type DirectMessage = {
+  id: string;
+  senderUid: string;
+  senderName: string;
+  senderAvatar: AvatarId;
+  text: string;
+  sentAt?: Timestamp;
+};
+const EMPTY_DIRECT_MESSAGES: DirectMessage[] = [];
 type InviteStatus = "pending" | "accepted" | "declined" | "cancelled";
 type GameInvite = {
   id: string;
@@ -71,6 +94,7 @@ type NumberOnlineState = {
 };
 
 const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
 const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: string }> = {
   games: { label: "ARCADE", japanese: "ゲーム", glyph: "遊" },
   leaderboard: { label: "RANKS", japanese: "ランキング", glyph: "冠" },
@@ -108,6 +132,25 @@ function isAvatarId(value: unknown): value is AvatarId {
 
 function friendCodeFor(uid: string) {
   return uid.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase();
+}
+
+function directChatId(leftUid: string, rightUid: string) {
+  return [leftUid, rightUid].sort((left, right) => left.localeCompare(right)).join("--");
+}
+
+function friendIsOnline(friend: FriendEntry, now?: number) {
+  return friend.online === true && friend.lastActiveAt instanceof Timestamp && (now == null || now - friend.lastActiveAt.toMillis() < PRESENCE_WINDOW_MS);
+}
+
+function friendPresenceLabel(friend: FriendEntry) {
+  if (friend.isOnline) return "Online now";
+  const lastActive = friend.lastActiveAt?.toMillis();
+  if (!lastActive) return "Offline";
+  const minutes = Math.max(1, Math.floor((Date.now() - lastActive) / 60000));
+  if (minutes < 60) return `Active ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Active ${hours}h ago`;
+  return "Offline";
 }
 
 function friendCodeFromUrl() {
@@ -148,6 +191,8 @@ async function syncPublicProfile(user: User, name: string, avatarId: AvatarId, h
     avatarId,
     friendCode: friendCodeFor(user.uid),
     highScores,
+    online: true,
+    lastActiveAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }, { merge: true });
 }
@@ -1638,6 +1683,206 @@ function HeaderLogo({ compact = false }: { compact?: boolean }) {
   return <span className={`header-title-logo ${compact ? "game-header-logo" : ""}`} role="img" aria-label="Game Garden" />;
 }
 
+function FriendsChat({
+  user,
+  profileName,
+  avatarId,
+  friends,
+  open,
+  selectedUid,
+  onOpen,
+  onClose,
+  onSelectFriend,
+}: {
+  user: User | null;
+  profileName: string;
+  avatarId: AvatarId;
+  friends: FriendEntry[];
+  open: boolean;
+  selectedUid: string | null;
+  onOpen: () => void;
+  onClose: () => void;
+  onSelectFriend: (uid: string | null) => void;
+}) {
+  const [chats, setChats] = useState<DirectChatSummary[]>([]);
+  const [messageThread, setMessageThread] = useState<{ id: string; messages: DirectMessage[] }>({ id: "", messages: EMPTY_DIRECT_MESSAGES });
+  const [draft, setDraft] = useState("");
+  const [search, setSearch] = useState("");
+  const [sending, setSending] = useState(false);
+  const [chatError, setChatError] = useState("");
+  const messageEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user || user.isAnonymous) return;
+    return onSnapshot(
+      query(collection(db, "directChats"), where("participants", "array-contains", user.uid)),
+      (snapshot) => setChats(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as DirectChatSummary))),
+      () => setChatError("Chat is temporarily unavailable."),
+    );
+  }, [user]);
+
+  const peers = useMemo(() => {
+    const entries = new Map<string, FriendEntry>();
+    friends.forEach((friend) => entries.set(friend.uid, friend));
+    if (user) {
+      chats.forEach((chat) => {
+        const peerUid = chat.userA === user.uid ? chat.userB : chat.userA;
+        if (entries.has(peerUid)) return;
+        const peerIsA = chat.userA === peerUid;
+        entries.set(peerUid, {
+          uid: peerUid,
+          name: peerIsA ? chat.userAName : chat.userBName,
+          avatarId: isAvatarId(peerIsA ? chat.userAAvatar : chat.userBAvatar) ? (peerIsA ? chat.userAAvatar : chat.userBAvatar) : "play",
+          isOnline: false,
+        });
+      });
+    }
+    return [...entries.values()].sort((left, right) => {
+      if (Boolean(left.isOnline) !== Boolean(right.isOnline)) return left.isOnline ? -1 : 1;
+      const leftChat = user ? chats.find((chat) => chat.id === directChatId(user.uid, left.uid)) : undefined;
+      const rightChat = user ? chats.find((chat) => chat.id === directChatId(user.uid, right.uid)) : undefined;
+      const recentDifference = (rightChat?.lastMessageAt?.toMillis() ?? 0) - (leftChat?.lastMessageAt?.toMillis() ?? 0);
+      return recentDifference || left.name.localeCompare(right.name);
+    });
+  }, [chats, friends, user]);
+
+  const selectedPeer = peers.find((peer) => peer.uid === selectedUid) ?? null;
+  const activeChatId = user && selectedPeer ? directChatId(user.uid, selectedPeer.uid) : "";
+  const activeChat = chats.find((chat) => chat.id === activeChatId);
+  const unreadCount = user ? chats.filter((chat) => chat.unreadBy?.[user.uid] === true).length : 0;
+  const visiblePeers = peers.filter((peer) => peer.name.toLowerCase().includes(search.trim().toLowerCase()));
+  const threadMessages = messageThread.id === activeChatId ? messageThread.messages : EMPTY_DIRECT_MESSAGES;
+
+  useEffect(() => {
+    if (!user || user.isAnonymous || !open || !activeChatId || !activeChat) return;
+    return onSnapshot(
+      query(collection(db, "directChats", activeChatId, "messages"), orderBy("sentAt", "asc"), limitToLast(100)),
+      (snapshot) => {
+        setMessageThread({ id: activeChatId, messages: snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as DirectMessage)) });
+      },
+      () => setChatError("Could not load this conversation."),
+    );
+  }, [activeChat, activeChatId, open, user]);
+
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ block: "end" });
+  }, [threadMessages]);
+
+  useEffect(() => {
+    if (!user || !open || !activeChatId || activeChat?.unreadBy?.[user.uid] !== true) return;
+    void updateDoc(doc(db, "directChats", activeChatId), {
+      [`unreadBy.${user.uid}`]: false,
+      updatedAt: serverTimestamp(),
+    }).catch(() => undefined);
+  }, [activeChat?.unreadBy, activeChatId, open, user]);
+
+  const sendMessage = async () => {
+    if (!user || user.isAnonymous || !selectedPeer || sending) return;
+    const text = draft.trim().slice(0, 500);
+    if (!text) return;
+    setSending(true);
+    setChatError("");
+    try {
+      const [userA, userB] = [user.uid, selectedPeer.uid].sort((left, right) => left.localeCompare(right));
+      const currentName = (profileName.trim() || user.displayName || "Player One").slice(0, 18);
+      const currentIsA = userA === user.uid;
+      const chatRef = doc(db, "directChats", directChatId(user.uid, selectedPeer.uid));
+      const messageRef = doc(collection(chatRef, "messages"));
+      const batch = writeBatch(db);
+      batch.set(chatRef, {
+        userA,
+        userB,
+        participants: [userA, userB],
+        userAName: currentIsA ? currentName : selectedPeer.name.slice(0, 18),
+        userAAvatar: currentIsA ? avatarId : selectedPeer.avatarId,
+        userBName: currentIsA ? selectedPeer.name.slice(0, 18) : currentName,
+        userBAvatar: currentIsA ? selectedPeer.avatarId : avatarId,
+        lastMessage: text,
+        lastSenderUid: user.uid,
+        lastMessageAt: serverTimestamp(),
+        unreadBy: { [user.uid]: false, [selectedPeer.uid]: true },
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      batch.set(messageRef, {
+        senderUid: user.uid,
+        senderName: currentName,
+        senderAvatar: avatarId,
+        text,
+        sentAt: serverTimestamp(),
+      });
+      await batch.commit();
+      setDraft("");
+    } catch {
+      setChatError("That message did not send. Try again.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!user || user.isAnonymous) return null;
+
+  return (
+    <aside className={`friends-chat ${open ? "open" : ""}`} aria-label="Friends chat">
+      {!open && (
+        <button className="chat-launcher" onClick={onOpen} aria-label={`Open friends chat${unreadCount ? `, ${unreadCount} unread` : ""}`}>
+          <span>話</span><strong>CHAT</strong>{unreadCount > 0 && <i>{unreadCount}</i>}
+        </button>
+      )}
+      {open && (
+        <div className="chat-window" role="dialog" aria-label="Direct friends chat">
+          <header className="chat-window-header">
+            {selectedPeer ? (
+              <>
+                <button className="chat-back" onClick={() => onSelectFriend(null)} aria-label="Back to conversations">←</button>
+                <span className="chat-peer-avatar"><AvatarGlyph avatarId={selectedPeer.avatarId} className="chat-avatar" /><i className={selectedPeer.isOnline ? "online" : ""} /></span>
+                <div><strong>{selectedPeer.name}</strong><small>{friendPresenceLabel(selectedPeer)}</small></div>
+              </>
+            ) : <div className="chat-title"><span>話</span><div><strong>Friends chat</strong><small>フレンドチャット</small></div></div>}
+            <button className="chat-close" onClick={onClose} aria-label="Close friends chat">×</button>
+          </header>
+
+          {!selectedPeer ? (
+            <div className="chat-inbox">
+              <div className="chat-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search friends" aria-label="Search friends to chat" /></div>
+              <div className="chat-inbox-label"><span>DIRECT MESSAGES</span><b>{peers.filter((peer) => peer.isOnline).length} ONLINE</b></div>
+              <div className="chat-peer-list">
+                {visiblePeers.map((peer) => {
+                  const summary = chats.find((chat) => chat.id === directChatId(user.uid, peer.uid));
+                  const unread = summary?.unreadBy?.[user.uid] === true;
+                  return (
+                    <button className={`chat-peer-row ${unread ? "unread" : ""}`} key={peer.uid} onClick={() => onSelectFriend(peer.uid)}>
+                      <span className="chat-peer-avatar"><AvatarGlyph avatarId={peer.avatarId} className="chat-avatar" /><i className={peer.isOnline ? "online" : ""} /></span>
+                      <span><strong>{peer.name}</strong><small>{summary?.lastMessage || friendPresenceLabel(peer)}</small></span>
+                      {unread ? <b>NEW</b> : <time>{summary?.lastMessageAt?.toDate().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) || ""}</time>}
+                    </button>
+                  );
+                })}
+                {!visiblePeers.length && <p className="chat-empty">No friends found. Add someone from the Friends screen.</p>}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="chat-messages" aria-live="polite">
+                {!threadMessages.length && <div className="chat-start"><span>話</span><strong>Start a conversation</strong><p>Messages are only visible to you and {selectedPeer.name}.</p></div>}
+                {threadMessages.map((message) => {
+                  const mine = message.senderUid === user.uid;
+                  return <div className={`chat-message ${mine ? "mine" : "theirs"}`} key={message.id}><p>{message.text}</p><small>{message.sentAt?.toDate().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</small></div>;
+                })}
+                <div ref={messageEndRef} />
+              </div>
+              {chatError && <p className="chat-error" role="alert">{chatError}</p>}
+              <div className="chat-compose">
+                <textarea value={draft} maxLength={500} rows={1} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder={`Message ${selectedPeer.name}`} aria-label={`Message ${selectedPeer.name}`} />
+                <button onClick={() => void sendMessage()} disabled={!draft.trim() || sending} aria-label="Send message">送</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </aside>
+  );
+}
+
 function AppHome({
   activeTab,
   theme,
@@ -1670,6 +1915,7 @@ function AppHome({
   onCancelInvite,
   onCloseInvite,
   onJoinLobby,
+  onOpenChat,
 }: {
   activeTab: AppTab;
   theme: ThemeMode;
@@ -1702,6 +1948,7 @@ function AppHome({
   onCancelInvite: (invite: GameInvite) => Promise<void>;
   onCloseInvite: (invite: GameInvite) => Promise<void>;
   onJoinLobby: (gameId: PlayableGameId, roomCode?: string) => void;
+  onOpenChat: (friend: FriendEntry) => void;
 }) {
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
@@ -1716,11 +1963,16 @@ function AppHome({
   const [inviteGame, setInviteGame] = useState<PlayableGameId>("codebreaker");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
+  const [friendSearch, setFriendSearch] = useState("");
   const activeRanks = leaderboards[rankGame] ?? [];
   const liveIncoming = incomingInvites.filter(inviteIsLive);
   const liveOutgoing = outgoingInvites.filter(inviteIsLive);
   const readyInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.status === "accepted" && all.findIndex((item) => item.id === invite.id) === index);
   const currentHeader = HEADER_META[activeTab];
+  const onlineFriends = friends.filter((friend) => friend.isOnline);
+  const displayedFriends = [...friends]
+    .filter((friend) => friend.name.toLowerCase().includes(friendSearch.trim().toLowerCase()))
+    .sort((left, right) => Number(Boolean(right.isOnline)) - Number(Boolean(left.isOnline)) || left.name.localeCompare(right.name));
 
   const submitFriend = async () => {
     setFriendBusy(true);
@@ -1943,6 +2195,10 @@ function AppHome({
                 <button className="primary-button" onClick={() => onTabChange("profile")}>Open profile</button>
               </div>
             ) : <>
+              <div className="friends-social-hero">
+                <div className="social-hero-copy"><span>YOUR SOCIAL GARDEN</span><h2>Play together.<br />Stay connected.</h2><p>See who is around, jump into a match, or message a friend without leaving the hub.</p></div>
+                <div className="social-live-count"><span><i /> LIVE NOW</span><strong>{onlineFriends.length}</strong><small>of {friends.length} friends online</small></div>
+              </div>
               <div className="invite-center">
                 <div className="invite-center-heading"><span>Game invites</span><span>対戦招待</span></div>
                 {liveIncoming.map((invite) => (
@@ -1971,30 +2227,35 @@ function AppHome({
                 ))}
                 {!liveIncoming.length && !liveOutgoing.length && !readyInvites.length && <p className="empty-invites">No active invites. Challenge a friend below.</p>}
               </div>
-              <div className="friend-code-card">
-                <span>YOUR FRIEND CODE</span>
-                <strong>{friendCode}</strong>
-                <small>Send a direct link or share this code.</small>
-                <div className="friend-link-actions">
-                  <button className="friend-share-button" onClick={() => void shareFriendLink()}>Share friend link</button>
-                  <button className="friend-copy-button" onClick={() => void copyFriendLink()}>Copy link</button>
+              <div className="friend-tools-grid">
+                <div className="friend-code-card">
+                  <span>YOUR FRIEND CODE</span>
+                  <strong>{friendCode}</strong>
+                  <small>Send a direct link or share this code.</small>
+                  <div className="friend-link-actions">
+                    <button className="friend-share-button" onClick={() => void shareFriendLink()}>Share friend link</button>
+                    <button className="friend-copy-button" onClick={() => void copyFriendLink()}>Copy link</button>
+                  </div>
+                  {shareMessage && <p className="friend-share-message" role="status">{shareMessage}</p>}
                 </div>
-                {shareMessage && <p className="friend-share-message" role="status">{shareMessage}</p>}
-              </div>
-              <div className="friend-add-card">
-                <label htmlFor="friend-code">ADD A FRIEND <span>友達を追加</span></label>
-                <div><input id="friend-code" value={friendInput} maxLength={8} onChange={(event) => setFriendInput(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="FRIEND CODE" /><button className="primary-button" onClick={submitFriend} disabled={friendBusy || friendInput.length !== 8}>{friendBusy ? "Adding…" : "Add"}</button></div>
-                {friendMessage && <p role="status">{friendMessage}</p>}
+                <div className="friend-add-card">
+                  <span className="friend-add-glyph">友</span>
+                  <label htmlFor="friend-code">ADD A FRIEND <span>友達を追加</span></label>
+                  <p>Enter their eight-character code to add them to your garden.</p>
+                  <div><input id="friend-code" value={friendInput} maxLength={8} onChange={(event) => setFriendInput(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="FRIEND CODE" /><button className="primary-button" onClick={submitFriend} disabled={friendBusy || friendInput.length !== 8}>{friendBusy ? "Adding…" : "Add"}</button></div>
+                  {friendMessage && <p className="friend-add-message" role="status">{friendMessage}</p>}
+                </div>
               </div>
               <div className="friend-list">
-                <div className="friend-list-heading"><span>Friend list</span><span>フレンド</span></div>
+                <div className="friend-list-heading"><span>Friend list <b>{friends.length}</b></span><span>フレンド</span></div>
+                <div className="friend-list-search"><span>⌕</span><input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Search your friends" aria-label="Search your friends" /><b>{onlineFriends.length} ONLINE</b></div>
                 {inviteMessage && <p className="invite-message" role="status">{inviteMessage}</p>}
-                {friends.length ? friends.map((friend) => (
-                  <div className="friend-row" key={friend.uid}>
+                {displayedFriends.length ? displayedFriends.map((friend) => (
+                  <div className={`friend-row ${friend.isOnline ? "is-online" : ""}`} key={friend.uid}>
                     <div className="friend-row-head">
-                      <AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" />
-                      <strong>{friend.name}</strong>
-                      <div className="friend-row-actions"><button className="friend-invite-button" onClick={() => { setInviteTarget((current) => current === friend.uid ? null : friend.uid); setInviteMessage(""); }}>INVITE</button><button className="friend-remove-button" onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button></div>
+                      <span className="friend-avatar-wrap"><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" /><i className={friend.isOnline ? "online" : ""} /></span>
+                      <span className="friend-identity"><strong>{friend.name}</strong><small className={friend.isOnline ? "online" : ""}>{friendPresenceLabel(friend)}</small></span>
+                      <div className="friend-row-actions"><button className="friend-chat-button" onClick={() => onOpenChat(friend)}><span>話</span> CHAT</button><button className="friend-invite-button" onClick={() => { setInviteTarget((current) => current === friend.uid ? null : friend.uid); setInviteMessage(""); }}>PLAY</button><button className="friend-remove-button" onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button></div>
                     </div>
                     {inviteTarget === friend.uid && (
                       <div className="friend-invite-picker">
@@ -2012,7 +2273,7 @@ function AppHome({
                       ))}
                     </div>
                   </div>
-                )) : <p className="empty-friends">No friends added yet.</p>}
+                )) : <p className="empty-friends">{friends.length ? "No friends match that search." : "No friends added yet."}</p>}
               </div>
             </>}
           </section>
@@ -2047,6 +2308,9 @@ export default function Home() {
   const [friendProfiles, setFriendProfiles] = useState<Record<string, FriendEntry>>({});
   const [incomingInvites, setIncomingInvites] = useState<GameInvite[]>([]);
   const [outgoingInvites, setOutgoingInvites] = useState<GameInvite[]>([]);
+  const [presenceNow, setPresenceNow] = useState<number | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatTargetUid, setChatTargetUid] = useState<string | null>(null);
 
   useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
@@ -2085,6 +2349,8 @@ export default function Home() {
         setIncomingInvites([]);
         setOutgoingInvites([]);
         setActiveRoom(null);
+        setChatOpen(false);
+        setChatTargetUid(null);
         return;
       }
 
@@ -2097,6 +2363,8 @@ export default function Home() {
         setFriendProfiles({});
         setIncomingInvites([]);
         setOutgoingInvites([]);
+        setChatOpen(false);
+        setChatTargetUid(null);
         return;
       }
 
@@ -2138,6 +2406,32 @@ export default function Home() {
         setAuthError(error instanceof Error ? error.message : "Could not load the cloud profile.");
       }
     });
+  }, []);
+
+  useEffect(() => {
+    if (!firebaseUser || firebaseUser.isAnonymous) return;
+    const profileRef = doc(db, "publicProfiles", firebaseUser.uid);
+    const updatePresence = (online: boolean) => updateDoc(profileRef, {
+      online,
+      lastActiveAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch(() => undefined);
+    const onVisibilityChange = () => void updatePresence(document.visibilityState === "visible");
+    void updatePresence(document.visibilityState === "visible");
+    const heartbeat = window.setInterval(() => {
+      if (document.visibilityState === "visible") void updatePresence(true);
+    }, 45_000);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(heartbeat);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      void updatePresence(false);
+    };
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    const clock = window.setInterval(() => setPresenceNow(Date.now()), 30_000);
+    return () => window.clearInterval(clock);
   }, []);
 
   useEffect(() => {
@@ -2193,6 +2487,8 @@ export default function Home() {
           name: typeof data.name === "string" ? data.name : friend.name,
           avatarId: isAvatarId(data.avatarId) ? data.avatarId : friend.avatarId,
           highScores: data.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {},
+          online: data.online === true,
+          lastActiveAt: data.lastActiveAt instanceof Timestamp ? data.lastActiveAt : undefined,
         },
       }));
     }));
@@ -2329,7 +2625,15 @@ export default function Home() {
   }, [profileName, avatarId]);
 
   const signOutProfile = useCallback(() => {
-    void signOut(auth).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not sign out."));
+    const user = auth.currentUser;
+    const finish = () => signOut(auth).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not sign out."));
+    if (!user || user.isAnonymous) {
+      void finish();
+      return;
+    }
+    void updateDoc(doc(db, "publicProfiles", user.uid), { online: false, lastActiveAt: serverTimestamp(), updatedAt: serverTimestamp() })
+      .catch(() => undefined)
+      .finally(() => void finish());
   }, []);
 
   const addFriend = useCallback(async (rawCode: string) => {
@@ -2558,11 +2862,15 @@ export default function Home() {
     }
   }, []);
 
-  const visibleFriends = useMemo(() => friends.map((friend) => ({
-    ...friend,
-    ...friendProfiles[friend.uid],
-    uid: friend.uid,
-  })), [friends, friendProfiles]);
+  const visibleFriends = useMemo(() => friends.map((friend) => {
+    const merged = { ...friend, ...friendProfiles[friend.uid], uid: friend.uid };
+    return { ...merged, isOnline: friendIsOnline(merged, presenceNow ?? undefined) };
+  }), [friends, friendProfiles, presenceNow]);
+
+  const openFriendChat = useCallback((friend: FriendEntry) => {
+    setChatTargetUid(friend.uid);
+    setChatOpen(true);
+  }, []);
 
   const view = useMemo(() => {
     const playFromMenu = (gameId: PlayableGameId, mode: GameMode) => {
@@ -2604,8 +2912,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat]);
 
-  return view;
+  return <>{view}<FriendsChat user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onOpen={() => setChatOpen(true)} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} /></>;
 }

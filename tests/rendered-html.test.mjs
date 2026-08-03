@@ -173,6 +173,15 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.global-rank-list/);
   assert.match(styles, /\.friend-list/);
   assert.match(styles, /\.friend-score-grid/);
+  assert.match(source, /function FriendsChat/);
+  assert.match(source, /collection\(db, "directChats"\)/);
+  assert.match(source, /where\("participants", "array-contains", user\.uid\)/);
+  assert.match(source, /className="chat-launcher"/);
+  assert.match(source, /className="friend-chat-button"/);
+  assert.match(source, /lastActiveAt: serverTimestamp\(\)/);
+  assert.match(styles, /\.friends-social-hero/);
+  assert.match(styles, /\.chat-window/);
+  assert.match(styles, /\.friend-avatar-wrap>i\.online/);
   assert.match(styles, /\.mode-picker/);
   assert.match(styles, /\.turn-banner/);
   assert.match(styles, /\.game-lobby/);
@@ -229,6 +238,10 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /publicProfiles/);
   assert.match(firestoreRules, /highScores is map/);
   assert.match(firestoreRules, /users\/\{userId\}\/friends/);
+  assert.match(firestoreRules, /directChats\/\{chatId\}/);
+  assert.match(firestoreRules, /messages\/\{messageId\}/);
+  assert.match(firestoreRules, /validNewDirectChat/);
+  assert.match(firestoreRules, /getAfter/);
   assert.match(firestoreRules, /invites\/\{inviteId\}/);
   assert.match(firestoreRules, /validNewInvite/);
   assert.match(firestoreRules, /rooms\/\{roomCode\}/);
