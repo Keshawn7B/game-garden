@@ -22,6 +22,7 @@ test("server-renders the Game Garden hub", async () => {
   assert.match(html, /Order Match/);
   assert.match(html, /Number Hunt/);
   assert.match(html, /Memory Flip/);
+  assert.match(html, /Connect Four/);
   assert.match(html, /Meducktion/);
   assert.match(html, /Deducktion/);
   assert.match(html, /App navigation/);
@@ -42,6 +43,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /number-menu/);
   assert.match(source, /memory-menu/);
   assert.match(source, /tictactoe-menu/);
+  assert.match(source, /connect4-menu/);
   assert.match(source, /rps-menu/);
   assert.match(source, /dice-menu/);
   assert.match(source, /meducktion-menu/);
@@ -75,6 +77,10 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /<div className="menu-card">\s*<button className="menu-close"/);
   assert.match(source, /function OrderMatch/);
   assert.match(source, /function TicTacToe/);
+  assert.match(source, /function ConnectFour/);
+  assert.match(source, /function connectCpuMove/);
+  assert.match(source, /connect-column-controls/);
+  assert.match(source, /winning-piece/);
   assert.match(source, /function RockPaperScissors/);
   assert.match(source, /type RpsRound/);
   assert.match(source, /rps-arena \$\{lastRound/);
@@ -144,12 +150,14 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.lobby-entry-grid/);
   assert.match(styles, /\.room-share-card/);
   assert.match(styles, /\.tic-board/);
+  assert.match(styles, /\.connect-board/);
+  assert.match(styles, /@keyframes connectDrop/);
   assert.match(styles, /\.rps-choices/);
   assert.match(styles, /\.rps-arena/);
   assert.match(styles, /@keyframes rpsWinnerPop/);
   assert.match(styles, /@keyframes rpsImpact/);
   assert.match(styles, /\.dice-racers/);
-  assert.match(firestoreRules, /'tictactoe', 'rps', 'dice'/);
+  assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice'/);
   assert.match(source, /friendProfiles/);
   assert.match(source, /friend\.highScores/);
   assert.match(source, /type InviteStatus = "pending" \| "accepted" \| "declined" \| "cancelled"/);
@@ -161,7 +169,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /const HEADER_META/);
   assert.match(source, /header-title-logo/);
   assert.match(source, /function HeaderLogo/);
-  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 10);
+  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 11);
   assert.match(source, /<button className="header-brand"[\s\S]*?<HeaderLogo \/>/);
   assert.doesNotMatch(source, /wordmark small-wordmark/);
   assert.match(source, /className="header-context"/);

@@ -5,7 +5,7 @@ import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, 
 import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "rps" | "dice";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice";
 type ExternalGameId = "meducktion" | "deducktion";
 type LibraryGameId = PlayableGameId | ExternalGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "profile";
@@ -609,6 +609,213 @@ function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
   );
 }
 
+type ConnectPiece = 0 | 1 | 2;
+type ConnectWin = { player: 1 | 2; cells: number[] };
+const CONNECT_ROWS = 6;
+const CONNECT_COLUMNS = 7;
+const CONNECT_COLUMN_ORDER = [3, 2, 4, 1, 5, 0, 6];
+const CONNECT_WINDOWS: number[][] = (() => {
+  const windows: number[][] = [];
+  for (let row = 0; row < CONNECT_ROWS; row += 1) {
+    for (let column = 0; column < CONNECT_COLUMNS; column += 1) {
+      if (column <= CONNECT_COLUMNS - 4) windows.push([0, 1, 2, 3].map((step) => row * CONNECT_COLUMNS + column + step));
+      if (row <= CONNECT_ROWS - 4) windows.push([0, 1, 2, 3].map((step) => (row + step) * CONNECT_COLUMNS + column));
+      if (row <= CONNECT_ROWS - 4 && column <= CONNECT_COLUMNS - 4) windows.push([0, 1, 2, 3].map((step) => (row + step) * CONNECT_COLUMNS + column + step));
+      if (row <= CONNECT_ROWS - 4 && column >= 3) windows.push([0, 1, 2, 3].map((step) => (row + step) * CONNECT_COLUMNS + column - step));
+    }
+  }
+  return windows;
+})();
+
+function emptyConnectBoard(): ConnectPiece[] {
+  return Array<ConnectPiece>(CONNECT_ROWS * CONNECT_COLUMNS).fill(0);
+}
+
+function connectWinner(board: ConnectPiece[]): ConnectWin | null {
+  for (const cells of CONNECT_WINDOWS) {
+    const player = board[cells[0]];
+    if (player && cells.every((index) => board[index] === player)) return { player, cells };
+  }
+  return null;
+}
+
+function dropConnectPiece(board: ConnectPiece[], column: number, player: 1 | 2) {
+  for (let row = CONNECT_ROWS - 1; row >= 0; row -= 1) {
+    const index = row * CONNECT_COLUMNS + column;
+    if (!board[index]) {
+      const next = [...board];
+      next[index] = player;
+      return { board: next, index };
+    }
+  }
+  return null;
+}
+
+function connectPositionScore(board: ConnectPiece[]) {
+  let score = 0;
+  for (let row = 0; row < CONNECT_ROWS; row += 1) {
+    if (board[row * CONNECT_COLUMNS + 3] === 2) score += 7;
+    if (board[row * CONNECT_COLUMNS + 3] === 1) score -= 7;
+  }
+  for (const cells of CONNECT_WINDOWS) {
+    const values = cells.map((index) => board[index]);
+    const cpu = values.filter((piece) => piece === 2).length;
+    const player = values.filter((piece) => piece === 1).length;
+    const empty = 4 - cpu - player;
+    if (cpu && player) continue;
+    if (cpu === 3 && empty === 1) score += 110;
+    else if (cpu === 2 && empty === 2) score += 16;
+    else if (cpu === 1 && empty === 3) score += 2;
+    if (player === 3 && empty === 1) score -= 135;
+    else if (player === 2 && empty === 2) score -= 18;
+    else if (player === 1 && empty === 3) score -= 2;
+  }
+  return score;
+}
+
+function connectMinimax(board: ConnectPiece[], depth: number, alpha: number, beta: number, maximizing: boolean): number {
+  const winner = connectWinner(board);
+  if (winner?.player === 2) return 100000 + depth;
+  if (winner?.player === 1) return -100000 - depth;
+  if (depth === 0 || board.every(Boolean)) return connectPositionScore(board);
+
+  if (maximizing) {
+    let best = Number.NEGATIVE_INFINITY;
+    for (const column of CONNECT_COLUMN_ORDER) {
+      const move = dropConnectPiece(board, column, 2);
+      if (!move) continue;
+      best = Math.max(best, connectMinimax(move.board, depth - 1, alpha, beta, false));
+      alpha = Math.max(alpha, best);
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  let best = Number.POSITIVE_INFINITY;
+  for (const column of CONNECT_COLUMN_ORDER) {
+    const move = dropConnectPiece(board, column, 1);
+    if (!move) continue;
+    best = Math.min(best, connectMinimax(move.board, depth - 1, alpha, beta, true));
+    beta = Math.min(beta, best);
+    if (alpha >= beta) break;
+  }
+  return best;
+}
+
+function connectCpuMove(board: ConnectPiece[]) {
+  const openColumns = CONNECT_COLUMN_ORDER.filter((column) => !board[column]);
+  const winning = openColumns.find((column) => connectWinner(dropConnectPiece(board, column, 2)!.board)?.player === 2);
+  if (winning != null) return winning;
+  const blocking = openColumns.find((column) => connectWinner(dropConnectPiece(board, column, 1)!.board)?.player === 1);
+  if (blocking != null) return blocking;
+
+  let bestColumn = openColumns[0] ?? 0;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const column of openColumns) {
+    const move = dropConnectPiece(board, column, 2)!;
+    const score = connectMinimax(move.board, 4, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, false);
+    if (score > bestScore) {
+      bestScore = score;
+      bestColumn = column;
+    }
+  }
+  return bestColumn;
+}
+
+function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
+  const [board, setBoard] = useState<ConnectPiece[]>(emptyConnectBoard);
+  const [turn, setTurn] = useState<1 | 2>(1);
+  const [moves, setMoves] = useState(0);
+  const [lastDrop, setLastDrop] = useState<number | null>(null);
+  const [hoveredColumn, setHoveredColumn] = useState<number | null>(null);
+  const [matchScore, setMatchScore] = useState<[number, number]>([0, 0]);
+  const [round, setRound] = useState(1);
+  const winner = useMemo(() => connectWinner(board), [board]);
+  const winningCells = useMemo(() => new Set(winner?.cells ?? []), [winner]);
+  const draw = !winner && board.every(Boolean);
+  const cpuThinking = mode === "solo" && turn === 2 && !winner && !draw;
+
+  const resetRound = () => {
+    setBoard(emptyConnectBoard());
+    setTurn(1);
+    setMoves(0);
+    setLastDrop(null);
+    setHoveredColumn(null);
+    setRound((value) => value + 1);
+  };
+
+  const resetMatch = () => {
+    setMatchScore([0, 0]);
+    setRound(1);
+    setBoard(emptyConnectBoard());
+    setTurn(1);
+    setMoves(0);
+    setLastDrop(null);
+    setHoveredColumn(null);
+  };
+
+  const playColumn = useCallback((column: number) => {
+    if (winner || draw || cpuThinking) return;
+    const move = dropConnectPiece(board, column, turn);
+    if (!move) return;
+    const nextMoves = moves + 1;
+    const nextWinner = connectWinner(move.board);
+    setBoard(move.board);
+    setLastDrop(move.index);
+    setHoveredColumn(null);
+    setMoves(nextMoves);
+    if (nextWinner) {
+      setMatchScore((scores) => scores.map((score, index) => index === nextWinner.player - 1 ? score + 1 : score) as [number, number]);
+      if (mode === "solo" && nextWinner.player === 1) onScore(move.board.filter((piece) => piece === 1).length);
+      return;
+    }
+    setTurn(turn === 1 ? 2 : 1);
+  }, [board, cpuThinking, draw, mode, moves, onScore, turn, winner]);
+
+  useEffect(() => {
+    if (!cpuThinking) return;
+    const timer = window.setTimeout(() => {
+      const move = dropConnectPiece(board, connectCpuMove(board), 2);
+      if (!move) return;
+      const nextWinner = connectWinner(move.board);
+      setBoard(move.board);
+      setLastDrop(move.index);
+      setMoves((value) => value + 1);
+      if (nextWinner) setMatchScore((scores) => [scores[0], scores[1] + 1]);
+      else setTurn(1);
+    }, 460);
+    return () => window.clearTimeout(timer);
+  }, [board, cpuThinking]);
+
+  const turnName = mode === "solo" ? turn === 1 ? "YOUR TURN" : "CPU THINKING" : `PLAYER ${turn}'S TURN`;
+  const resultTitle = winner ? mode === "solo" ? winner.player === 1 ? "You connected four!" : "CPU connected four." : `Player ${winner.player} wins!` : draw ? "Board locked. Draw game." : turnName;
+
+  return (
+    <main className="game-shell simple-game-shell connect-game-shell">
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={resetMatch} aria-label="Restart Connect Four match">↻</button></header>
+      <section className="connect-game">
+        <div className="connect-heading"><div><p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p><h1>Connect Four</h1><p>Build a line across, down, or diagonally before your opponent.</p></div><span><b>四</b><small>四目並べ</small></span></div>
+        {mode === "multi" && !winner && !draw && <TurnBanner mode={mode} currentPlayer={turn === 1 ? 0 : 1} scores={matchScore} />}
+        <div className="connect-scoreboard" aria-label="Match score">
+          <div className={`connect-player player-one ${turn === 1 && !winner ? "is-active" : ""} ${winner?.player === 1 ? "is-winner" : ""}`}><i /><span><small>{mode === "solo" ? "YOU" : "PLAYER 1"}</small><strong>{matchScore[0]}</strong></span></div>
+          <div className="connect-round"><small>ROUND</small><strong>{String(round).padStart(2, "0")}</strong><span>{moves} MOVES</span></div>
+          <div className={`connect-player player-two ${turn === 2 && !winner ? "is-active" : ""} ${winner?.player === 2 ? "is-winner" : ""}`}><span><small>{mode === "solo" ? "CPU" : "PLAYER 2"}</small><strong>{matchScore[1]}</strong></span><i /></div>
+        </div>
+        <div className={`connect-stage ${winner ? "has-winner" : ""}`}>
+          <div className="connect-column-controls" aria-label="Choose a column">
+            {Array.from({ length: CONNECT_COLUMNS }, (_, column) => <button key={column} className={hoveredColumn === column ? "is-preview" : ""} disabled={Boolean(board[column]) || Boolean(winner) || draw || cpuThinking} onMouseEnter={() => setHoveredColumn(column)} onMouseLeave={() => setHoveredColumn(null)} onFocus={() => setHoveredColumn(column)} onBlur={() => setHoveredColumn(null)} onClick={() => playColumn(column)} aria-label={`Drop a piece in column ${column + 1}`}><span>▼</span><b>{column + 1}</b></button>)}
+          </div>
+          <div className="connect-board" role="grid" aria-label="Connect Four board">
+            {board.map((piece, index) => <span role="gridcell" aria-label={`Row ${Math.floor(index / CONNECT_COLUMNS) + 1}, column ${(index % CONNECT_COLUMNS) + 1}${piece ? `: ${mode === "solo" && piece === 2 ? "CPU" : `Player ${piece}`} piece` : ": empty"}`} className={`connect-cell ${piece ? `piece-${piece}` : ""} ${index === lastDrop ? "last-drop" : ""} ${winningCells.has(index) ? "winning-piece" : ""}`} key={index}><i /></span>)}
+          </div>
+          <div className="connect-feet" aria-hidden="true"><i /><i /></div>
+        </div>
+        <div className={`connect-status ${winner || draw ? "is-finished" : ""}`} role="status"><span>{winner ? "勝負あり" : draw ? "引き分け" : cpuThinking ? "思考中" : "あなたの番"}</span><div><strong>{resultTitle}</strong><small>{winner || draw ? "The match score stays for your rematch." : board.filter((piece) => !piece).length + " open spaces"}</small></div>{(winner || draw) && <button className="primary-button" onClick={resetRound}>Rematch <span>→</span></button>}</div>
+      </section>
+    </main>
+  );
+}
+
 const RPS_CHOICES = [
   { id: "rock", symbol: "✊", label: "Rock", japanese: "石" },
   { id: "paper", symbol: "✋", label: "Paper", japanese: "紙" },
@@ -828,6 +1035,19 @@ const GAME_MENUS: Record<LibraryGameId, {
       "Place your mark in any open square.",
       "Make a row of three across, down, or diagonally.",
       "Play against the CPU or pass the device to a friend.",
+    ],
+  },
+  connect4: {
+    title: "Connect Four",
+    japanese: "四目並べ",
+    category: "Strategy",
+    glyph: "四",
+    color: "connect",
+    players: "1–2 Players",
+    rules: [
+      "Choose a column to drop your piece into the lowest open space.",
+      "Build a line of four across, down, or diagonally.",
+      "Play the tactical CPU or open a Versus room for a friend.",
     ],
   },
   rps: {
@@ -1072,17 +1292,18 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "number", number: "03", name: "Number Hunt", japanese: "数字探し", meta: "QUICK", scoreGame: "number" },
   { id: "memory", number: "04", name: "Memory Flip", japanese: "記憶", meta: "MEMORY", scoreGame: "memory" },
   { id: "tictactoe", number: "05", name: "Tic Tac Toe", japanese: "三目並べ", meta: "STRATEGY", scoreGame: "tictactoe" },
-  { id: "rps", number: "06", name: "Rock Paper Scissors", japanese: "じゃんけん", meta: "QUICK", scoreGame: "rps" },
-  { id: "dice", number: "07", name: "Dice Race", japanese: "サイコロ競走", meta: "LUCK", scoreGame: "dice" },
-  { id: "meducktion", number: "08", name: "Meducktion", japanese: "医学推理", meta: "CARD GAME" },
-  { id: "deducktion", number: "09", name: "Deducktion", japanese: "正体推理", meta: "CARD GAME" },
+  { id: "connect4", number: "06", name: "Connect Four", japanese: "四目並べ", meta: "STRATEGY", scoreGame: "connect4" },
+  { id: "rps", number: "07", name: "Rock Paper Scissors", japanese: "じゃんけん", meta: "QUICK", scoreGame: "rps" },
+  { id: "dice", number: "08", name: "Dice Race", japanese: "サイコロ競走", meta: "LUCK", scoreGame: "dice" },
+  { id: "meducktion", number: "09", name: "Meducktion", japanese: "医学推理", meta: "CARD GAME" },
+  { id: "deducktion", number: "10", name: "Deducktion", japanese: "正体推理", meta: "CARD GAME" },
 ];
 
-const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "rps", "dice"];
+const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice"];
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
-  const unit = game === "memory" || game === "tictactoe" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
+  const unit = game === "memory" || game === "tictactoe" || game === "connect4" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
@@ -2025,6 +2246,7 @@ export default function Home() {
     if (game === "number-menu") return <GameMenu game="number" onPlay={(mode) => playFromMenu("number", mode)} onBack={() => selectGame("games")} />;
     if (game === "memory-menu") return <GameMenu game="memory" onPlay={(mode) => playFromMenu("memory", mode)} onBack={() => selectGame("games")} />;
     if (game === "tictactoe-menu") return <GameMenu game="tictactoe" onPlay={(mode) => playFromMenu("tictactoe", mode)} onBack={() => selectGame("games")} />;
+    if (game === "connect4-menu") return <GameMenu game="connect4" onPlay={(mode) => playFromMenu("connect4", mode)} onBack={() => selectGame("games")} />;
     if (game === "rps-menu") return <GameMenu game="rps" onPlay={(mode) => playFromMenu("rps", mode)} onBack={() => selectGame("games")} />;
     if (game === "dice-menu") return <GameMenu game="dice" onPlay={(mode) => playFromMenu("dice", mode)} onBack={() => selectGame("games")} />;
     if (game === "meducktion-menu") return <GameMenu game="meducktion" onPlay={() => selectGame("meducktion")} onBack={() => selectGame("games")} />;
@@ -2034,6 +2256,7 @@ export default function Home() {
     if (game === "number") return <NumberHunt mode={gameMode} onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
     if (game === "memory") return <MemoryGame mode={gameMode} onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
     if (game === "tictactoe") return <TicTacToe mode={gameMode} onBack={() => selectGame("tictactoe-menu")} onScore={(score) => recordScore("tictactoe", score)} />;
+    if (game === "connect4") return <ConnectFour mode={gameMode} onBack={() => selectGame("connect4-menu")} onScore={(score) => recordScore("connect4", score)} />;
     if (game === "rps") return <RockPaperScissors mode={gameMode} onBack={() => selectGame("rps-menu")} onScore={(score) => recordScore("rps", score)} />;
     if (game === "dice") return <DiceRace mode={gameMode} onBack={() => selectGame("dice-menu")} onScore={(score) => recordScore("dice", score)} />;
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;

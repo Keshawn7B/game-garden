@@ -97,7 +97,7 @@ service cloud.firestore {
     function validScore(gameId, userId) {
       return request.auth != null
         && request.auth.uid == userId
-        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'rps', 'dice']
+        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice']
         && request.resource.data.uid == userId
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
@@ -175,6 +175,7 @@ service cloud.firestore {
         || (gameId == 'number' && gameName == 'Number Hunt')
         || (gameId == 'memory' && gameName == 'Memory Flip')
         || (gameId == 'tictactoe' && gameName == 'Tic Tac Toe')
+        || (gameId == 'connect4' && gameName == 'Connect Four')
         || (gameId == 'rps' && gameName == 'Rock Paper Scissors')
         || (gameId == 'dice' && gameName == 'Dice Race');
     }
