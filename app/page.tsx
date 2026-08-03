@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
+import { makeOnlineGameState, OnlineVersusGame, type OnlineGameId } from "./online-games";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice";
 type ExternalGameId = "meducktion" | "deducktion";
@@ -1299,7 +1300,7 @@ const GAME_MENUS: Record<LibraryGameId, {
     rules: [
       "Place your mark in any open square.",
       "Make a row of three across, down, or diagonally.",
-      "Play against the CPU or pass the device to a friend.",
+      "Play against the CPU or open a live Versus room for a friend.",
     ],
   },
   connect4: {
@@ -2136,10 +2137,10 @@ export default function Home() {
       const nextRoom = snapshot.data() as GameRoom;
       const isParticipant = nextRoom.hostUid === firebaseUser.uid || nextRoom.guestUid === firebaseUser.uid;
       setActiveRoom(isParticipant ? nextRoom : null);
-      if (isParticipant && nextRoom.status === "playing" && nextRoom.gameId === "number") {
+      if (isParticipant && nextRoom.status === "playing") {
         setGameMode("multi");
-        setGame("number");
-        window.location.hash = "number";
+        setGame(nextRoom.gameId);
+        window.location.hash = nextRoom.gameId;
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     }, () => setAuthError("Could not load that room."));
@@ -2408,35 +2409,37 @@ export default function Home() {
 
   const startVersus = useCallback(async (gameId: PlayableGameId) => {
     const user = auth.currentUser;
-    if (gameId !== "number") {
-      setGameMode("multi");
-      setGame(gameId);
-      window.location.hash = gameId;
-      return;
-    }
     if (!user || !activeRoom || activeRoom.hostUid !== user.uid || !activeRoom.guestUid || !activeRoom.guestName) {
       setAuthError("The host can start after both online players are ready.");
       return;
     }
     const batch = writeBatch(db);
-    batch.set(doc(db, "rooms", activeRoom.code, "numberHunt", "state"), {
-      gameId: "number",
-      roomCode: activeRoom.code,
-      round: 1,
-      phase: "setting",
-      keeperUid: activeRoom.hostUid,
-      keeperName: activeRoom.hostName,
-      guesserUid: activeRoom.guestUid,
-      guesserName: activeRoom.guestName,
-      guesses: [],
-      pendingGuess: null,
-      lastGuess: null,
-      lastClue: "none",
-      scores: [null, null],
-      revealedSecrets: [null, null],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    if (gameId === "number") {
+      batch.set(doc(db, "rooms", activeRoom.code, "numberHunt", "state"), {
+        gameId: "number",
+        roomCode: activeRoom.code,
+        round: 1,
+        phase: "setting",
+        keeperUid: activeRoom.hostUid,
+        keeperName: activeRoom.hostName,
+        guesserUid: activeRoom.guestUid,
+        guesserName: activeRoom.guestName,
+        guesses: [],
+        pendingGuess: null,
+        lastGuess: null,
+        lastClue: "none",
+        scores: [null, null],
+        revealedSecrets: [null, null],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      batch.set(doc(db, "rooms", activeRoom.code, "game", "state"), {
+        ...makeOnlineGameState(gameId as OnlineGameId, activeRoom),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
     batch.update(doc(db, "rooms", activeRoom.code), { status: "playing", updatedAt: serverTimestamp() });
     try { await batch.commit(); }
     catch { setAuthError("Could not start the online match."); }
@@ -2452,14 +2455,15 @@ export default function Home() {
         if (snapshot.exists()) {
           const data = snapshot.data() as GameRoom;
           if (data.hostUid === user.uid || data.guestUid === user.uid) {
-            if (data.gameId === "number") {
+            {
               const batch = writeBatch(db);
               batch.delete(doc(db, "rooms", code, "numberHunt", "state"));
               batch.delete(doc(db, "rooms", code, "numberHunt", "secret-1"));
               batch.delete(doc(db, "rooms", code, "numberHunt", "secret-2"));
+              batch.delete(doc(db, "rooms", code, "game", "state"));
               batch.delete(roomRef);
               await batch.commit();
-            } else await deleteDoc(roomRef);
+            }
           }
         }
         const relatedInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.roomCode === code && all.findIndex((item) => item.id === invite.id) === index);
@@ -2568,14 +2572,15 @@ export default function Home() {
     if (game === "dice-menu") return <GameMenu game="dice" onPlay={(mode) => playFromMenu("dice", mode)} onBack={() => selectGame("games")} />;
     if (game === "meducktion-menu") return <GameMenu game="meducktion" onPlay={() => selectGame("meducktion")} onBack={() => selectGame("games")} />;
     if (game === "deducktion-menu") return <GameMenu game="deducktion" onPlay={() => selectGame("deducktion")} onBack={() => selectGame("games")} />;
-    if (game === "codebreaker") return <Codebreaker mode={gameMode} onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
-    if (game === "order") return <OrderMatch mode={gameMode} onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
+    if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && SCORE_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
+    if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
+    if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
     if (game === "number") return gameMode === "multi" && activeRoom?.gameId === "number" && firebaseUser ? <OnlineNumberHunt room={activeRoom} user={firebaseUser} onLeave={leaveRoom} /> : <NumberHunt mode="solo" onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
-    if (game === "memory") return <MemoryGame mode={gameMode} onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
-    if (game === "tictactoe") return <TicTacToe mode={gameMode} onBack={() => selectGame("tictactoe-menu")} onScore={(score) => recordScore("tictactoe", score)} />;
-    if (game === "connect4") return <ConnectFour mode={gameMode} onBack={() => selectGame("connect4-menu")} onScore={(score) => recordScore("connect4", score)} />;
-    if (game === "rps") return <RockPaperScissors mode={gameMode} onBack={() => selectGame("rps-menu")} onScore={(score) => recordScore("rps", score)} />;
-    if (game === "dice") return <DiceRace mode={gameMode} onBack={() => selectGame("dice-menu")} onScore={(score) => recordScore("dice", score)} />;
+    if (game === "memory") return <MemoryGame mode="solo" onBack={() => selectGame("memory-menu")} onScore={(score) => recordScore("memory", score)} />;
+    if (game === "tictactoe") return <TicTacToe mode="solo" onBack={() => selectGame("tictactoe-menu")} onScore={(score) => recordScore("tictactoe", score)} />;
+    if (game === "connect4") return <ConnectFour mode="solo" onBack={() => selectGame("connect4-menu")} onScore={(score) => recordScore("connect4", score)} />;
+    if (game === "rps") return <RockPaperScissors mode="solo" onBack={() => selectGame("rps-menu")} onScore={(score) => recordScore("rps", score)} />;
+    if (game === "dice") return <DiceRace mode="solo" onBack={() => selectGame("dice-menu")} onScore={(score) => recordScore("dice", score)} />;
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";

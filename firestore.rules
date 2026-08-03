@@ -125,6 +125,22 @@ service cloud.firestore {
       allow delete: if roomParticipant(roomCode);
     }
 
+    match /rooms/{roomCode}/game/{documentId} {
+      allow read: if documentId == 'state' && roomParticipant(roomCode);
+      allow create: if documentId == 'state'
+        && roomParticipant(roomCode)
+        && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid
+        && validOnlineGameState(roomCode, request.resource.data);
+      allow update: if documentId == 'state'
+        && roomParticipant(roomCode)
+        && validOnlineGameState(roomCode, request.resource.data)
+        && request.resource.data.gameId == resource.data.gameId
+        && request.resource.data.players == resource.data.players
+        && request.resource.data.names == resource.data.names
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if documentId == 'state' && roomParticipant(roomCode);
+    }
+
     match /leaderboards/{gameId}/entries/{userId} {
       allow read: if true;
       allow create: if validScore(gameId, userId);
@@ -232,6 +248,43 @@ service cloud.firestore {
         && state.revealedSecrets is list
         && state.revealedSecrets.size() == 2
         && state.lastClue in ['none', 'higher', 'lower', 'correct'];
+    }
+
+    function validOnlineGameState(roomCode, state) {
+      return state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice']
+        && state.roomCode == roomCode
+        && state.gameId == get(/databases/$(database)/documents/rooms/$(roomCode)).data.gameId
+        && state.players is list
+        && state.players.size() == 2
+        && state.players[0] == get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid
+        && state.players[1] == get(/databases/$(database)/documents/rooms/$(roomCode)).data.guestUid
+        && state.names is list
+        && state.names.size() == 2
+        && state.turnUid in state.players
+        && state.phase in ['playing', 'revealing', 'complete']
+        && state.round is int
+        && state.round >= 1
+        && state.moves is int
+        && state.moves >= 0
+        && state.scores is list
+        && state.scores.size() == 2
+        && state.board is list
+        && state.secret is list
+        && state.guesses is list
+        && state.target is list
+        && state.objects is list
+        && state.checks is list
+        && state.deck is list
+        && state.open is list
+        && state.matched is list
+        && state.choices is list
+        && state.positions is list
+        && state.positions.size() == 2
+        && state.faces is list
+        && state.faces.size() == 2
+        && state.winnerUid in ['', 'draw', state.players[0], state.players[1]]
+        && state.createdAt is timestamp
+        && state.updatedAt is timestamp;
     }
 
     function validInviteGame(gameId, gameName) {

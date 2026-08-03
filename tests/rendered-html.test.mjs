@@ -36,6 +36,8 @@ test("server-renders the Game Garden hub", async () => {
 test("routes every game through a start menu", async () => {
   const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const onlineSource = await readFile(new URL("../app/online-games.tsx", import.meta.url), "utf8");
+  const onlineStyles = await readFile(new URL("../app/online-games.css", import.meta.url), "utf8");
   const firebaseSource = await readFile(new URL("../app/firebase.ts", import.meta.url), "utf8");
   const firestoreRules = await readFile(new URL("../firestore.rules", import.meta.url), "utf8");
   assert.match(source, /codebreaker-menu/);
@@ -70,7 +72,13 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /Start Online Versus/);
   assert.match(source, /onJoinLobby/);
   assert.match(source, /`\$\{gameId\}-lobby`/);
-  assert.match(source, /mode=\{gameMode\}/);
+  assert.match(source, /<OnlineVersusGame/);
+  assert.match(source, /makeOnlineGameState/);
+  assert.match(source, /nextRoom\.status === "playing"/);
+  assert.match(onlineSource, /export function OnlineVersusGame/);
+  assert.match(onlineSource, /runTransaction/);
+  assert.match(onlineSource, /onSnapshot/);
+  for (const gameId of ["codebreaker", "order", "memory", "tictactoe", "connect4", "rps", "dice"]) assert.match(onlineSource, new RegExp(`state\\.gameId === "${gameId}"`));
   assert.match(source, /How to play/);
   assert.match(source, /aria-label="Close game menu"/);
   assert.match(source, /className="menu-close"/);
@@ -178,6 +186,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /@keyframes rpsWinnerPop/);
   assert.match(styles, /@keyframes rpsImpact/);
   assert.match(styles, /\.dice-racers/);
+  assert.match(onlineStyles, /\.online-player-strip/);
+  assert.match(onlineStyles, /\.online-turn-status/);
   assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice'/);
   assert.match(source, /friendProfiles/);
   assert.match(source, /friend\.highScores/);
@@ -218,6 +228,8 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /validRoomCode/);
   assert.match(firestoreRules, /numberHunt/);
   assert.match(firestoreRules, /validNumberState/);
+  assert.match(firestoreRules, /rooms\/\{roomCode\}\/game\/\{documentId\}/);
+  assert.match(firestoreRules, /validOnlineGameState/);
   assert.match(firestoreRules, /roomParticipant/);
   assert.match(firestoreRules, /affectedKeys\(\)\.hasOnly/);
   assert.match(firestoreRules, /'sakura'.*'dragon'.*'pink-blossom'.*'pink-peach'/);
