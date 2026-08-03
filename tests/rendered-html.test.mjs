@@ -76,6 +76,13 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /className="menu-close"/);
   assert.match(source, /<div className="menu-card">\s*<button className="menu-close"/);
   assert.match(source, /function OrderMatch/);
+  assert.match(source, /function NumberHunt/);
+  assert.match(source, /type NumberVersusPhase/);
+  assert.match(source, /Choose the secret/);
+  assert.match(source, /SECRET LOCKED/);
+  assert.match(source, /Pass to Player/);
+  assert.match(source, /Swap Roles/);
+  assert.match(source, /Fewest guesses wins/);
   assert.match(source, /function TicTacToe/);
   assert.match(source, /function ConnectFour/);
   assert.match(source, /function connectCpuMove/);
@@ -153,6 +160,9 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.lobby-entry-grid/);
   assert.match(styles, /\.room-share-card/);
   assert.match(styles, /\.tic-board/);
+  assert.match(styles, /\.number-versus-progress/);
+  assert.match(styles, /\.number-role-card/);
+  assert.match(styles, /\.number-match-scores/);
   assert.match(styles, /\.connect-board/);
   assert.match(styles, /@keyframes connectDrop/);
   assert.doesNotMatch(styles, /72%\{transform:translateY\(8px\)/);

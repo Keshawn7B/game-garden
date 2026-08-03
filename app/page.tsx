@@ -416,32 +416,82 @@ function OrderMatch({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
   );
 }
 
+type NumberVersusPhase = "set-secret" | "handoff" | "guessing" | "round-result" | "match-result";
+
 function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
   const [target, setTarget] = useState(() => Math.floor(Math.random() * 100) + 1);
   const [value, setValue] = useState(50);
-  const [history, setHistory] = useState<{ value: number; player: 0 | 1 }[]>([]);
-  const [currentPlayer, setCurrentPlayer] = useState<0 | 1>(0);
-  const latest = history.at(-1)?.value;
+  const [history, setHistory] = useState<number[]>([]);
+  const [phase, setPhase] = useState<NumberVersusPhase>(mode === "multi" ? "set-secret" : "guessing");
+  const [round, setRound] = useState<1 | 2>(1);
+  const [roundScores, setRoundScores] = useState<[number | null, number | null]>([null, null]);
+  const [roundSecrets, setRoundSecrets] = useState<[number | null, number | null]>([null, null]);
+  const guessLimit = 7;
+  const secretKeeper = round === 1 ? 1 : 2;
+  const guesser = round === 1 ? 2 : 1;
+  const latest = history.at(-1);
   const won = latest === target;
-  const guessLimit = mode === "multi" ? 10 : 7;
   const lost = history.length >= guessLimit && !won;
 
   const reset = () => {
     setTarget(Math.floor(Math.random() * 100) + 1);
     setValue(50);
     setHistory([]);
-    setCurrentPlayer(0);
+    setPhase(mode === "multi" ? "set-secret" : "guessing");
+    setRound(1);
+    setRoundScores([null, null]);
+    setRoundSecrets([null, null]);
+  };
+
+  const adjustValue = (amount: number) => setValue((number) => Math.min(100, Math.max(1, number + amount)));
+
+  const lockSecret = () => {
+    setTarget(value);
+    setRoundSecrets((secrets) => secrets.map((secret, index) => index === round - 1 ? value : secret) as [number | null, number | null]);
+    setValue(50);
+    setHistory([]);
+    setPhase("handoff");
   };
 
   const submit = () => {
-    if (!won && !lost) {
-      if (value === target && mode === "solo") onScore(history.length + 1);
-      setHistory((items) => [...items, { value, player: currentPlayer }]);
-      if (mode === "multi" && value !== target) setCurrentPlayer((player) => player === 0 ? 1 : 0);
+    if (won || lost || (mode === "multi" && phase !== "guessing")) return;
+    const nextHistory = [...history, value];
+    const found = value === target;
+    setHistory(nextHistory);
+    if (mode === "solo") {
+      if (found) onScore(nextHistory.length);
+      return;
+    }
+    if (found || nextHistory.length >= guessLimit) {
+      const result = found ? nextHistory.length : guessLimit + 1;
+      setRoundScores((scores) => scores.map((score, index) => index === guesser - 1 ? result : score) as [number | null, number | null]);
+      setPhase(round === 1 ? "round-result" : "match-result");
     }
   };
 
+  const swapRoles = () => {
+    setRound(2);
+    setValue(50);
+    setHistory([]);
+    setPhase("set-secret");
+  };
+
+  const scoreLabel = (score: number | null) => score == null ? "—" : score > guessLimit ? "MISSED" : `${score} ${score === 1 ? "GUESS" : "GUESSES"}`;
+  const playerOneScore = roundScores[0] ?? guessLimit + 1;
+  const playerTwoScore = roundScores[1] ?? guessLimit + 1;
+  const matchTitle = playerOneScore === playerTwoScore ? "Draw match!" : `Player ${playerOneScore < playerTwoScore ? 1 : 2} wins!`;
   const message = latest == null ? "Make your first guess" : won ? "You found it!" : lost ? `It was ${target}` : latest < target ? "Go higher ↑" : "Go lower ↓";
+
+  const numberControl = (label: string, disabled = false) => (
+    <>
+      <input aria-label={label} type="range" min="1" max="100" value={value} onChange={(event) => setValue(Number(event.target.value))} disabled={disabled} />
+      <div className="number-input-row">
+        <button onClick={() => adjustValue(-1)} disabled={disabled}>−</button>
+        <output>{value}</output>
+        <button onClick={() => adjustValue(1)} disabled={disabled}>+</button>
+      </div>
+    </>
+  );
 
   return (
     <main className="game-shell number-shell">
@@ -450,25 +500,59 @@ function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
         <HeaderLogo compact />
         <button className="icon-button" onClick={reset} aria-label="Start a new number game">↻</button>
       </header>
-      <section className="number-game">
-        <p className="eyebrow">QUICK · {mode === "multi" ? "2 PLAYERS" : "1 PLAYER"}</p>
-        <h1>Find the secret number.</h1>
-        <p>{mode === "multi" ? "Take turns guessing from 1–100. First to find the number wins." : "I picked a number from 1–100. You get seven guesses."}</p>
-        {!won && !lost && <TurnBanner mode={mode} currentPlayer={currentPlayer} />}
-        <div className={`number-orb ${won ? "number-win" : ""}`} aria-live="polite">
-          <span>{won || lost ? target : "?"}</span>
-        </div>
-        <h2>{won && mode === "multi" ? `Player ${currentPlayer + 1} wins!` : lost && mode === "multi" ? "Draw game." : message}</h2>
-        <input aria-label="Your number guess" type="range" min="1" max="100" value={value} onChange={(event) => setValue(Number(event.target.value))} disabled={won || lost} />
-        <div className="number-input-row">
-          <button onClick={() => setValue((number) => Math.max(1, number - 1))} disabled={won || lost}>−</button>
-          <output>{value}</output>
-          <button onClick={() => setValue((number) => Math.min(100, number + 1))} disabled={won || lost}>+</button>
-        </div>
-        <button className="primary-button wide-button" onClick={won || lost ? reset : submit}>{won || lost ? "Play again" : "Lock in guess"}</button>
-        <div className="guess-trail">
-          {Array.from({ length: guessLimit }, (_, index) => <span key={index} className={history[index]?.value === target ? "trail-win" : ""}>{history[index] ? `${mode === "multi" ? `P${history[index].player + 1}·` : ""}${history[index].value}` : "·"}</span>)}
-        </div>
+      <section className={`number-game ${mode === "multi" ? "number-versus" : ""}`}>
+        {mode === "multi" && <div className="number-versus-progress" aria-label={`Round ${round} of 2`}><span className={round === 1 ? "active" : "complete"}><b>01</b>P1 HIDES</span><i>交代</i><span className={round === 2 ? "active" : ""}><b>02</b>P2 HIDES</span></div>}
+
+        {mode === "multi" && phase === "set-secret" ? (
+          <div className="number-role-card secret-setup">
+            <span className="number-role-kanji">秘</span>
+            <p className="eyebrow">ROUND {round} · PLAYER {secretKeeper}</p>
+            <h1>Choose the secret.</h1>
+            <p>Player {guesser}, look away. Pick any number from 1–100 and lock it before handing over the device.</p>
+            <div className="number-orb secret-orb"><span>{value}</span></div>
+            {numberControl("Secret number")}
+            <button className="primary-button wide-button" onClick={lockSecret}>Lock Secret <span>→</span></button>
+          </div>
+        ) : mode === "multi" && phase === "handoff" ? (
+          <div className="number-role-card handoff-card">
+            <span className="handoff-lock">✓</span>
+            <p className="eyebrow">SECRET LOCKED · 秘密</p>
+            <h1>Pass to Player {guesser}.</h1>
+            <p>The number is hidden. Player {secretKeeper} gives only the higher and lower clues shown by the game.</p>
+            <div className="handoff-players"><span>P{secretKeeper}<small>KEEPER</small></span><b>→</b><span>P{guesser}<small>GUESSER</small></span></div>
+            <button className="primary-button wide-button" onClick={() => setPhase("guessing")}>I&apos;m Ready to Guess</button>
+          </div>
+        ) : mode === "multi" && phase === "round-result" ? (
+          <div className="number-role-card round-result-card">
+            <span className="number-role-kanji">解</span>
+            <p className="eyebrow">ROUND 1 COMPLETE</p>
+            <h1>{won ? `Player ${guesser} found it!` : `Player ${guesser} missed it.`}</h1>
+            <div className="round-secret-reveal"><small>PLAYER {secretKeeper}&apos;S NUMBER</small><strong>{target}</strong><span>{scoreLabel(roundScores[guesser - 1])}</span></div>
+            <p>Now swap roles. Player 2 chooses a new secret for Player 1.</p>
+            <button className="primary-button wide-button" onClick={swapRoles}>Swap Roles <span>→</span></button>
+          </div>
+        ) : mode === "multi" && phase === "match-result" ? (
+          <div className="number-role-card number-match-card">
+            <span className="number-role-kanji">勝</span>
+            <p className="eyebrow">MATCH COMPLETE · 結果</p>
+            <h1>{matchTitle}</h1>
+            <p>Fewest guesses wins. A missed round ranks behind any successful guess count.</p>
+            <div className="number-match-scores"><div className={playerOneScore < playerTwoScore ? "winner" : ""}><small>PLAYER 1</small><strong>{scoreLabel(roundScores[0])}</strong><span>Secret was {roundSecrets[1]}</span></div><b>VS</b><div className={playerTwoScore < playerOneScore ? "winner" : ""}><small>PLAYER 2</small><strong>{scoreLabel(roundScores[1])}</strong><span>Secret was {roundSecrets[0]}</span></div></div>
+            <button className="primary-button wide-button" onClick={reset}>Play Again</button>
+          </div>
+        ) : (
+          <>
+            <p className="eyebrow">QUICK · {mode === "multi" ? `ROUND ${round} · PLAYER ${guesser} GUESSES` : "1 PLAYER"}</p>
+            <h1>{mode === "multi" ? `Find Player ${secretKeeper}'s number.` : "Find the secret number."}</h1>
+            <p>{mode === "multi" ? `Player ${guesser} gets seven guesses. Player ${secretKeeper}, keep the secret.` : "I picked a number from 1–100. You get seven guesses."}</p>
+            {mode === "multi" && <div className="number-role-strip"><span>P{secretKeeper}<small>SECRET KEEPER</small></span><b>VS</b><span>P{guesser}<small>GUESSER</small></span></div>}
+            <div className={`number-orb ${won ? "number-win" : ""}`} aria-live="polite"><span>{won || lost ? target : "?"}</span></div>
+            <h2>{message}</h2>
+            {numberControl("Your number guess", won || lost)}
+            <button className="primary-button wide-button" onClick={mode === "solo" && (won || lost) ? reset : submit}>{mode === "solo" && (won || lost) ? "Play again" : "Lock in guess"}</button>
+            <div className="guess-trail">{Array.from({ length: guessLimit }, (_, index) => <span key={index} className={history[index] === target ? "trail-win" : ""}>{history[index] ?? "·"}</span>)}</div>
+          </>
+        )}
       </section>
     </main>
   );
@@ -1011,9 +1095,9 @@ const GAME_MENUS: Record<LibraryGameId, {
     color: "blue",
     players: "1–2 Players",
     rules: [
-      "Pick a number from 1 to 100.",
-      "Use the higher or lower clue after each guess.",
-      "Find the secret number within seven guesses.",
+      "Solo mode chooses a number; in Versus, one player locks a secret.",
+      "The guesser gets seven tries using higher and lower clues.",
+      "Swap roles for round two. The fewest guesses wins.",
     ],
   },
   memory: {
