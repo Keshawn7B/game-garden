@@ -14,7 +14,7 @@ type ThemeMode = "classic" | "sakura";
 type GameMode = "solo" | "multi";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu` | `${PlayableGameId}-lobby`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
-type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun" | "pink-blossom" | "pink-heart" | "pink-bunny" | "pink-fan" | "pink-peach" | "premium-shogun" | "premium-kitsune" | "premium-empress" | "premium-dragon" | "premium-koi" | "premium-ronin";
+type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun" | "pink-blossom" | "pink-heart" | "pink-bunny" | "pink-fan" | "pink-peach" | "premium-shogun" | "premium-kitsune" | "premium-empress" | "premium-dragon" | "premium-koi" | "premium-ronin" | "premium-cat" | "premium-blossom" | "premium-dual-swords";
 type HighScores = Partial<Record<PlayableGameId, number>>;
 type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
@@ -125,6 +125,9 @@ const AVATARS: { id: AvatarId; glyph?: string; label: string; premium?: boolean 
   { id: "premium-dragon", label: "Onyx Dragon", premium: true },
   { id: "premium-koi", label: "Legendary Koi", premium: true },
   { id: "premium-ronin", label: "Moon Ronin", premium: true },
+  { id: "premium-cat", label: "Emerald Guardian Cat", premium: true },
+  { id: "premium-blossom", label: "Sacred Sakura", premium: true },
+  { id: "premium-dual-swords", label: "Crimson Dual Swords", premium: true },
 ];
 
 function isAvatarId(value: unknown): value is AvatarId {

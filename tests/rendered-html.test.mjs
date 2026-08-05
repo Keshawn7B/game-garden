@@ -152,8 +152,8 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /game-garden-theme/);
   assert.match(source, /avatar-style-/);
   const avatarOptions = source.match(/const AVATARS[\s\S]*?\n\];/)?.[0] ?? "";
-  assert.equal((avatarOptions.match(/id: "/g) ?? []).length, 21);
-  assert.equal((avatarOptions.match(/premium: true/g) ?? []).length, 6);
+  assert.equal((avatarOptions.match(/id: "/g) ?? []).length, 24);
+  assert.equal((avatarOptions.match(/premium: true/g) ?? []).length, 9);
   assert.equal((avatarOptions.match(/glyph: "/g) ?? []).length, 2);
   assert.match(source, /avatar\.glyph && <b className="avatar-mark">/);
   assert.match(source, /className="header-profile"/);
@@ -171,6 +171,12 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.avatar-style-fox::before/);
   assert.match(styles, /\.avatar-style-pink-heart::before/);
   assert.match(styles, /premium-avatars\.webp/);
+  assert.match(source, /premium-cat/);
+  assert.match(source, /premium-blossom/);
+  assert.match(source, /premium-dual-swords/);
+  assert.match(styles, /premium-cat\.jpg/);
+  assert.match(styles, /premium-blossom\.jpg/);
+  assert.match(styles, /premium-dual-swords\.jpg/);
   assert.match(styles, /\.avatar-premium/);
   assert.match(styles, /\.premium-avatar-picker/);
   assert.match(source, /className="profile-avatar-button"/);
