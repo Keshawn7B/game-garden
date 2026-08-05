@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "firebase/auth";
-import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { HeaderChatButton } from "./chat-chrome";
 
@@ -195,14 +195,51 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const [colors, setColors] = useState<ColorId[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [hoveredColumn, setHoveredColumn] = useState<number | null>(null);
+  const latestState = useRef<OnlineState | null>(null);
   const stateRef = useMemo(() => doc(db, "rooms", room.code, "game", "state"), [room.code]);
 
   useEffect(() => onSnapshot(stateRef, (snapshot) => {
-    if (snapshot.exists()) setState(snapshot.data() as OnlineState);
+    if (snapshot.exists()) {
+      const next = snapshot.data() as OnlineState;
+      latestState.current = next;
+      setState(next);
+    }
   }, () => setError("The online match lost connection.")), [stateRef]);
 
+  // Regular turns have a single permitted mover, so a direct Firestore write is
+  // both safe for the game flow and immediately visible through latency
+  // compensation. Transactions are reserved for the two truly concurrent
+  // paths below (RPS choices and host-controlled reveal resolution).
   const mutate = useCallback(async (change: (current: OnlineState) => Partial<OnlineState> | null) => {
     setError("");
+    const current = latestState.current;
+    if (!current) return;
+    const update = change(current);
+    if (!update) return;
+
+    const optimistic = { ...current, ...update } as OnlineState;
+    latestState.current = optimistic;
+    setState(optimistic);
+
+    try {
+      await updateDoc(stateRef, { ...update, updatedAt: serverTimestamp() });
+    } catch {
+      setError("Your move did not send. Please try again.");
+    }
+  }, [stateRef]);
+
+  const mutateAtomic = useCallback(async (change: (current: OnlineState) => Partial<OnlineState> | null) => {
+    setError("");
+    const current = latestState.current;
+    if (current) {
+      const update = change(current);
+      if (update) {
+        const optimistic = { ...current, ...update } as OnlineState;
+        latestState.current = optimistic;
+        setState(optimistic);
+      }
+    }
+
     try {
       await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(stateRef);
@@ -222,7 +259,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
 
   useEffect(() => {
     if (!state || state.gameId !== "memory" || state.phase !== "revealing" || user.uid !== room.hostUid || state.open.length !== 2) return;
-    const timer = window.setTimeout(() => void mutate((current) => {
+    const timer = window.setTimeout(() => void mutateAtomic((current) => {
       if (current.gameId !== "memory" || current.phase !== "revealing" || current.open.length !== 2) return null;
       const [first, second] = current.open;
       const match = current.deck[first] === current.deck[second];
@@ -239,13 +276,13 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
       };
     }), 850);
     return () => window.clearTimeout(timer);
-  }, [mutate, room.hostUid, state, user.uid]);
+  }, [mutateAtomic, room.hostUid, state, user.uid]);
 
   useEffect(() => {
     if (!state || state.gameId !== "rps" || state.phase !== "revealing" || state.winnerUid || user.uid !== room.hostUid) return;
-    const timer = window.setTimeout(() => void mutate((current) => current.gameId === "rps" && current.phase === "revealing" && !current.winnerUid ? { choices: ["", ""], phase: "playing", round: current.round + 1 } : null), 1400);
+    const timer = window.setTimeout(() => void mutateAtomic((current) => current.gameId === "rps" && current.phase === "revealing" && !current.winnerUid ? { choices: ["", ""], phase: "playing", round: current.round + 1 } : null), 1400);
     return () => window.clearTimeout(timer);
-  }, [mutate, room.hostUid, state, user.uid]);
+  }, [mutateAtomic, room.hostUid, state, user.uid]);
 
   if (!state) return <main className="game-shell"><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><div className="game-header-actions"><HeaderChatButton inGame /><span className="online-room-pill">● {room.code}</span></div></header><section className="online-game waiting"><b>接</b><h1>Connecting match…</h1><p>Synchronizing both players.</p></section></main>;
 
@@ -316,7 +353,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return { board: move.board, moves: current.moves + 1, winnerUid: winner ? user.uid : draw ? "draw" : "", phase: winner || draw ? "complete" : "playing", turnUid: current.players[otherIndex] };
   });
 
-  const chooseRps = (choice: RpsChoice) => void mutate((current) => {
+  const chooseRps = (choice: RpsChoice) => void mutateAtomic((current) => {
     if (current.gameId !== "rps" || current.phase !== "playing" || current.choices[playerIndex]) return null;
     const choices = [...current.choices];
     choices[playerIndex] = choice;

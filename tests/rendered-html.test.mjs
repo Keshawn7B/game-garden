@@ -37,6 +37,7 @@ test("routes every game through a start menu", async () => {
   const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const onlineSource = await readFile(new URL("../app/online-games.tsx", import.meta.url), "utf8");
+  const chatSource = await readFile(new URL("../app/chat-chrome.tsx", import.meta.url), "utf8");
   const onlineStyles = await readFile(new URL("../app/online-games.css", import.meta.url), "utf8");
   const firebaseSource = await readFile(new URL("../app/firebase.ts", import.meta.url), "utf8");
   const firestoreRules = await readFile(new URL("../firestore.rules", import.meta.url), "utf8");
@@ -78,6 +79,8 @@ test("routes every game through a start menu", async () => {
   assert.match(onlineSource, /export function OnlineVersusGame/);
   assert.match(onlineSource, /runTransaction/);
   assert.match(onlineSource, /onSnapshot/);
+  assert.match(onlineSource, /await updateDoc\(stateRef/);
+  assert.match(onlineSource, /latestState\.current = optimistic/);
   for (const gameId of ["codebreaker", "order", "memory", "tictactoe", "connect4", "rps", "dice"]) assert.match(onlineSource, new RegExp(`state\\.gameId === "${gameId}"`));
   assert.match(source, /How to play/);
   assert.match(source, /aria-label="Close game menu"/);
@@ -193,7 +196,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function FriendsChat/);
   assert.match(source, /collection\(db, "directChats"\)/);
   assert.match(source, /where\("participants", "array-contains", user\.uid\)/);
-  assert.match(source, /className="chat-launcher"/);
+  assert.match(chatSource, /className=\{`header-chat/);
   assert.match(source, /className="friend-chat-button"/);
   assert.match(source, /lastActiveAt: serverTimestamp\(\)/);
   assert.match(styles, /\.friends-social-hero/);
