@@ -1751,7 +1751,6 @@ function FriendsChat({
   friends,
   open,
   selectedUid,
-  onOpen,
   onClose,
   onSelectFriend,
 }: {
@@ -1761,7 +1760,6 @@ function FriendsChat({
   friends: FriendEntry[];
   open: boolean;
   selectedUid: string | null;
-  onOpen: () => void;
   onClose: () => void;
   onSelectFriend: (uid: string | null) => void;
 }) {
@@ -1810,7 +1808,6 @@ function FriendsChat({
   const selectedPeer = peers.find((peer) => peer.uid === selectedUid) ?? null;
   const activeChatId = user && selectedPeer ? directChatId(user.uid, selectedPeer.uid) : "";
   const activeChat = chats.find((chat) => chat.id === activeChatId);
-  const unreadCount = user ? chats.filter((chat) => chat.unreadBy?.[user.uid] === true).length : 0;
   const visiblePeers = peers.filter((peer) => peer.name.toLowerCase().includes(search.trim().toLowerCase()));
   const threadMessages = messageThread.id === activeChatId ? messageThread.messages : EMPTY_DIRECT_MESSAGES;
 
@@ -1880,66 +1877,59 @@ function FriendsChat({
     }
   };
 
-  if (!user || user.isAnonymous) return null;
+  if (!user || user.isAnonymous || !open) return null;
 
   return (
-    <aside className={`friends-chat ${open ? "open" : ""}`} aria-label="Friends chat">
-      {!open && (
-        <button className="chat-launcher" onClick={onOpen} aria-label={`Open friends chat${unreadCount ? `, ${unreadCount} unread` : ""}`}>
-          <span>話</span><strong>CHAT</strong>{unreadCount > 0 && <i>{unreadCount}</i>}
-        </button>
-      )}
-      {open && (
-        <div className="chat-window" role="dialog" aria-label="Direct friends chat">
-          <header className="chat-window-header">
-            {selectedPeer ? (
-              <>
-                <button className="chat-back" onClick={() => onSelectFriend(null)} aria-label="Back to conversations">←</button>
-                <span className="chat-peer-avatar"><AvatarGlyph avatarId={selectedPeer.avatarId} className="chat-avatar" /><i className={selectedPeer.isOnline ? "online" : ""} /></span>
-                <div><strong>{selectedPeer.name}</strong><small>{friendPresenceLabel(selectedPeer)}</small></div>
-              </>
-            ) : <div className="chat-title"><span>話</span><div><strong>Friends chat</strong><small>フレンドチャット</small></div></div>}
-            <button className="chat-close" onClick={onClose} aria-label="Close friends chat">×</button>
-          </header>
-
-          {!selectedPeer ? (
-            <div className="chat-inbox">
-              <div className="chat-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search friends" aria-label="Search friends to chat" /></div>
-              <div className="chat-inbox-label"><span>DIRECT MESSAGES</span><b>{peers.filter((peer) => peer.isOnline).length} ONLINE</b></div>
-              <div className="chat-peer-list">
-                {visiblePeers.map((peer) => {
-                  const summary = chats.find((chat) => chat.id === directChatId(user.uid, peer.uid));
-                  const unread = summary?.unreadBy?.[user.uid] === true;
-                  return (
-                    <button className={`chat-peer-row ${unread ? "unread" : ""}`} key={peer.uid} onClick={() => onSelectFriend(peer.uid)}>
-                      <span className="chat-peer-avatar"><AvatarGlyph avatarId={peer.avatarId} className="chat-avatar" /><i className={peer.isOnline ? "online" : ""} /></span>
-                      <span><strong>{peer.name}</strong><small>{summary?.lastMessage || friendPresenceLabel(peer)}</small></span>
-                      {unread ? <b>NEW</b> : <time>{summary?.lastMessageAt?.toDate().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) || ""}</time>}
-                    </button>
-                  );
-                })}
-                {!visiblePeers.length && <p className="chat-empty">No friends found. Add someone from the Friends screen.</p>}
-              </div>
-            </div>
-          ) : (
+    <aside className="friends-chat" aria-label="Friends chat">
+      <div className="chat-window" role="dialog" aria-label="Direct friends chat">
+        <header className="chat-window-header">
+          {selectedPeer ? (
             <>
-              <div className="chat-messages" aria-live="polite">
-                {!threadMessages.length && <div className="chat-start"><span>話</span><strong>Start a conversation</strong><p>Messages are only visible to you and {selectedPeer.name}.</p></div>}
-                {threadMessages.map((message) => {
-                  const mine = message.senderUid === user.uid;
-                  return <div className={`chat-message ${mine ? "mine" : "theirs"}`} key={message.id}><p>{message.text}</p><small>{message.sentAt?.toDate().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</small></div>;
-                })}
-                <div ref={messageEndRef} />
-              </div>
-              {chatError && <p className="chat-error" role="alert">{chatError}</p>}
-              <div className="chat-compose">
-                <textarea value={draft} maxLength={500} rows={1} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder={`Message ${selectedPeer.name}`} aria-label={`Message ${selectedPeer.name}`} />
-                <button onClick={() => void sendMessage()} disabled={!draft.trim() || sending} aria-label="Send message">送</button>
-              </div>
+              <button className="chat-back" onClick={() => onSelectFriend(null)} aria-label="Back to conversations">←</button>
+              <span className="chat-peer-avatar"><AvatarGlyph avatarId={selectedPeer.avatarId} className="chat-avatar" /><i className={selectedPeer.isOnline ? "online" : ""} /></span>
+              <div><strong>{selectedPeer.name}</strong><small>{friendPresenceLabel(selectedPeer)}</small></div>
             </>
-          )}
-        </div>
-      )}
+          ) : <div className="chat-title"><span>話</span><div><strong>Friends chat</strong><small>フレンドチャット</small></div></div>}
+          <button className="chat-close" onClick={onClose} aria-label="Close friends chat">×</button>
+        </header>
+
+        {!selectedPeer ? (
+          <div className="chat-inbox">
+            <div className="chat-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search friends" aria-label="Search friends to chat" /></div>
+            <div className="chat-inbox-label"><span>DIRECT MESSAGES</span><b>{peers.filter((peer) => peer.isOnline).length} ONLINE</b></div>
+            <div className="chat-peer-list">
+              {visiblePeers.map((peer) => {
+                const summary = chats.find((chat) => chat.id === directChatId(user.uid, peer.uid));
+                const unread = summary?.unreadBy?.[user.uid] === true;
+                return (
+                  <button className={`chat-peer-row ${unread ? "unread" : ""}`} key={peer.uid} onClick={() => onSelectFriend(peer.uid)}>
+                    <span className="chat-peer-avatar"><AvatarGlyph avatarId={peer.avatarId} className="chat-avatar" /><i className={peer.isOnline ? "online" : ""} /></span>
+                    <span><strong>{peer.name}</strong><small>{summary?.lastMessage || friendPresenceLabel(peer)}</small></span>
+                    {unread ? <b>NEW</b> : <time>{summary?.lastMessageAt?.toDate().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) || ""}</time>}
+                  </button>
+                );
+              })}
+              {!visiblePeers.length && <p className="chat-empty">No friends found. Add someone from the Friends screen.</p>}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="chat-messages" aria-live="polite">
+              {!threadMessages.length && <div className="chat-start"><span>話</span><strong>Start a conversation</strong><p>Messages are only visible to you and {selectedPeer.name}.</p></div>}
+              {threadMessages.map((message) => {
+                const mine = message.senderUid === user.uid;
+                return <div className={`chat-message ${mine ? "mine" : "theirs"}`} key={message.id}><p>{message.text}</p><small>{message.sentAt?.toDate().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</small></div>;
+              })}
+              <div ref={messageEndRef} />
+            </div>
+            {chatError && <p className="chat-error" role="alert">{chatError}</p>}
+            <div className="chat-compose">
+              <textarea value={draft} maxLength={500} rows={1} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder={`Message ${selectedPeer.name}`} aria-label={`Message ${selectedPeer.name}`} />
+              <button onClick={() => void sendMessage()} disabled={!draft.trim() || sending} aria-label="Send message">送</button>
+            </div>
+          </>
+        )}
+      </div>
     </aside>
   );
 }
@@ -1977,6 +1967,9 @@ function AppHome({
   onCloseInvite,
   onJoinLobby,
   onOpenChat,
+  onOpenChatPanel,
+  chatUnreadCount,
+  chatOpen,
   premiumUnlocked,
   onUnlockPremium,
 }: {
@@ -2012,6 +2005,9 @@ function AppHome({
   onCloseInvite: (invite: GameInvite) => Promise<void>;
   onJoinLobby: (gameId: PlayableGameId, roomCode?: string) => void;
   onOpenChat: (friend: FriendEntry) => void;
+  onOpenChatPanel: () => void;
+  chatUnreadCount: number;
+  chatOpen: boolean;
   premiumUnlocked: boolean;
   onUnlockPremium: (code: string) => Promise<string>;
 }) {
@@ -2140,6 +2136,13 @@ function AppHome({
         <div className="header-actions">
           {firebaseUser && <span className="header-online"><i />{firebaseUser.isAnonymous ? "GUEST" : "ONLINE"}</span>}
           {liveIncoming.length > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${liveIncoming.length} pending game invites`}><b>招</b><span>{liveIncoming.length}</span></button>}
+          {firebaseUser && !firebaseUser.isAnonymous && (
+            <button className={`header-chat ${chatOpen ? "active" : ""}`} onClick={onOpenChatPanel} aria-label={`Open friends chat${chatUnreadCount ? `, ${chatUnreadCount} unread` : ""}`} aria-pressed={chatOpen}>
+              <span className="header-chat-icon" aria-hidden="true"><i /><b /></span>
+              <strong>CHAT</strong>
+              {chatUnreadCount > 0 && <em>{chatUnreadCount}</em>}
+            </button>
+          )}
           <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
             <PlayerAvatar small avatarId={avatarId} />
@@ -3032,8 +3035,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} onOpenChatPanel={() => setChatOpen(true)} chatUnreadCount={0} chatOpen={chatOpen} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium, chatOpen]);
 
-  return <>{view}<FriendsChat user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onOpen={() => setChatOpen(true)} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} /></>;
+  return <>{view}<FriendsChat user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} /></>;
 }
