@@ -31,7 +31,7 @@ export function HeaderChatButton({ inGame = false }: { inGame?: boolean }) {
       aria-label={`${open ? "Close" : "Open"} friends chat${unreadCount ? `, ${unreadCount} unread` : ""}`}
       aria-expanded={open}
     >
-      <span className="header-chat-icon" aria-hidden="true"><i /><b /><u /></span>
+      <span className="header-chat-icon" aria-hidden="true">話</span>
       {unreadCount > 0 && <em>{unreadCount > 9 ? "9+" : unreadCount}</em>}
     </button>
   );
