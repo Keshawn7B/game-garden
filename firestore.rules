@@ -380,11 +380,11 @@ service cloud.firestore {
     }
 
     function validAvatar(avatarId) {
-      return avatarId in ['play', 'sakura', 'fox', 'koi', 'moon', 'crane', 'dragon', 'cat', 'ninja', 'sun', 'pink-blossom', 'pink-heart', 'pink-bunny', 'pink-fan', 'pink-peach', 'premium-shogun', 'premium-kitsune', 'premium-empress', 'premium-dragon', 'premium-koi', 'premium-ronin'];
+      return avatarId in ['play', 'sakura', 'fox', 'koi', 'moon', 'crane', 'dragon', 'cat', 'ninja', 'sun', 'pink-blossom', 'pink-heart', 'pink-bunny', 'pink-fan', 'pink-peach', 'premium-shogun', 'premium-kitsune', 'premium-empress', 'premium-dragon', 'premium-koi', 'premium-ronin', 'premium-cat', 'premium-blossom', 'premium-dual-swords'];
     }
 
     function isPremiumAvatar(avatarId) {
-      return avatarId in ['premium-shogun', 'premium-kitsune', 'premium-empress', 'premium-dragon', 'premium-koi', 'premium-ronin'];
+      return avatarId in ['premium-shogun', 'premium-kitsune', 'premium-empress', 'premium-dragon', 'premium-koi', 'premium-ronin', 'premium-cat', 'premium-blossom', 'premium-dual-swords'];
     }
 
     function validAccountAvatar(userId, avatarId) {

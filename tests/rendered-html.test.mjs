@@ -205,8 +205,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.bottom-nav[^}]*position:fixed;inset:auto 0 0/);
   assert.match(styles, /\.bottom-nav[^}]*height:83px/);
   assert.match(styles, /\.bottom-nav\{height:76px/);
-  assert.match(styles, /\.bottom-nav::before \{[^}]*width:100vw;height:5px;[^}]*background:var\(--red\)/);
-  assert.doesNotMatch(styles, /\.bottom-nav \{[^}]*contain:layout paint/);
+  assert.match(styles, /\.bottom-nav \{[^}]*width:100vw;[^}]*grid-template-columns:repeat\(4,minmax\(0,190px\)\);[^}]*border-top:5px solid var\(--red\)/);
+  assert.doesNotMatch(styles, /\.bottom-nav::before/);
   assert.match(styles, /\.bottom-nav button\.active b \{ border-color:transparent;background:transparent;color:var\(--red\);box-shadow:none;/);
   assert.doesNotMatch(styles, /\.bottom-nav button\.active b \{[^}]*border-color:white/);
   assert.match(styles, /\.app-shell[^}]*min-height:100svh/);
@@ -298,4 +298,5 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /roomParticipant/);
   assert.match(firestoreRules, /affectedKeys\(\)\.hasOnly/);
   assert.match(firestoreRules, /'sakura'.*'dragon'.*'pink-blossom'.*'pink-peach'/);
+  assert.match(firestoreRules, /'premium-cat', 'premium-blossom', 'premium-dual-swords'/);
 });
