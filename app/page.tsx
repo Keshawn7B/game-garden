@@ -1753,6 +1753,7 @@ function FriendsChat({
   selectedUid,
   onClose,
   onSelectFriend,
+  onUnreadCountChange,
 }: {
   user: User | null;
   profileName: string;
@@ -1762,6 +1763,7 @@ function FriendsChat({
   selectedUid: string | null;
   onClose: () => void;
   onSelectFriend: (uid: string | null) => void;
+  onUnreadCountChange: (count: number) => void;
 }) {
   const [chats, setChats] = useState<DirectChatSummary[]>([]);
   const [messageThread, setMessageThread] = useState<{ id: string; messages: DirectMessage[] }>({ id: "", messages: EMPTY_DIRECT_MESSAGES });
@@ -1772,13 +1774,23 @@ function FriendsChat({
   const messageEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!user || user.isAnonymous) return;
+    if (!user || user.isAnonymous) {
+      setChats([]);
+      return;
+    }
     return onSnapshot(
       query(collection(db, "directChats"), where("participants", "array-contains", user.uid)),
       (snapshot) => setChats(snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() } as DirectChatSummary))),
       () => setChatError("Chat is temporarily unavailable."),
     );
   }, [user]);
+
+  useEffect(() => {
+    const unreadCount = user && !user.isAnonymous
+      ? chats.filter((chat) => chat.unreadBy?.[user.uid] === true).length
+      : 0;
+    onUnreadCountChange(unreadCount);
+  }, [chats, onUnreadCountChange, user]);
 
   const peers = useMemo(() => {
     const entries = new Map<string, FriendEntry>();
@@ -1967,7 +1979,7 @@ function AppHome({
   onCloseInvite,
   onJoinLobby,
   onOpenChat,
-  onOpenChatPanel,
+  onToggleChatPanel,
   chatUnreadCount,
   chatOpen,
   premiumUnlocked,
@@ -2005,7 +2017,7 @@ function AppHome({
   onCloseInvite: (invite: GameInvite) => Promise<void>;
   onJoinLobby: (gameId: PlayableGameId, roomCode?: string) => void;
   onOpenChat: (friend: FriendEntry) => void;
-  onOpenChatPanel: () => void;
+  onToggleChatPanel: () => void;
   chatUnreadCount: number;
   chatOpen: boolean;
   premiumUnlocked: boolean;
@@ -2136,14 +2148,13 @@ function AppHome({
         <div className="header-actions">
           {firebaseUser && <span className="header-online"><i />{firebaseUser.isAnonymous ? "GUEST" : "ONLINE"}</span>}
           {liveIncoming.length > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${liveIncoming.length} pending game invites`}><b>招</b><span>{liveIncoming.length}</span></button>}
+          <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           {firebaseUser && !firebaseUser.isAnonymous && (
-            <button className={`header-chat ${chatOpen ? "active" : ""}`} onClick={onOpenChatPanel} aria-label={`Open friends chat${chatUnreadCount ? `, ${chatUnreadCount} unread` : ""}`} aria-pressed={chatOpen}>
+            <button className={`header-chat ${chatOpen ? "active" : ""}`} onClick={onToggleChatPanel} aria-label={`${chatOpen ? "Close" : "Open"} friends chat${chatUnreadCount ? `, ${chatUnreadCount} unread` : ""}`} aria-expanded={chatOpen}>
               <span className="header-chat-icon" aria-hidden="true"><i /><b /></span>
-              <strong>CHAT</strong>
-              {chatUnreadCount > 0 && <em>{chatUnreadCount}</em>}
+              {chatUnreadCount > 0 && <em>{chatUnreadCount > 9 ? "9+" : chatUnreadCount}</em>}
             </button>
           )}
-          <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
             <PlayerAvatar small avatarId={avatarId} />
           </button>
@@ -2401,6 +2412,7 @@ export default function Home() {
   const [presenceNow, setPresenceNow] = useState<number | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatTargetUid, setChatTargetUid] = useState<string | null>(null);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [premiumUnlocked, setPremiumUnlocked] = useState(false);
 
   useEffect(() => {
@@ -3035,8 +3047,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} onOpenChatPanel={() => setChatOpen(true)} chatUnreadCount={0} chatOpen={chatOpen} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium, chatOpen]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} onToggleChatPanel={() => setChatOpen((current) => !current)} chatUnreadCount={chatUnreadCount} chatOpen={chatOpen} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium, chatOpen, chatUnreadCount]);
 
-  return <>{view}<FriendsChat user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} /></>;
+  return <>{view}<FriendsChat user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} onUnreadCountChange={setChatUnreadCount} /></>;
 }
