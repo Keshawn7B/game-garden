@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import { HeaderChatButton } from "./chat-chrome";
 
 export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice";
 
@@ -246,7 +247,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return () => window.clearTimeout(timer);
   }, [mutate, room.hostUid, state, user.uid]);
 
-  if (!state) return <main className="game-shell"><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><span className="online-room-pill">● {room.code}</span></header><section className="online-game waiting"><b>接</b><h1>Connecting match…</h1><p>Synchronizing both players.</p></section></main>;
+  if (!state) return <main className="game-shell"><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><div className="game-header-actions"><HeaderChatButton inGame /><span className="online-room-pill">● {room.code}</span></div></header><section className="online-game waiting"><b>接</b><h1>Connecting match…</h1><p>Synchronizing both players.</p></section></main>;
 
   const playerIndex = state.players.indexOf(user.uid) as 0 | 1;
   const otherIndex = playerIndex === 0 ? 1 : 0;
@@ -364,5 +365,5 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
 
   if (state.gameId === "dice") gameView = <section className="online-game simple-game dice-game"><p className="eyebrow">LUCK · LIVE ONLINE</p><h1>Dice Race</h1><p>Roll on your turn. Both racers update live.</p><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="dice-racers">{state.positions.map((position, index) => <div key={index}><span>{state.names[index]}</span><b>{state.faces[index] || "□"}</b><strong>{Math.min(position, 20)}<small>/20</small></strong><i><em style={{ width: `${Math.min(position / 20 * 100, 100)}%` }} /></i></div>)}</div>{state.phase === "complete" ? finish : <button className="primary-button dice-roll" disabled={!myTurn} onClick={() => void roll()}>{myTurn ? "Roll the dice" : "Opponent rolling…"}</button>}</section>;
 
-  return <main className={`game-shell online-versus-shell online-${state.gameId}`}><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><span className="online-room-pill">● {room.code}</span></header>{gameView}{error && <p className="online-game-error" role="alert">{error}</p>}</main>;
+  return <main className={`game-shell online-versus-shell online-${state.gameId}`}><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><div className="game-header-actions"><HeaderChatButton inGame /><span className="online-room-pill">● {room.code}</span></div></header>{gameView}{error && <p className="online-game-error" role="alert">{error}</p>}</main>;
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, limit, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
+import { ChatChromeProvider, HeaderChatButton } from "./chat-chrome";
 import { makeOnlineGameState, OnlineVersusGame, type OnlineGameId } from "./online-games";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice";
@@ -309,7 +310,7 @@ function Codebreaker({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
         <HeaderLogo compact />
-        <button className="icon-button" onClick={reset} aria-label="Start a new code">↻</button>
+        <div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Start a new code">↻</button></div>
       </header>
 
       <section className="game-intro">
@@ -435,7 +436,7 @@ function OrderMatch({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
         <HeaderLogo compact />
-        <button className="icon-button" onClick={reset} aria-label="Start a new order">↻</button>
+        <div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Start a new order">↻</button></div>
       </header>
 
       <section className="order-game">
@@ -573,7 +574,7 @@ function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
         <HeaderLogo compact />
-        <button className="icon-button" onClick={reset} aria-label="Start a new number game">↻</button>
+        <div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Start a new number game">↻</button></div>
       </header>
       <section className={`number-game ${mode === "multi" ? "number-versus" : ""}`}>
         {mode === "multi" && <div className="number-versus-progress" aria-label={`Round ${round} of 2`}><span className={round === 1 ? "active" : "complete"}><b>01</b>P1 HIDES</span><i>交代</i><span className={round === 2 ? "active" : ""}><b>02</b>P2 HIDES</span></div>}
@@ -764,7 +765,7 @@ function OnlineNumberHunt({ room, user, onLeave }: { room: GameRoom; user: User;
 
   return (
     <main className="game-shell number-shell">
-      <header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo compact /><span className="online-room-pill">● {room.code}</span></header>
+      <header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><span className="online-room-pill">● {room.code}</span></div></header>
       <section className="number-game number-versus number-online">
         <div className="online-match-heading"><span>LIVE MATCH</span><strong>{room.hostName}</strong><b>VS</b><strong>{room.guestName}</strong></div>
         {!match ? <div className="number-role-card online-waiting-card"><span className="waiting-pulse">接</span><h1>Connecting match…</h1><p>Synchronizing both players.</p></div> : (
@@ -838,7 +839,7 @@ function MemoryGame({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
       <header className="game-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
         <HeaderLogo compact />
-        <button className="icon-button" onClick={reset} aria-label="Shuffle and restart">↻</button>
+        <div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Shuffle and restart">↻</button></div>
       </header>
       <section className="memory-game">
         <div className="memory-heading">
@@ -955,7 +956,7 @@ function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
 
   return (
     <main className="game-shell simple-game-shell">
-      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={reset} aria-label="Restart tic tac toe">↻</button></header>
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart tic tac toe">↻</button></div></header>
       <section className="simple-game tic-game">
         <p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : `VS CPU · ${difficulty.toUpperCase()}`}</p>
         <h1>Tic Tac Toe</h1>
@@ -1170,7 +1171,7 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
 
   return (
     <main className="game-shell simple-game-shell connect-game-shell">
-      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={resetMatch} aria-label="Restart Connect Four match">↻</button></header>
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={resetMatch} aria-label="Restart Connect Four match">↻</button></div></header>
       <section className="connect-game">
         <div className="connect-heading"><div><p className="eyebrow">STRATEGY · {mode === "multi" ? "2 PLAYERS" : `VS CPU · ${difficulty.toUpperCase()}`}</p><h1>Connect Four</h1><p>Build a line across, down, or diagonally before your opponent.</p></div><span><b>四</b><small>四目並べ</small></span></div>
         {mode === "solo" && <CpuDifficultyPicker difficulty={difficulty} onChange={changeDifficulty} gameName="Connect Four" />}
@@ -1258,7 +1259,7 @@ function RockPaperScissors({ mode, onBack, onScore }: { mode: GameMode; onBack: 
 
   return (
     <main className="game-shell simple-game-shell">
-      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={reset} aria-label="Restart rock paper scissors">↻</button></header>
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart rock paper scissors">↻</button></div></header>
       <section className="simple-game rps-game">
         <p className="eyebrow">QUICK · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
         <h1>Rock Paper Scissors</h1>
@@ -1330,7 +1331,7 @@ function DiceRace({ mode, onBack, onScore }: { mode: GameMode; onBack: () => voi
 
   return (
     <main className="game-shell simple-game-shell">
-      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><button className="icon-button" onClick={reset} aria-label="Restart dice race">↻</button></header>
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart dice race">↻</button></div></header>
       <section className="simple-game dice-game">
         <p className="eyebrow">LUCK · {mode === "multi" ? "2 PLAYERS" : "VS CPU"}</p>
         <h1>Dice Race</h1>
@@ -1497,7 +1498,7 @@ function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode
       <header className="game-topbar menu-topbar">
         <button className="back-button" onClick={onBack}>← Games</button>
         <HeaderLogo compact />
-        <span className="menu-header-spacer" aria-hidden="true" />
+        <div className="game-header-actions"><HeaderChatButton inGame /><span className="menu-header-spacer" aria-hidden="true" /></div>
       </header>
       <section className="game-menu">
         <div className="menu-card">
@@ -1615,7 +1616,7 @@ function GameLobby({
       <header className="game-topbar menu-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
         <HeaderLogo compact />
-        <span className="menu-header-spacer" aria-hidden="true" />
+        <div className="game-header-actions"><HeaderChatButton inGame /><span className="menu-header-spacer" aria-hidden="true" /></div>
       </header>
       <section className="game-lobby">
         <div className="lobby-card">
@@ -1663,7 +1664,7 @@ function EmbeddedGame({ game, onBack }: { game: ExternalGameId; onBack: () => vo
       <header className="game-topbar embedded-topbar">
         <button className="back-button" onClick={onBack}>← Game menu</button>
         <HeaderLogo compact />
-        <a className="icon-button embedded-open" href={details.url} target="_blank" rel="noreferrer" aria-label={`Open ${details.title} in a new tab`}>↗</a>
+        <div className="game-header-actions"><HeaderChatButton inGame /><a className="icon-button embedded-open" href={details.url} target="_blank" rel="noreferrer" aria-label={`Open ${details.title} in a new tab`}>↗</a></div>
       </header>
       <iframe className="embedded-game" src={details.url} title={details.title} allow="fullscreen" />
     </main>
@@ -1979,9 +1980,6 @@ function AppHome({
   onCloseInvite,
   onJoinLobby,
   onOpenChat,
-  onToggleChatPanel,
-  chatUnreadCount,
-  chatOpen,
   premiumUnlocked,
   onUnlockPremium,
 }: {
@@ -2017,9 +2015,6 @@ function AppHome({
   onCloseInvite: (invite: GameInvite) => Promise<void>;
   onJoinLobby: (gameId: PlayableGameId, roomCode?: string) => void;
   onOpenChat: (friend: FriendEntry) => void;
-  onToggleChatPanel: () => void;
-  chatUnreadCount: number;
-  chatOpen: boolean;
   premiumUnlocked: boolean;
   onUnlockPremium: (code: string) => Promise<string>;
 }) {
@@ -2149,12 +2144,7 @@ function AppHome({
           {firebaseUser && <span className="header-online"><i />{firebaseUser.isAnonymous ? "GUEST" : "ONLINE"}</span>}
           {liveIncoming.length > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${liveIncoming.length} pending game invites`}><b>招</b><span>{liveIncoming.length}</span></button>}
           <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
-          {firebaseUser && !firebaseUser.isAnonymous && (
-            <button className={`header-chat ${chatOpen ? "active" : ""}`} onClick={onToggleChatPanel} aria-label={`${chatOpen ? "Close" : "Open"} friends chat${chatUnreadCount ? `, ${chatUnreadCount} unread` : ""}`} aria-expanded={chatOpen}>
-              <span className="header-chat-icon" aria-hidden="true"><i /><b /></span>
-              {chatUnreadCount > 0 && <em>{chatUnreadCount > 9 ? "9+" : chatUnreadCount}</em>}
-            </button>
-          )}
+          <HeaderChatButton />
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
             <PlayerAvatar small avatarId={avatarId} />
           </button>
@@ -3047,8 +3037,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} onToggleChatPanel={() => setChatOpen((current) => !current)} chatUnreadCount={chatUnreadCount} chatOpen={chatOpen} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium, chatOpen, chatUnreadCount]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
 
-  return <>{view}<FriendsChat user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} onUnreadCountChange={setChatUnreadCount} /></>;
+  return <ChatChromeProvider enabled={Boolean(firebaseUser && !firebaseUser.isAnonymous)} open={chatOpen} unreadCount={chatUnreadCount} onToggle={() => setChatOpen((current) => !current)}>{view}<FriendsChat user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} onUnreadCountChange={setChatUnreadCount} /></ChatChromeProvider>;
 }
