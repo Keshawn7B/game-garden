@@ -2005,6 +2005,7 @@ function AppHome({
   const [premiumCode, setPremiumCode] = useState("");
   const [premiumMessage, setPremiumMessage] = useState("");
   const [premiumBusy, setPremiumBusy] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const activeRanks = leaderboards[rankGame] ?? [];
@@ -2187,7 +2188,11 @@ function AppHome({
         {activeTab === "profile" && (
           <section className="app-panel profile-panel">
             <div className="profile-card">
-              <PlayerAvatar avatarId={avatarId} />
+              <button className="profile-avatar-button" onClick={() => setAvatarPickerOpen(true)} aria-label="Change profile picture">
+                <PlayerAvatar avatarId={avatarId} />
+                <span>CHANGE PICTURE</span>
+                <small>画像を変更</small>
+              </button>
               <p>PLAYER PROFILE <span>プロフィール</span></p>
               <div className={`premium-access-card ${premiumUnlocked ? "unlocked" : "locked"}`}>
                 <div className="premium-access-heading"><span>{premiumUnlocked ? "認" : "鍵"}</span><div><small>PREMIUM ACCESS</small><strong>{premiumUnlocked ? "Legendary collection unlocked" : "Enter your access code"}</strong></div><b>{premiumUnlocked ? "ACTIVE" : "LOCKED"}</b></div>
@@ -2197,22 +2202,30 @@ function AppHome({
                 </> : <p>Sign in or create an account before entering a premium access code.</p>}
                 {premiumMessage && <p className="premium-access-message" role="status">{premiumMessage}</p>}
               </div>
-              <div className="avatar-collection-label premium-collection-label"><span>✦ PREMIUM COLLECTION</span><small>{premiumUnlocked ? "伝説のアバター" : "ACCOUNT ACCESS REQUIRED"}</small></div>
-              <div className={`avatar-picker premium-avatar-picker ${premiumUnlocked ? "" : "locked"}`} role="group" aria-label="Choose a premium profile picture">
-                {AVATARS.filter((avatar) => avatar.premium).map((avatar) => (
-                  <button key={avatar.id} className={`${avatarId === avatar.id ? "selected" : ""} ${premiumUnlocked ? "" : "locked"}`} onClick={() => onAvatarChange(avatar.id)} aria-label={`${avatar.label} premium profile picture${premiumUnlocked ? "" : ", locked"}`} aria-pressed={avatarId === avatar.id} disabled={!premiumUnlocked}>
-                    <AvatarGlyph avatarId={avatar.id} className="avatar-option" />
-                  </button>
-                ))}
-              </div>
-              <div className="avatar-collection-label"><span>CLASSIC COLLECTION</span><small>スタンダード</small></div>
-              <div className="avatar-picker classic-avatar-picker" role="group" aria-label="Choose a profile picture">
-                {AVATARS.filter((avatar) => !avatar.premium).map((avatar) => (
-                  <button key={avatar.id} className={avatarId === avatar.id ? "selected" : ""} onClick={() => onAvatarChange(avatar.id)} aria-label={`${avatar.label} profile picture`} aria-pressed={avatarId === avatar.id}>
-                    <AvatarGlyph avatarId={avatar.id} className="avatar-option" />
-                  </button>
-                ))}
-              </div>
+              {avatarPickerOpen && (
+                <div className="avatar-picker-backdrop" onMouseDown={() => setAvatarPickerOpen(false)}>
+                  <section className="avatar-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setAvatarPickerOpen(false); }}>
+                    <div className="avatar-picker-heading"><div><small>PLAYER ICON · アイコン</small><h2 id="avatar-picker-title">Choose your picture</h2></div><button autoFocus onClick={() => setAvatarPickerOpen(false)} aria-label="Close profile picture chooser">×</button></div>
+                    <div className="avatar-collection-label"><span>CLASSIC COLLECTION</span><small>スタンダード</small></div>
+                    <div className="avatar-picker classic-avatar-picker" role="group" aria-label="Choose a profile picture">
+                      {AVATARS.filter((avatar) => !avatar.premium).map((avatar) => (
+                        <button key={avatar.id} className={avatarId === avatar.id ? "selected" : ""} onClick={() => { onAvatarChange(avatar.id); setAvatarPickerOpen(false); }} aria-label={`${avatar.label} profile picture`} aria-pressed={avatarId === avatar.id}>
+                          <AvatarGlyph avatarId={avatar.id} className="avatar-option" />
+                        </button>
+                      ))}
+                    </div>
+                    <div className="avatar-collection-label premium-collection-label"><span>✦ PREMIUM COLLECTION</span><small>{premiumUnlocked ? "伝説のアバター" : "ACCOUNT ACCESS REQUIRED"}</small></div>
+                    <div className={`avatar-picker premium-avatar-picker ${premiumUnlocked ? "" : "locked"}`} role="group" aria-label="Choose a premium profile picture">
+                      {AVATARS.filter((avatar) => avatar.premium).map((avatar) => (
+                        <button key={avatar.id} className={`${avatarId === avatar.id ? "selected" : ""} ${premiumUnlocked ? "" : "locked"}`} onClick={() => { onAvatarChange(avatar.id); setAvatarPickerOpen(false); }} aria-label={`${avatar.label} premium profile picture${premiumUnlocked ? "" : ", locked"}`} aria-pressed={avatarId === avatar.id} disabled={!premiumUnlocked}>
+                          <AvatarGlyph avatarId={avatar.id} className="avatar-option" />
+                        </button>
+                      ))}
+                    </div>
+                    {!premiumUnlocked && <p className="avatar-picker-lock-note">Enter your premium code on the profile page to unlock the legendary collection.</p>}
+                  </section>
+                </div>
+              )}
               <input
                 value={profileName}
                 maxLength={18}

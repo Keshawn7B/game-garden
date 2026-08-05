@@ -173,6 +173,10 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /premium-avatars\.webp/);
   assert.match(styles, /\.avatar-premium/);
   assert.match(styles, /\.premium-avatar-picker/);
+  assert.match(source, /className="profile-avatar-button"/);
+  assert.match(source, /avatarPickerOpen &&/);
+  assert.match(source, /role="dialog" aria-modal="true"/);
+  assert.match(styles, /\.avatar-picker-backdrop/);
   assert.match(source, /const PREMIUM_ACCESS_CODE = "SOKEY"/);
   assert.match(source, /premiumUnlocked/);
   assert.match(source, /onUnlockPremium/);
