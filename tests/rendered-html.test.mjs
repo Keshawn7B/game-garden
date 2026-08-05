@@ -174,7 +174,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /premium-cat/);
   assert.match(source, /premium-blossom/);
   assert.match(source, /premium-dual-swords/);
-  assert.match(styles, /premium-cat-v2\.jpg/);
+  assert.match(styles, /premium-cat-v3\.jpg/);
   assert.match(styles, /premium-blossom\.jpg/);
   assert.match(styles, /premium-dual-swords-v2\.jpg/);
   assert.match(styles, /\.avatar-premium/);
