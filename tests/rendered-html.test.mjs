@@ -196,6 +196,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.friend-list-heading[^}]*color:var\(--red\)/);
   assert.match(styles, /\.global-rank-list/);
   assert.match(styles, /\.bottom-nav[^}]*position:fixed;inset:auto 0 0/);
+  assert.match(styles, /\.bottom-nav[^}]*height:83px/);
+  assert.match(styles, /\.bottom-nav\{height:76px/);
   assert.match(styles, /\.app-shell[^}]*min-height:100svh/);
   assert.match(styles, /\.friend-list/);
   assert.match(styles, /\.friend-score-grid/);
