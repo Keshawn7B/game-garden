@@ -127,6 +127,10 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /switchObject/);
   assert.match(source, /Check order/);
   assert.match(source, /pocket-play-scores/);
+  assert.match(source, /game-garden-account-\$\{user\.uid\}-\$\{field\}/);
+  assert.match(source, /authLoadId\.current !== loadId/);
+  assert.match(source, /Reset this profile's scores/);
+  assert.match(styles, /\.reset-scores-button/);
   assert.match(source, /function AppHome/);
   assert.match(source, /function PlayerAvatar/);
   assert.match(source, /activeTab === "leaderboard"/);

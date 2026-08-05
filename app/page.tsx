@@ -140,6 +140,28 @@ function friendCodeFor(uid: string) {
   return uid.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase();
 }
 
+type PlayerStorageField = "scores" | "name" | "avatar";
+
+function playerStorageKey(user: User | null, field: PlayerStorageField) {
+  return user && !user.isAnonymous
+    ? `game-garden-account-${user.uid}-${field}`
+    : `game-garden-guest-${field}`;
+}
+
+function storedScores(user: User | null): HighScores {
+  try {
+    const saved = window.localStorage.getItem(playerStorageKey(user, "scores"));
+    if (!saved) return {};
+    const parsed = JSON.parse(saved) as Record<string, unknown>;
+    return Object.fromEntries(SCORE_GAME_IDS.flatMap((gameId) => {
+      const score = parsed[gameId];
+      return Number.isInteger(score) && Number(score) >= 1 && Number(score) <= 10_000 ? [[gameId, Number(score)]] : [];
+    })) as HighScores;
+  } catch {
+    return {};
+  }
+}
+
 function directChatId(leftUid: string, rightUid: string) {
   return [leftUid, rightUid].sort((left, right) => left.localeCompare(right)).join("--");
 }
@@ -1956,6 +1978,7 @@ function AppHome({
   onProfileNameChange,
   onAvatarChange,
   onProfileSave,
+  onResetScores,
   firebaseUser,
   authLoading,
   authError,
@@ -1991,6 +2014,7 @@ function AppHome({
   onProfileNameChange: (name: string) => void;
   onAvatarChange: (avatarId: AvatarId) => void;
   onProfileSave: () => void;
+  onResetScores: () => Promise<string>;
   firebaseUser: User | null;
   authLoading: boolean;
   authError: string;
@@ -2032,6 +2056,8 @@ function AppHome({
   const [premiumCode, setPremiumCode] = useState("");
   const [premiumMessage, setPremiumMessage] = useState("");
   const [premiumBusy, setPremiumBusy] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
   const activeRanks = leaderboards[rankGame] ?? [];
   const liveIncoming = incomingInvites.filter(inviteIsLive);
   const liveOutgoing = outgoingInvites.filter(inviteIsLive);
@@ -2268,6 +2294,8 @@ function AppHome({
               <div className="profile-stats-dropdown">
                 <div className="profile-stats-compact"><div><strong>{completedGames}</strong><span>HIGH SCORES</span></div><div><strong>{GAMES.length}</strong><span>GAMES</span></div></div>
                 <div className="profile-score-dropdown"><h2>Your best <span>自己ベスト</span></h2>{scoredGames.map((game) => <p key={game.id}><span>{game.name}</span><strong>{formatScore(game.scoreGame, highScores[game.scoreGame])}</strong></p>)}</div>
+                <button className="reset-scores-button" disabled={resetBusy || completedGames === 0} onClick={() => { if (!window.confirm("Reset every high score for this profile? This cannot be undone.")) return; setResetBusy(true); setResetMessage(""); void onResetScores().then(setResetMessage).finally(() => setResetBusy(false)); }}>{resetBusy ? "Resetting…" : "Reset this profile's scores"}</button>
+                {resetMessage && <p className="reset-scores-message" role="status">{resetMessage}</p>}
               </div>
             </details>
           </section>
@@ -2401,19 +2429,30 @@ export default function Home() {
   const [chatTargetUid, setChatTargetUid] = useState<string | null>(null);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [premiumUnlocked, setPremiumUnlocked] = useState(false);
+  const authLoadId = useRef(0);
 
   useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
     onPopState();
     const restoreTimer = window.setTimeout(() => {
       try {
-        const savedScores = window.localStorage.getItem("pocket-play-scores");
-        const savedName = window.localStorage.getItem("pocket-play-name");
-        const savedAvatar = window.localStorage.getItem("game-garden-avatar");
         const savedTheme = window.localStorage.getItem("game-garden-theme");
-        if (savedScores) setHighScores(JSON.parse(savedScores));
-        if (savedName) setProfileName(savedName);
-        if (isAvatarId(savedAvatar) && !isPremiumAvatar(savedAvatar)) setAvatarId(savedAvatar);
+        const legacyScores = window.localStorage.getItem("pocket-play-scores");
+        const legacyName = window.localStorage.getItem("pocket-play-name");
+        const legacyAvatar = window.localStorage.getItem("game-garden-avatar");
+        if (legacyScores && !window.localStorage.getItem(playerStorageKey(null, "scores"))) window.localStorage.setItem(playerStorageKey(null, "scores"), legacyScores);
+        if (legacyName && !window.localStorage.getItem(playerStorageKey(null, "name"))) window.localStorage.setItem(playerStorageKey(null, "name"), legacyName);
+        if (legacyAvatar && !window.localStorage.getItem(playerStorageKey(null, "avatar"))) window.localStorage.setItem(playerStorageKey(null, "avatar"), legacyAvatar);
+        window.localStorage.removeItem("pocket-play-scores");
+        window.localStorage.removeItem("pocket-play-name");
+        window.localStorage.removeItem("game-garden-avatar");
+        if (!auth.currentUser) {
+          const guestName = window.localStorage.getItem(playerStorageKey(null, "name"));
+          const guestAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
+          setProfileName(guestName || "Player One");
+          setHighScores(storedScores(null));
+          if (isAvatarId(guestAvatar) && !isPremiumAvatar(guestAvatar)) setAvatarId(guestAvatar);
+        }
         if (savedTheme === "sakura") {
           setTheme("sakura");
           document.documentElement.dataset.theme = "sakura";
@@ -2430,50 +2469,53 @@ export default function Home() {
   useEffect(() => {
     void getRedirectResult(auth).catch((error: unknown) => setAuthError(friendlyAuthError(error)));
     return onAuthStateChanged(auth, async (user) => {
+      const loadId = ++authLoadId.current;
       setFirebaseUser(user);
       setAuthLoading(false);
       setAuthError("");
+      setHighScores({});
+      setProfileName("Player One");
+      setAvatarId("play");
+      setPremiumUnlocked(false);
+      setFriends([]);
+      setFriendProfiles({});
+      setIncomingInvites([]);
+      setOutgoingInvites([]);
+      setActiveRoom(null);
+      setChatOpen(false);
+      setChatTargetUid(null);
+      setChatUnreadCount(0);
       if (!user) {
-        setFriends([]);
-        setFriendProfiles({});
-        setIncomingInvites([]);
-        setOutgoingInvites([]);
-        setActiveRoom(null);
-        setChatOpen(false);
-        setChatTargetUid(null);
-        setPremiumUnlocked(false);
-        setAvatarId((current) => isPremiumAvatar(current) ? "play" : current);
+        const guestName = window.localStorage.getItem(playerStorageKey(null, "name")) || "Player One";
+        const guestAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
+        setProfileName(guestName);
+        setHighScores(storedScores(null));
+        if (isAvatarId(guestAvatar) && !isPremiumAvatar(guestAvatar)) setAvatarId(guestAvatar);
         return;
       }
 
       if (user.isAnonymous) {
-        const savedGuestName = window.localStorage.getItem("game-garden-guest-name") || `Guest ${user.uid.slice(0, 4).toUpperCase()}`;
-        const savedAvatar = window.localStorage.getItem("game-garden-avatar");
+        const savedGuestName = window.localStorage.getItem("game-garden-guest-name") || window.localStorage.getItem(playerStorageKey(null, "name")) || `Guest ${user.uid.slice(0, 4).toUpperCase()}`;
+        const savedAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
         setProfileName(savedGuestName);
+        setHighScores(storedScores(null));
         if (isAvatarId(savedAvatar) && !isPremiumAvatar(savedAvatar)) setAvatarId(savedAvatar);
-        setFriends([]);
-        setFriendProfiles({});
-        setIncomingInvites([]);
-        setOutgoingInvites([]);
-        setChatOpen(false);
-        setChatTargetUid(null);
-        setPremiumUnlocked(false);
-        setAvatarId((current) => isPremiumAvatar(current) ? "play" : current);
         return;
       }
 
       try {
         const profileRef = doc(db, "users", user.uid);
         const profile = await getDoc(profileRef);
+        if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         const data = profile.data();
         const hasPremiumAccess = data?.premiumUnlocked === true;
-        const cloudName = typeof data?.displayName === "string" ? data.displayName : user.displayName || "Player One";
-        const savedAvatar = window.localStorage.getItem("game-garden-avatar");
+        const accountName = window.localStorage.getItem(playerStorageKey(user, "name"));
+        const cloudName = typeof data?.displayName === "string" ? data.displayName : user.displayName || accountName || "Player One";
+        const savedAvatar = window.localStorage.getItem(playerStorageKey(user, "avatar"));
         const avatarCandidate: AvatarId = isAvatarId(data?.avatarId) ? data.avatarId : isAvatarId(savedAvatar) ? savedAvatar : "play";
         const cloudAvatar: AvatarId = isPremiumAvatar(avatarCandidate) && !hasPremiumAccess ? "play" : avatarCandidate;
         const cloudScores = data?.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {};
-        const savedScores = window.localStorage.getItem("pocket-play-scores");
-        const localScores = savedScores ? JSON.parse(savedScores) as HighScores : {};
+        const localScores = storedScores(user);
         const mergedScores = { ...cloudScores };
         for (const gameId of SCORE_GAME_IDS) {
           const local = localScores[gameId];
@@ -2483,13 +2525,14 @@ export default function Home() {
             await saveCloudScore(user, gameId, local, cloudName, cloudAvatar);
           }
         }
+        if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         setProfileName(cloudName);
         setAvatarId(cloudAvatar);
         setPremiumUnlocked(hasPremiumAccess);
         setHighScores(mergedScores);
-        window.localStorage.setItem("pocket-play-name", cloudName);
-        window.localStorage.setItem("pocket-play-scores", JSON.stringify(mergedScores));
-        window.localStorage.setItem("game-garden-avatar", cloudAvatar);
+        window.localStorage.setItem(playerStorageKey(user, "name"), cloudName);
+        window.localStorage.setItem(playerStorageKey(user, "scores"), JSON.stringify(mergedScores));
+        window.localStorage.setItem(playerStorageKey(user, "avatar"), cloudAvatar);
         await setDoc(profileRef, {
           uid: user.uid,
           displayName: cloudName,
@@ -2501,6 +2544,7 @@ export default function Home() {
         }, { merge: true });
         await syncPublicProfile(user, cloudName, cloudAvatar, mergedScores);
       } catch (error) {
+        if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         setAuthError(error instanceof Error ? error.message : "Could not load the cloud profile.");
       }
     });
@@ -2612,7 +2656,7 @@ export default function Home() {
     setHighScores((previous) => {
       if (previous[gameId] != null && previous[gameId]! <= score) return previous;
       const next = { ...previous, [gameId]: score };
-      try { window.localStorage.setItem("pocket-play-scores", JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
+      try { window.localStorage.setItem(playerStorageKey(firebaseUser, "scores"), JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
       return next;
     });
     if (firebaseUser && !firebaseUser.isAnonymous) void saveCloudScore(firebaseUser, gameId, score, profileName, avatarId).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
@@ -2620,8 +2664,8 @@ export default function Home() {
 
   const updateProfileName = useCallback((name: string) => {
     setProfileName(name);
-    try { window.localStorage.setItem("pocket-play-name", name); } catch { /* Device storage may be unavailable. */ }
-  }, []);
+    try { window.localStorage.setItem(playerStorageKey(firebaseUser, "name"), name); } catch { /* Device storage may be unavailable. */ }
+  }, [firebaseUser]);
 
   const updateAvatar = useCallback((nextAvatar: AvatarId) => {
     if (isPremiumAvatar(nextAvatar) && !premiumUnlocked) {
@@ -2629,8 +2673,8 @@ export default function Home() {
       return;
     }
     setAvatarId(nextAvatar);
-    try { window.localStorage.setItem("game-garden-avatar", nextAvatar); } catch { /* Device storage may be unavailable. */ }
-  }, [premiumUnlocked]);
+    try { window.localStorage.setItem(playerStorageKey(firebaseUser, "avatar"), nextAvatar); } catch { /* Device storage may be unavailable. */ }
+  }, [firebaseUser, premiumUnlocked]);
 
   const unlockPremium = useCallback(async (rawCode: string) => {
     if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before unlocking premium access.";
@@ -2688,13 +2732,34 @@ export default function Home() {
         }, { merge: true });
       }
       await batch.commit();
-      window.localStorage.setItem("pocket-play-name", displayName);
+      window.localStorage.setItem(playerStorageKey(firebaseUser, "name"), displayName);
       setAvatarId(savedAvatar);
-      window.localStorage.setItem("game-garden-avatar", savedAvatar);
+      window.localStorage.setItem(playerStorageKey(firebaseUser, "avatar"), savedAvatar);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Could not save the profile.");
     }
   }, [firebaseUser, highScores, profileName, avatarId, premiumUnlocked]);
+
+  const resetScores = useCallback(async () => {
+    const user = firebaseUser;
+    setAuthError("");
+    try {
+      if (user && !user.isAnonymous) {
+        const batch = writeBatch(db);
+        for (const gameId of SCORE_GAME_IDS) batch.delete(doc(db, "leaderboards", gameId, "entries", user.uid));
+        batch.set(doc(db, "users", user.uid), { highScores: {}, updatedAt: serverTimestamp() }, { merge: true });
+        batch.set(doc(db, "publicProfiles", user.uid), { highScores: {}, updatedAt: serverTimestamp() }, { merge: true });
+        await batch.commit();
+      }
+      window.localStorage.removeItem(playerStorageKey(user, "scores"));
+      setHighScores({});
+      return user && !user.isAnonymous ? "This account's scores were reset." : "Guest scores were reset.";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not reset these scores.";
+      setAuthError(message);
+      return message;
+    }
+  }, [firebaseUser]);
 
   const signIn = useCallback(async () => {
     setAuthLoading(true);
@@ -3034,8 +3099,8 @@ export default function Home() {
     if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
     if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
 
   return <ChatChromeProvider enabled={Boolean(firebaseUser && !firebaseUser.isAnonymous)} open={chatOpen} unreadCount={chatUnreadCount} onToggle={() => setChatOpen((current) => !current)}>{view}<FriendsChat key={firebaseUser?.uid ?? "signed-out"} user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} onUnreadCountChange={setChatUnreadCount} /></ChatChromeProvider>;
 }
