@@ -39,6 +39,8 @@ dev.stderr.log
 # typescript
 next-env.d.ts
 /dist/
+/\.firebase/
+/firebase-public/
 /.wrangler/
 /outputs/
 /work/
