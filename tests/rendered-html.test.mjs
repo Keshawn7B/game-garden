@@ -174,6 +174,9 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.avatar-premium/);
   assert.match(styles, /\.premium-avatar-picker/);
   assert.match(source, /className="profile-avatar-button"/);
+  assert.match(source, /className="profile-avatar-label"/);
+  assert.match(styles, /\.profile-avatar-button>\.profile-avatar-label/);
+  assert.doesNotMatch(styles, /\.profile-avatar-button>span\s*\{/);
   assert.match(source, /avatarPickerOpen &&/);
   assert.match(source, /role="dialog" aria-modal="true"/);
   assert.match(styles, /\.avatar-picker-backdrop/);

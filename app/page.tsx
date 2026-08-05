@@ -2190,7 +2190,7 @@ function AppHome({
             <div className="profile-card">
               <button className="profile-avatar-button" onClick={() => setAvatarPickerOpen(true)} aria-label="Change profile picture">
                 <PlayerAvatar avatarId={avatarId} />
-                <span>CHANGE PICTURE</span>
+                <span className="profile-avatar-label">CHANGE PICTURE</span>
                 <small>画像を変更</small>
               </button>
               <p>PLAYER PROFILE <span>プロフィール</span></p>
