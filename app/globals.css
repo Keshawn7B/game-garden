@@ -146,10 +146,6 @@ span[class*="avatar-style-"]>.avatar-mark { position:relative;z-index:2;width:au
 .art-connect4 { background-color:var(--red);background-image:url('/game-connect4.png');background-size:cover;background-position:center; }
 .art-rps { background-image:url('/game-rps.jpg'); }
 .art-dice { background-image:url('/game-dice.jpg'); }
-.art-meducktion { background-image:url('/meducktion-icon.webp');background-size:cover;background-position:center; }
-.art-deducktion { background-image:linear-gradient(rgba(0,0,0,.04),rgba(0,0,0,.04)),url('/deducktion-icon.webp');background-size:cover;background-position:center; }
-.deducktion-cover-title { position:absolute;left:50%;top:50%;z-index:2;width:94%;padding:5px 2px;transform:translate(-50%,-50%);background:rgba(5,14,32,.5);color:white;font-family:var(--font-japanese),sans-serif;font-size:clamp(13px,2.2vw,22px);font-weight:900;line-height:1;text-align:center;letter-spacing:-.07em;text-shadow:2px 2px 0 #20cce8,4px 4px 0 rgba(0,0,0,.65);-webkit-text-stroke:1px rgba(255,255,255,.45); }
-.menu-game-cover .deducktion-cover-title { font-size:15px; }
 .game-card-copy { display:block;padding:14px 3px 0; }
 .game-card-copy strong { display:block;font-size:14px;font-weight:900;line-height:1.1; }
 .game-card-copy small { display:block;margin-top:4px;color:var(--red);font-size:7px;font-weight:900;letter-spacing:.09em; }
@@ -230,11 +226,6 @@ span[class*="avatar-style-"]>.avatar-mark { position:relative;z-index:2;width:au
 .bottom-nav button { min-width:0;border:0;background:transparent;color:#a6a2a0;display:grid;place-items:center;align-content:center;gap:4px;cursor:pointer; }
 .bottom-nav button b { width:30px;height:30px;display:grid;place-items:center;border:2px solid transparent;font-size:15px;font-weight:900; }.bottom-nav button span { font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:.11em; }.bottom-nav button.active { color:white; }.bottom-nav button.active b { border-color:white;background:var(--red);box-shadow:3px 3px 0 white; }.bottom-nav button.active span { color:#ff6d78; }
 
-.embedded-game-shell { height:100dvh;display:flex;flex-direction:column;background:var(--black);overflow:hidden; }
-.embedded-topbar { flex:0 0 69px;background:var(--black);color:white;border-bottom:5px solid var(--red); }
-.embedded-topbar .brand-dot { box-shadow:3px 3px 0 white; }
-.embedded-open { display:grid;place-items:center;text-decoration:none;color:var(--black); }
-.embedded-game { width:100%;min-height:0;flex:1;border:0;background:white; }
 
 .game-menu-shell { min-height:100vh; background:linear-gradient(90deg,rgba(0,0,0,.025) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.025) 1px,transparent 1px),var(--paper);background-size:30px 30px; }
 .menu-topbar { background:var(--black); color:white; border-bottom:5px solid var(--red); }

@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = incoming.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const baseUrl = new URL(`${protocol}://${host}`);
   const title = "Game Garden | ゲームガーデン";
-  const description = "Pocket-sized logic, memory, medical deduction, and multiplayer identity games in one app.";
+  const description = "Pocket-sized logic, memory, strategy, and multiplayer games in one app.";
 
   return {
     metadataBase: baseUrl,

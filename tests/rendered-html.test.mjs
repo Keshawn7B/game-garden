@@ -23,8 +23,7 @@ test("server-renders the Game Garden hub", async () => {
   assert.match(html, /Number Hunt/);
   assert.match(html, /Memory Flip/);
   assert.match(html, /Connect Four/);
-  assert.match(html, /Meducktion/);
-  assert.match(html, /Deducktion/);
+  assert.doesNotMatch(html, /Meducktion|Deducktion/);
   assert.match(html, /App navigation/);
   assert.match(html, /Ranks/);
   assert.match(html, /Profile/);
@@ -49,8 +48,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /connect4-menu/);
   assert.match(source, /rps-menu/);
   assert.match(source, /dice-menu/);
-  assert.match(source, /meducktion-menu/);
-  assert.match(source, /deducktion-menu/);
+  assert.doesNotMatch(source, /meducktion|deducktion/i);
   assert.match(source, /function GameMenu/);
   assert.match(source, /Open Lobby/);
   assert.match(source, /type GameMode = "solo" \| "multi"/);
@@ -164,11 +162,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /onAuthStateChanged/);
   assert.match(source, /saveCloudScore/);
   assert.match(source, /<p>GLOBAL<\/p><h1>Leaderboard/);
-  assert.match(source, /function EmbeddedGame/);
-  assert.match(source, /keshawn7b\.github\.io\/Meducktion/);
-  assert.match(source, /keshawn7b\.github\.io\/deduction-game/);
-  assert.match(source, /deducktion-cover-title">DEDUCKTION/);
-  assert.match(source, /name: "Deducktion"[\s\S]*?meta: "CARD GAME"/);
+  assert.doesNotMatch(styles, /meducktion|deducktion/i);
   assert.match(styles, /game-covers\.png/);
   assert.match(styles, /game-connect4\.png/);
   assert.match(styles, /\.bottom-nav/);
@@ -247,7 +241,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /const HEADER_META/);
   assert.match(source, /header-title-logo/);
   assert.match(source, /function HeaderLogo/);
-  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 12);
+  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 11);
   assert.match(source, /<button className="header-brand"[\s\S]*?<HeaderLogo \/>/);
   assert.doesNotMatch(source, /wordmark small-wordmark/);
   assert.match(source, /className="header-context"/);

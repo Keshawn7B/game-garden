@@ -8,8 +8,7 @@ import { ChatChromeProvider, HeaderChatButton } from "./chat-chrome";
 import { makeOnlineGameState, OnlineVersusGame, type OnlineGameId } from "./online-games";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice";
-type ExternalGameId = "meducktion" | "deducktion";
-type LibraryGameId = PlayableGameId | ExternalGameId;
+type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "profile";
 type ThemeMode = "classic" | "sakura";
 type GameMode = "solo" | "multi";
@@ -1482,38 +1481,11 @@ const GAME_MENUS: Record<LibraryGameId, {
       "Be the first player to reach 20 spaces.",
     ],
   },
-  meducktion: {
-    title: "Meducktion",
-    japanese: "医学推理",
-    category: "Card game",
-    glyph: "診",
-    color: "meducktion",
-    players: "1–4 Players",
-    rules: [
-      "Choose one Ask, Check, or Test question each round.",
-      "Use the YES and NO clues to narrow eight conditions.",
-      "Diagnose the fictional case before your opponents.",
-    ],
-  },
-  deducktion: {
-    title: "Deducktion",
-    japanese: "正体推理",
-    category: "Card game",
-    glyph: "探",
-    color: "deducktion",
-    players: "Multiplayer",
-    rules: [
-      "Create a room or join friends with a four-letter code.",
-      "Reveal clues about your hidden animal, accessory, and background.",
-      "Be the first player to correctly guess your full identity.",
-    ],
-  },
 };
 
 function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
   const details = GAME_MENUS[game];
   const [selectedMode, setSelectedMode] = useState<GameMode>("solo");
-  const supportsLocalMultiplayer = game !== "meducktion" && game !== "deducktion";
 
   return (
     <main className="game-menu-shell">
@@ -1525,21 +1497,19 @@ function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode
       <section className="game-menu">
         <div className="menu-card">
           <button className="menu-close" onClick={onBack} aria-label="Close game menu">×</button>
-          <span className={`game-cover menu-game-cover art-${game}`}><i>{details.glyph}</i>{game === "deducktion" && <b className="deducktion-cover-title">DEDUCKTION</b>}</span>
+          <span className={`game-cover menu-game-cover art-${game}`}><i>{details.glyph}</i></span>
           <p className="menu-japanese">{details.japanese}</p>
           <h1>{details.title}</h1>
           <div className="menu-meta"><span>{details.players}</span><span>{details.category}</span></div>
-          {supportsLocalMultiplayer && (
-            <div className="mode-picker" aria-label="Choose game mode">
-              <button className={selectedMode === "solo" ? "active" : ""} onClick={() => setSelectedMode("solo")}><b>一</b><span>SOLO<small>1 PLAYER</small></span></button>
-              <button className={selectedMode === "multi" ? "active" : ""} onClick={() => setSelectedMode("multi")}><b>対</b><span>VERSUS<small>2 PLAYERS</small></span></button>
-            </div>
-          )}
+          <div className="mode-picker" aria-label="Choose game mode">
+            <button className={selectedMode === "solo" ? "active" : ""} onClick={() => setSelectedMode("solo")}><b>一</b><span>SOLO<small>1 PLAYER</small></span></button>
+            <button className={selectedMode === "multi" ? "active" : ""} onClick={() => setSelectedMode("multi")}><b>対</b><span>VERSUS<small>2 PLAYERS</small></span></button>
+          </div>
           <div className="menu-rules">
             <h2>How to play <span>遊び方</span></h2>
             <ol>{details.rules.map((rule, index) => <li key={rule}><b>{index + 1}</b><span>{rule}</span></li>)}</ol>
           </div>
-          <button className="primary-button menu-start" onClick={() => onPlay(selectedMode)}>{supportsLocalMultiplayer && selectedMode === "multi" ? "Open Lobby" : "Start Game"} <span>→</span></button>
+          <button className="primary-button menu-start" onClick={() => onPlay(selectedMode)}>{selectedMode === "multi" ? "Open Lobby" : "Start Game"} <span>→</span></button>
         </div>
       </section>
     </main>
@@ -1674,25 +1644,6 @@ function GameLobby({
   );
 }
 
-const EXTERNAL_GAMES: Record<ExternalGameId, { title: string; url: string }> = {
-  meducktion: { title: "Meducktion", url: "https://keshawn7b.github.io/Meducktion/" },
-  deducktion: { title: "Deducktion", url: "https://keshawn7b.github.io/deduction-game/" },
-};
-
-function EmbeddedGame({ game, onBack }: { game: ExternalGameId; onBack: () => void }) {
-  const details = EXTERNAL_GAMES[game];
-  return (
-    <main className="embedded-game-shell">
-      <header className="game-topbar embedded-topbar">
-        <button className="back-button" onClick={onBack}>← Game menu</button>
-        <HeaderLogo compact />
-        <div className="game-header-actions"><HeaderChatButton inGame /><a className="icon-button embedded-open" href={details.url} target="_blank" rel="noreferrer" aria-label={`Open ${details.title} in a new tab`}>↗</a></div>
-      </header>
-      <iframe className="embedded-game" src={details.url} title={details.title} allow="fullscreen" />
-    </main>
-  );
-}
-
 const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string; meta: string; scoreGame?: PlayableGameId }[] = [
   { id: "codebreaker", number: "01", name: "Codebreaker", japanese: "コードブレイカー", meta: "LOGIC", scoreGame: "codebreaker" },
   { id: "order", number: "02", name: "Order Match", japanese: "並べ替え", meta: "LOGIC", scoreGame: "order" },
@@ -1702,8 +1653,6 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "connect4", number: "06", name: "Connect Four", japanese: "四目並べ", meta: "STRATEGY", scoreGame: "connect4" },
   { id: "rps", number: "07", name: "Rock Paper Scissors", japanese: "じゃんけん", meta: "QUICK", scoreGame: "rps" },
   { id: "dice", number: "08", name: "Dice Race", japanese: "サイコロ競走", meta: "LUCK", scoreGame: "dice" },
-  { id: "meducktion", number: "09", name: "Meducktion", japanese: "医学推理", meta: "CARD GAME" },
-  { id: "deducktion", number: "10", name: "Deducktion", japanese: "正体推理", meta: "CARD GAME" },
 ];
 
 const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice"];
@@ -2189,7 +2138,7 @@ function AppHome({
             <div className="game-app-grid">
               {GAMES.map((game) => (
                 <button className="game-app-card" key={game.id} onClick={() => onSelect(game.id)}>
-                  <span className={`game-cover art-${game.id}`}><i>{game.number}</i>{game.id === "deducktion" && <b className="deducktion-cover-title">DEDUCKTION</b>}</span>
+                  <span className={`game-cover art-${game.id}`}><i>{game.number}</i></span>
                   <span className="game-card-copy">
                     <strong>{game.name}</strong>
                     <small>{game.japanese}</small>
@@ -3085,8 +3034,6 @@ export default function Home() {
     if (game === "connect4-menu") return <GameMenu game="connect4" onPlay={(mode) => playFromMenu("connect4", mode)} onBack={() => selectGame("games")} />;
     if (game === "rps-menu") return <GameMenu game="rps" onPlay={(mode) => playFromMenu("rps", mode)} onBack={() => selectGame("games")} />;
     if (game === "dice-menu") return <GameMenu game="dice" onPlay={(mode) => playFromMenu("dice", mode)} onBack={() => selectGame("games")} />;
-    if (game === "meducktion-menu") return <GameMenu game="meducktion" onPlay={() => selectGame("meducktion")} onBack={() => selectGame("games")} />;
-    if (game === "deducktion-menu") return <GameMenu game="deducktion" onPlay={() => selectGame("deducktion")} onBack={() => selectGame("games")} />;
     if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && SCORE_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
     if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
@@ -3096,8 +3043,6 @@ export default function Home() {
     if (game === "connect4") return <ConnectFour mode="solo" onBack={() => selectGame("connect4-menu")} onScore={(score) => recordScore("connect4", score)} />;
     if (game === "rps") return <RockPaperScissors mode="solo" onBack={() => selectGame("rps-menu")} onScore={(score) => recordScore("rps", score)} />;
     if (game === "dice") return <DiceRace mode="solo" onBack={() => selectGame("dice-menu")} onScore={(score) => recordScore("dice", score)} />;
-    if (game === "meducktion") return <EmbeddedGame game="meducktion" onBack={() => selectGame("meducktion-menu")} />;
-    if (game === "deducktion") return <EmbeddedGame game="deducktion" onBack={() => selectGame("deducktion-menu")} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
     return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
   }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
