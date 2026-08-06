@@ -15,12 +15,13 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
-export function airHockeyVelocityFromPull(puck: AirHockeyPoint, pull: AirHockeyPoint) {
-  const dx = puck.x - pull.x;
-  const dy = puck.y - pull.y;
+export function airHockeyVelocityFromMallet(previous: AirHockeyPoint, current: AirHockeyPoint, elapsedMs = 16) {
+  const dx = current.x - previous.x;
+  const dy = current.y - previous.y;
   const distance = Math.hypot(dx, dy);
-  if (distance < 3) return null;
-  const speed = clamp(distance * 0.13, 1.7, 5.7);
+  if (distance < 0.2) return null;
+  const timing = clamp(20 / Math.max(8, elapsedMs), 0.55, 1.8);
+  const speed = clamp(distance * timing * 0.9, 1.55, 5.7);
   return { x: dx / distance * speed, y: dy / distance * speed };
 }
 

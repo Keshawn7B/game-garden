@@ -2067,7 +2067,7 @@ const GAME_MENUS: Record<LibraryGameId, {
     color: "airhockey",
     players: "1–2 Players",
     rules: [
-      "Pull back from the puck and release to strike it across the rink.",
+      "Tap Lock Rink, then drag your mallet freely around your half.",
       "Use the side rails for bank shots and defend against the return.",
       "Score through the opponent's goal; the first player to five wins.",
     ],

@@ -508,6 +508,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     if (shot.goal != null) scores[shot.goal] += 1;
     const winnerIndex = scores.findIndex((score) => score >= AIR_HOCKEY_WIN_SCORE);
     const won = winnerIndex >= 0;
+    const nextPlayer = shot.goal != null ? shot.goal === 0 ? 1 : 0 : shot.final.y < 75 ? 1 : 0;
     return {
       board: [shot.final.x, shot.final.y],
       open: encodeAirHockeyTrajectory(shot.trajectory),
@@ -515,7 +516,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
       moves: current.moves + 1,
       phase: won ? "complete" : "playing",
       winnerUid: won ? current.players[winnerIndex] : "",
-      turnUid: won ? user.uid : current.players[otherIndex],
+      turnUid: won ? current.players[winnerIndex] : current.players[nextPlayer],
     };
   });
 
@@ -664,7 +665,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
 
   if (state.gameId === "airhockey") {
     const puck = { x: Number(state.board[0] ?? AIR_HOCKEY_CENTER.x), y: Number(state.board[1] ?? AIR_HOCKEY_CENTER.y) };
-    gameView = <section className="online-game air-hockey-game online-air-hockey"><div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · LIVE ONLINE</p><h1>Air Hockey</h1><p>Each complete shot synchronizes instantly across both rinks.</p></div><span>氷</span></div><PlayerStrip state={state} user={user} /><div className="air-scoreboard"><div className={state.turnUid === state.players[0] && state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong></div><b>FIRST TO 5<small>{state.moves} SHOTS</small></b><div className={state.turnUid === state.players[1] && state.phase === "playing" ? "active" : ""}><strong>{state.scores[1]}</strong><small>{state.names[1]}</small></div></div><div className="online-turn-status">{status}{myTurn ? " — pull the puck to aim" : ""}</div><AirHockeyRink puck={puck} trajectory={decodeAirHockeyTrajectory(state.open)} activePlayer={state.players.indexOf(state.turnUid) as 0 | 1} disabled={!myTurn} labels={[state.names[0], state.names[1]]} onShoot={playAirHockey} />{state.phase === "complete" && finish}</section>;
+    gameView = <section className="online-game air-hockey-game online-air-hockey"><div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · LIVE ONLINE</p><h1>Air Hockey</h1><p>Lock the rink and strike with your mallet. Each shot synchronizes across both screens.</p></div><span>氷</span></div><PlayerStrip state={state} user={user} /><div className="air-scoreboard"><div className={state.turnUid === state.players[0] && state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong></div><b>FIRST TO 5<small>{state.moves} SHOTS</small></b><div className={state.turnUid === state.players[1] && state.phase === "playing" ? "active" : ""}><strong>{state.scores[1]}</strong><small>{state.names[1]}</small></div></div><div className="online-turn-status">{status}{myTurn ? " — lock rink and move your mallet" : ""}</div><AirHockeyRink puck={puck} trajectory={decodeAirHockeyTrajectory(state.open)} activePlayer={state.players.indexOf(state.turnUid) as 0 | 1} controlledPlayer={playerIndex} disabled={!myTurn} labels={[state.names[0], state.names[1]]} onShoot={playAirHockey} />{state.phase === "complete" && finish}</section>;
   }
 
   if (state.gameId === "rps") {

@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AIR_HOCKEY_CENTER, airHockeyVelocityFromPull, chooseAirHockeyCpuVelocity, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, simulateAirHockeyShot } from "../app/air-hockey.ts";
+import { AIR_HOCKEY_CENTER, airHockeyVelocityFromMallet, chooseAirHockeyCpuVelocity, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, simulateAirHockeyShot } from "../app/air-hockey.ts";
 
-test("pulling behind the puck launches it in the opposite direction", () => {
-  const velocity = airHockeyVelocityFromPull(AIR_HOCKEY_CENTER, { x: 50, y: 100 });
+test("moving the mallet creates puck velocity in the same direction", () => {
+  const velocity = airHockeyVelocityFromMallet({ x: 50, y: 100 }, { x: 50, y: 90 });
   assert.ok(velocity);
   assert.equal(velocity.x, 0);
   assert.ok(velocity.y < 0);
