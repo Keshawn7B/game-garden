@@ -143,6 +143,7 @@ test("routes every game through a start menu", async () => {
   assert.match(barricadeDragSource, /onDragMove\?\.\(event\.clientX, event\.clientY, kind\)/);
   assert.match(styles, /wall-target\.snap-preview\.legal/);
   assert.match(styles, /wall-target\.snap-preview\.blocked/);
+  assert.match(styles, /wall-target\.legal:not\(\.snap-preview\)\{background:transparent;box-shadow:none\}/);
   assert.match(onlineSource, /dropOnlineBarricadePiece/);
   assert.match(barricadeDragSource, /onPointerDown/);
   assert.match(barricadeDragSource, /onPointerMove/);
