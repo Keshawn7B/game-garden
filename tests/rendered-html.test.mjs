@@ -146,6 +146,7 @@ test("routes every game through a start menu", async () => {
   assert.match(battleshipSource, /onPointerDown=\{\(event\) => beginDrag/);
   assert.match(battleshipSource, /onPointerMove=\{\(event\) => moveDrag/);
   assert.match(battleshipSource, /onPointerUp=\{\(event\) => finishDrag/);
+  assert.match(battleshipSource, /onShipPointerDown=\{beginBoardDrag\}/);
   assert.match(battleshipSource, /ship-drop-preview/);
   assert.match(onlineSource, /readyBattleshipFleet/);
   assert.match(onlineSource, /fireBattleship/);
