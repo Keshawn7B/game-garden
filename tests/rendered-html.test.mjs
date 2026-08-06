@@ -127,8 +127,13 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function Checkers/);
   assert.match(source, /<GameMenu game="checkers"/);
   assert.match(source, /recordScore\("checkers", score\)/);
+  assert.match(source, /const \[lastMove, setLastMove\]/);
   assert.match(onlineSource, /playCheckers/);
+  assert.match(onlineSource, /lastCheckersMove/);
   assert.match(styles, /\.checkers-board/);
+  assert.match(styles, /\.checkers-piece\.move-arrival/);
+  assert.match(styles, /@keyframes checkersMove/);
+  assert.match(styles, /@keyframes checkersCapture/);
   assert.match(styles, /game-checkers\.png/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);

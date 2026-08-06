@@ -1255,6 +1255,7 @@ function Checkers({ onBack, onScore }: { onBack: () => void; onScore: (score: nu
   const [winner, setWinner] = useState<CheckersPlayer | null>(null);
   const [moves, setMoves] = useState(0);
   const [message, setMessage] = useState("Select a red piece to begin.");
+  const [lastMove, setLastMove] = useState<CheckersMove | null>(null);
   const cpuThinking = turn === 1 && winner == null;
 
   const reset = useCallback(() => {
@@ -1265,6 +1266,7 @@ function Checkers({ onBack, onScore }: { onBack: () => void; onScore: (score: nu
     setWinner(null);
     setMoves(0);
     setMessage("Select a red piece to begin.");
+    setLastMove(null);
   }, []);
 
   const legalMoves = useMemo(() => winner == null ? checkersLegalMoves(board, turn, forcedFrom) : [], [board, forcedFrom, turn, winner]);
@@ -1291,6 +1293,7 @@ function Checkers({ onBack, onScore }: { onBack: () => void; onScore: (score: nu
   const playPlayerMove = (move: CheckersMove) => {
     if (turn !== 0 || winner != null || cpuThinking) return;
     const applied = applyCheckersMove(board, move);
+    setLastMove(move);
     const followUps = move.captured != null && !applied.promoted ? checkersLegalMoves(applied.board, 0, move.to) : [];
     setBoard(applied.board);
     if (followUps.length) {
@@ -1323,6 +1326,7 @@ function Checkers({ onBack, onScore }: { onBack: () => void; onScore: (score: nu
       }
       const nextMoves = moves + 1;
       const nextWinner = checkersWinner(choice.board, 0);
+      setLastMove(choice.moves.at(-1) ?? null);
       setBoard(choice.board);
       setMoves(nextMoves);
       setWinner(nextWinner);
@@ -1351,9 +1355,12 @@ function Checkers({ onBack, onScore }: { onBack: () => void; onScore: (score: nu
             const isKing = piece === "R" || piece === "B";
             const isDestination = destinations.has(index);
             const canSelect = turn === 0 && winner == null && selectable.has(index);
+            const isArrival = lastMove?.to === index;
+            const moveStyle = isArrival ? { "--move-x": `${(lastMove.from % 8 - column) * 137}%`, "--move-y": `${(Math.floor(lastMove.from / 8) - row) * 137}%` } as React.CSSProperties : undefined;
             return <button type="button" role="gridcell" key={index} className={`${playable ? "dark-square" : "light-square"} ${selected === index ? "selected" : ""} ${isDestination ? "legal-target" : ""} ${canSelect ? "selectable" : ""}`} disabled={turn !== 0 || winner != null || cpuThinking || (!canSelect && !isDestination)} onClick={() => handleSquare(index)} aria-label={`Row ${row + 1}, column ${column + 1}${piece ? `, ${owner === 0 ? "red" : "black"}${isKing ? " king" : " piece"}` : isDestination ? ", legal move" : ", empty"}`}>
-              {piece && <span className={`checkers-piece ${owner === 0 ? "red" : "black"} ${isKing ? "king" : ""}`}>{isKing && <b>王</b>}</span>}
+              {piece && <span style={moveStyle} className={`checkers-piece ${owner === 0 ? "red" : "black"} ${isKing ? "king" : ""} ${isArrival ? "move-arrival" : ""}`}>{isKing && <b>王</b>}</span>}
               {isDestination && <i className={destinations.get(index)?.captured != null ? "capture-dot" : "move-dot"} />}
+              {lastMove?.captured === index && <i className="capture-burst" aria-hidden="true" />}
             </button>;
           })}
         </div>
