@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { HeaderChatButton } from "./chat-chrome";
+import { GameResult } from "./game-result";
 import { DOTS_BOX_COUNT, DOTS_EDGE_COUNT, DOTS_GRID_SIZE, DOTS_HORIZONTAL_EDGE_COUNT, applyDotsBoxesEdge, chooseDotsBoxesCpuEdge, dotsBoxesScores, type DotsBoxesDifficulty, type DotsBoxesPlayer } from "./dots-boxes";
 
 export function DotsBoxesBoard({ edges, boxes, onEdge, disabled = false, lastEdge = null, labels = ["一", "二"] }: {
@@ -104,7 +105,7 @@ export function DotsAndBoxes({ onBack, onScore }: { onBack: () => void; onScore:
       <div className="dots-score-strip"><div className={turn === 0 && !winner ? "active" : ""}><small>YOU</small><strong>{scores[0]}</strong><span>RED BOXES</span></div><b>対<small>{moves}/40 LINES</small></b><div className={turn === 1 && !winner ? "active" : ""}><small>CPU</small><strong>{scores[1]}</strong><span>INK BOXES</span></div></div>
       <div className="dots-turn-status" role="status">{message}</div>
       <DotsBoxesBoard edges={edges} boxes={boxes} lastEdge={lastEdge} onEdge={(edge) => playEdge(edge, 0)} disabled={turn !== 0 || Boolean(winner)} labels={["YOU", "CPU"]} />
-      {winner && <div className="dots-result"><strong>{winner === "draw" ? "DRAW" : winner === "player" ? "YOU WIN" : "CPU WINS"}</strong><span>{scores[0]} — {scores[1]}</span><button className="primary-button" onClick={reset}>Play again</button></div>}
+      {winner && <GameResult outcome={winner === "draw" ? "Draw Game" : winner === "player" ? "You Win!" : "CPU Wins!"} detail={`Final box score ${scores[0]}–${scores[1]}.`} onPlayAgain={reset} draw={winner === "draw"} />}
     </section>
   </main>;
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { HeaderChatButton } from "./chat-chrome";
+import { GameResult } from "./game-result";
 import {
   BATTLESHIP_SHIPS,
   battleshipCells,
@@ -283,7 +284,7 @@ export function Battleship({ onBack, onScore }: { onBack: () => void; onScore: (
           <section><div><small>FIRING GRID</small><h2>Enemy waters</h2></div><BattleshipGrid fleet={cpuFleet} shots={playerShots} revealShips={phase === "complete"} onFire={fire} disabled={turn !== 0 || phase !== "playing"} label="Enemy waters" lastShot={lastShots[0]} /></section>
           <section><div><small>YOUR FLEET</small><h2>Home waters</h2></div><BattleshipGrid fleet={playerFleet} shots={cpuShots} revealShips label="Your fleet" lastShot={lastShots[1]} /></section>
         </div>
-        {phase === "complete" && <div className="battleship-result"><span>{winner === 0 ? "勝" : "敗"}</span><div><small>BATTLE COMPLETE</small><h2>{winner === 0 ? "You rule the sea." : "The CPU wins."}</h2><p>{playerShots.length + cpuShots.length} shots exchanged.</p></div><button className="primary-button" onClick={reset}>Play again</button></div>}
+        {phase === "complete" && <GameResult outcome={winner === 0 ? "You Win!" : "CPU Wins!"} detail={`${playerShots.length + cpuShots.length} shots exchanged before the fleet sank.`} onPlayAgain={reset} />}
       </>}
     </section>
   </main>;

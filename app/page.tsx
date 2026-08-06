@@ -10,6 +10,7 @@ import { BarricadeDragPiece, type BarricadeDragKind } from "./barricade-drag";
 import { CHECKERS_START, applyCheckersMove, checkersLegalMoves, checkersPieceCount, checkersPieceOwner, checkersWinner, chooseCheckersCpuTurn, type CheckersMove, type CheckersPlayer } from "./checkers";
 import { Battleship } from "./battleship-game";
 import { DotsAndBoxes } from "./dots-boxes-game";
+import { GameResult } from "./game-result";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes";
 type LibraryGameId = PlayableGameId;
@@ -408,10 +409,7 @@ function Codebreaker({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
         </div>
 
         {won || lost ? (
-          <div className="result-panel" role="status">
-            <div><strong>{won ? mode === "multi" ? `Player ${(winner ?? 0) + 1} wins!` : "Code cracked!" : mode === "multi" ? "Draw game." : "So close."}</strong><span>{won ? `Solved in ${guesses.length} ${guesses.length === 1 ? "guess" : "guesses"}.` : "The secret slipped away this round."}</span></div>
-            <button className="primary-button" onClick={reset}>Play again</button>
-          </div>
+          <GameResult outcome={won ? mode === "multi" ? `Player ${(winner ?? 0) + 1} Wins!` : "You Win!" : mode === "multi" ? "Draw Game" : "Code Not Cracked"} detail={won ? `Code cracked in ${guesses.length} ${guesses.length === 1 ? "guess" : "guesses"}.` : "The secret slipped away this round."} onPlayAgain={reset} draw={!won && mode === "multi"} neutral={!won && mode === "solo"} />
         ) : (
           <div className="picker-panel">
             <p>Choose a color <span>{current.length}/4</span></p>
@@ -529,12 +527,11 @@ function OrderMatch({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
               <div className="check-history" aria-label={`${checks.length} of 8 checks used`}>
                 {Array.from({ length: 8 }, (_, index) => <i key={index} className={index < checks.length ? "used" : ""} />)}
               </div>
-              <button className="primary-button" onClick={won || lost ? reset : checkOrder}>
-                {won || lost ? "Play again" : "Check order"}
-              </button>
+              {!won && !lost && <button className="primary-button" onClick={checkOrder}>Check order</button>}
             </div>
           </div>
         </div>
+        {(won || lost) && <GameResult outcome={won ? mode === "multi" ? `Player ${currentPlayer + 1} Wins!` : "You Win!" : "Order Not Matched"} detail={won ? `Matched the hidden order in ${checks.length} ${checks.length === 1 ? "check" : "checks"}.` : "The hidden order was revealed after eight checks."} onPlayAgain={reset} neutral={lost} />}
       </section>
     </main>
   );
@@ -603,7 +600,7 @@ function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
   const scoreLabel = (score: number | null) => score == null ? "—" : score > guessLimit ? "MISSED" : `${score} ${score === 1 ? "GUESS" : "GUESSES"}`;
   const playerOneScore = roundScores[0] ?? guessLimit + 1;
   const playerTwoScore = roundScores[1] ?? guessLimit + 1;
-  const matchTitle = playerOneScore === playerTwoScore ? "Draw match!" : `Player ${playerOneScore < playerTwoScore ? 1 : 2} wins!`;
+  const matchTitle = playerOneScore === playerTwoScore ? "Draw Match" : `Player ${playerOneScore < playerTwoScore ? 1 : 2} Wins!`;
   const message = latest == null ? "Make your first guess" : won ? "You found it!" : lost ? `It was ${target}` : latest < target ? "Go higher ↑" : "Go lower ↓";
 
   const numberControl = (label: string, disabled = false) => (
@@ -657,12 +654,8 @@ function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
           </div>
         ) : mode === "multi" && phase === "match-result" ? (
           <div className="number-role-card number-match-card">
-            <span className="number-role-kanji">勝</span>
-            <p className="eyebrow">MATCH COMPLETE · 結果</p>
-            <h1>{matchTitle}</h1>
-            <p>Fewest guesses wins. A missed round ranks behind any successful guess count.</p>
             <div className="number-match-scores"><div className={playerOneScore < playerTwoScore ? "winner" : ""}><small>PLAYER 1</small><strong>{scoreLabel(roundScores[0])}</strong><span>Secret was {roundSecrets[1]}</span></div><b>VS</b><div className={playerTwoScore < playerOneScore ? "winner" : ""}><small>PLAYER 2</small><strong>{scoreLabel(roundScores[1])}</strong><span>Secret was {roundSecrets[0]}</span></div></div>
-            <button className="primary-button wide-button" onClick={reset}>Play Again</button>
+            <GameResult outcome={matchTitle} detail="Fewest guesses wins. Both secret rounds are shown above." onPlayAgain={reset} draw={playerOneScore === playerTwoScore} />
           </div>
         ) : (
           <>
@@ -673,7 +666,7 @@ function NumberHunt({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
             <div className={`number-orb ${won ? "number-win" : ""}`} aria-live="polite"><span>{won || lost ? target : "?"}</span></div>
             <h2>{message}</h2>
             {numberControl("Your number guess", won || lost)}
-            <button className="primary-button wide-button" onClick={mode === "solo" && (won || lost) ? reset : submit}>{mode === "solo" && (won || lost) ? "Play again" : "Lock in guess"}</button>
+            {mode === "solo" && (won || lost) ? <GameResult outcome={won ? "You Win!" : "Number Not Found"} detail={won ? `Found ${target} in ${history.length} ${history.length === 1 ? "guess" : "guesses"}.` : `The secret number was ${target}.`} onPlayAgain={reset} neutral={!won} /> : <button className="primary-button wide-button" onClick={submit}>Lock in guess</button>}
             <div className="guess-trail">{Array.from({ length: guessLimit }, (_, index) => <span key={index} className={history[index] === target ? "trail-win" : ""}>{history[index] ?? "·"}</span>)}</div>
           </>
         )}
@@ -830,7 +823,7 @@ function OnlineNumberHunt({ room, user, onLeave }: { room: GameRoom; user: User;
             ) : match.phase === "round-result" ? (
               <div className="number-role-card round-result-card"><span className="number-role-kanji">解</span><p className="eyebrow">ROUND 1 COMPLETE · LIVE</p><h1>{match.scores[1] != null && match.scores[1]! <= 7 ? `${room.guestName} found it!` : `${room.guestName} missed it.`}</h1><div className="round-secret-reveal"><small>{room.hostName}&apos;S NUMBER</small><strong>{match.revealedSecrets[0]}</strong><span>{scoreLabel(match.scores[1])}</span></div>{user.uid === room.guestUid ? <button className="primary-button wide-button" onClick={() => void startRoundTwo()}>Choose My Secret <span>→</span></button> : <p className="online-wait-copy">Waiting for {room.guestName} to start round two…</p>}</div>
             ) : (
-              <div className="number-role-card number-match-card"><span className="number-role-kanji">勝</span><p className="eyebrow">ONLINE MATCH COMPLETE · 結果</p><h1>{playerOneScore === playerTwoScore ? "Draw match!" : `${playerOneScore < playerTwoScore ? room.hostName : room.guestName} wins!`}</h1><p>Fewest guesses wins. Both secret rounds were synchronized between your devices.</p><div className="number-match-scores"><div className={playerOneScore < playerTwoScore ? "winner" : ""}><small>{room.hostName}</small><strong>{scoreLabel(match.scores[0])}</strong><span>Secret was {match.revealedSecrets[1]}</span></div><b>VS</b><div className={playerTwoScore < playerOneScore ? "winner" : ""}><small>{room.guestName}</small><strong>{scoreLabel(match.scores[1])}</strong><span>Secret was {match.revealedSecrets[0]}</span></div></div>{user.uid === room.hostUid ? <button className="primary-button wide-button" onClick={() => void restartMatch()}>Play Again</button> : <p className="online-wait-copy">Waiting for {room.hostName} to restart the match…</p>}</div>
+              <div className="number-role-card number-match-card"><div className="number-match-scores"><div className={playerOneScore < playerTwoScore ? "winner" : ""}><small>{room.hostName}</small><strong>{scoreLabel(match.scores[0])}</strong><span>Secret was {match.revealedSecrets[1]}</span></div><b>VS</b><div className={playerTwoScore < playerOneScore ? "winner" : ""}><small>{room.guestName}</small><strong>{scoreLabel(match.scores[1])}</strong><span>Secret was {match.revealedSecrets[0]}</span></div></div><GameResult outcome={playerOneScore === playerTwoScore ? "Draw Match" : `${playerOneScore < playerTwoScore ? room.hostName : room.guestName} Wins!`} detail="Fewest guesses wins. Both secret rounds synchronized live." onPlayAgain={user.uid === room.hostUid ? () => void restartMatch() : undefined} waitingText={`Waiting for ${room.hostName} to play again…`} draw={playerOneScore === playerTwoScore} /></div>
             )}
           </>
         )}
@@ -908,7 +901,7 @@ function MemoryGame({ mode, onBack, onScore }: { mode: GameMode; onBack: () => v
             );
           })}
         </div>
-        {complete && <div className="result-panel" role="status"><div><strong>{mode === "multi" ? pairScores[0] === pairScores[1] ? "Draw game!" : `Player ${pairScores[0] > pairScores[1] ? 1 : 2} wins!` : "Perfect pairs!"}</strong><span>{mode === "multi" ? `Final score ${pairScores[0]}–${pairScores[1]}.` : `You cleared the board in ${moves} moves.`}</span></div><button className="primary-button" onClick={reset}>Play again</button></div>}
+        {complete && <GameResult outcome={mode === "multi" ? pairScores[0] === pairScores[1] ? "Draw Game" : `Player ${pairScores[0] > pairScores[1] ? 1 : 2} Wins!` : "You Win!"} detail={mode === "multi" ? `Final score ${pairScores[0]}–${pairScores[1]}.` : `Every pair found in ${moves} moves.`} onPlayAgain={reset} draw={mode === "multi" && pairScores[0] === pairScores[1]} />}
       </section>
     </main>
   );
@@ -1014,8 +1007,7 @@ function TicTacToe({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
         <div className="tic-board" aria-label="Tic tac toe board">
           {board.map((mark, index) => <button key={index} className={mark ? `tic-${mark.toLowerCase()}` : ""} onClick={() => play(index)} aria-label={`Square ${index + 1}${mark ? `: ${mark}` : ""}`}>{mark}</button>)}
         </div>
-        <div className="simple-status" role="status"><strong>{winner ? mode === "multi" ? `Player ${winner === "X" ? 1 : 2} wins!` : winner === "X" ? "You win!" : "CPU wins." : draw ? "Draw game." : mode === "multi" ? `Player ${turn === "X" ? 1 : 2}'s turn` : "You are X"}</strong><span>{winner || draw ? "Ready for another round?" : "Tap an open square."}</span></div>
-        {(winner || draw) && <button className="primary-button simple-reset" onClick={reset}>Play again</button>}
+        {winner || draw ? <GameResult outcome={winner ? mode === "multi" ? `Player ${winner === "X" ? 1 : 2} Wins!` : winner === "X" ? "You Win!" : "CPU Wins!" : "Draw Game"} detail={winner ? `${winner} completed three in a row.` : "Every square is filled with no winner."} onPlayAgain={reset} draw={draw} /> : <div className="simple-status" role="status"><strong>{mode === "multi" ? `Player ${turn === "X" ? 1 : 2}'s turn` : "You are X"}</strong><span>Tap an open square.</span></div>}
       </section>
     </main>
   );
@@ -1242,7 +1234,7 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
           </div>
           <div className="connect-feet" aria-hidden="true"><i /><i /></div>
         </div>
-        <div className={`connect-status ${winner || draw ? "is-finished" : ""}`} role="status"><span>{winner ? "勝負あり" : draw ? "引き分け" : cpuThinking ? "思考中" : "あなたの番"}</span><div><strong>{resultTitle}</strong><small>{winner || draw ? "The match score stays for your rematch." : board.filter((piece) => !piece).length + " open spaces"}</small></div>{(winner || draw) && <button className="primary-button" onClick={resetRound}>Rematch <span>→</span></button>}</div>
+        {winner || draw ? <GameResult outcome={winner ? mode === "solo" ? winner.player === 1 ? "You Win!" : "CPU Wins!" : `Player ${winner.player} Wins!` : "Draw Game"} detail={winner ? "Four connected chips decide the round." : "The board filled without a winning line."} onPlayAgain={resetRound} draw={draw} /> : <div className="connect-status" role="status"><span>{cpuThinking ? "思考中" : "あなたの番"}</span><div><strong>{resultTitle}</strong><small>{board.filter((piece) => !piece).length} open spaces</small></div></div>}
       </section>
     </main>
   );
@@ -1366,7 +1358,7 @@ function Checkers({ onBack, onScore }: { onBack: () => void; onScore: (score: nu
             </button>;
           })}
         </div>
-        <div className={`checkers-status ${winner != null ? "finished" : ""}`} role="status"><span>{winner != null ? "勝" : captureRequired && turn === 0 ? "取" : cpuThinking ? "考" : "手"}</span><div><strong>{winner === 0 ? "You win!" : winner === 1 ? "CPU wins." : message}</strong><small>{winner != null ? `${moves} turns played` : captureRequired && turn === 0 ? "A capture is available and must be taken." : "Red moves upward. Kings move both directions."}</small></div>{winner != null && <button className="primary-button" onClick={reset}>Rematch →</button>}</div>
+        {winner != null ? <GameResult outcome={winner === 0 ? "You Win!" : "CPU Wins!"} detail={`${moves} turns played.`} onPlayAgain={reset} /> : <div className="checkers-status" role="status"><span>{captureRequired && turn === 0 ? "取" : cpuThinking ? "考" : "手"}</span><div><strong>{message}</strong><small>{captureRequired && turn === 0 ? "A capture is available and must be taken." : "Red moves upward. Kings move both directions."}</small></div></div>}
       </section>
     </main>
   );
@@ -1477,7 +1469,7 @@ function BarricadeClassic({ mode, onBack, onScore }: { mode: GameMode; onBack: (
             return <button key={space} className={`${space === BARRICADE_FINISH ? "finish" : ""} ${barricades.includes(space) ? "has-barricade" : ""} ${canPlace ? "can-place" : ""}`} onClick={() => canPlace && relocate(space, 0)} disabled={!canPlace}><small>{space === 0 ? "START" : space === BARRICADE_FINISH ? "GOAL" : space}</small>{barricades.includes(space) && <span className="barricade-block">止</span>}<span className="pawn-stack">{positions[0] === space && <i className="pawn-one" />}{positions[1] === space && <i className="pawn-two" />}</span></button>;
           })}
         </div>
-        <div className="barricade-controls" role="status"><div><small>{winner != null ? "MATCH COMPLETE" : relocating != null ? "MOVE THE BARRICADE" : turn === 0 ? "YOUR MOVE" : "OPPONENT MOVE"}</small><strong>{message}</strong></div>{winner != null ? <button className="primary-button" onClick={reset}>Rematch</button> : relocating == null && turn === 0 ? <button className="primary-button barricade-roll" onClick={() => movePawn(0, Math.floor(Math.random() * 6) + 1)}>Roll die</button> : <span className="barricade-wait">{turn === 1 ? "CPU THINKING…" : "CHOOSE A SPACE"}</span>}</div>
+        {winner != null ? <GameResult outcome={mode === "solo" ? winner === 0 ? "You Win!" : "CPU Wins!" : `Player ${winner + 1} Wins!`} detail="The winning piece reached the end of the track." onPlayAgain={reset} /> : <div className="barricade-controls" role="status"><div><small>{relocating != null ? "MOVE THE BARRICADE" : turn === 0 ? "YOUR MOVE" : "OPPONENT MOVE"}</small><strong>{message}</strong></div>{relocating == null && turn === 0 ? <button className="primary-button barricade-roll" onClick={() => movePawn(0, Math.floor(Math.random() * 6) + 1)}>Roll die</button> : <span className="barricade-wait">{turn === 1 ? "CPU THINKING…" : "CHOOSE A SPACE"}</span>}</div>}
       </section>
     </main>
   );
@@ -1750,7 +1742,7 @@ function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
           <span><strong>{wallsLeft[0]}</strong><small>WALLS</small></span>
           <BarricadeDragPiece kind="v" label="Drag a vertical wall" disabled={turn !== 0 || winner != null || wallsLeft[0] === 0} onDragStart={setDraggingPiece} onDragMove={previewBarricadeWall} onDragEnd={() => { setDraggingPiece(null); setWallSnapPreview(null); }} onDrop={dropBarricadePiece} />
         </div>
-        <div className="barricade-controls" role="status"><div><small>{winner != null ? "MATCH COMPLETE" : turn === 0 ? "TAP A SPACE OR DRAG A WALL" : "OPPONENT MOVE"}</small><strong>{message}</strong></div>{winner != null && <button className="primary-button" onClick={reset}>Rematch</button>}</div>
+        {winner != null ? <GameResult outcome={mode === "solo" ? winner === 0 ? "You Win!" : "CPU Wins!" : `Player ${winner + 1} Wins!`} detail="The winning pawn reached the opposite edge." onPlayAgain={reset} /> : <div className="barricade-controls" role="status"><div><small>{turn === 0 ? "TAP A SPACE OR DRAG A WALL" : "OPPONENT MOVE"}</small><strong>{message}</strong></div></div>}
       </section>
     </main>
   );
@@ -1837,8 +1829,7 @@ function RockPaperScissors({ mode, onBack, onScore }: { mode: GameMode; onBack: 
         <div className="rps-prompt"><span>{pending ? "PLAYER 2 · MAKE YOUR MOVE" : gameOver ? "MATCH COMPLETE" : "CHOOSE YOUR HAND"}</span><i>じゃんけん</i></div>
         <div className="rps-choices">{RPS_CHOICES.map((choice) => <button className={`rps-choice-card choice-${choice.id}`} key={choice.id} onClick={() => choose(choice.id)} disabled={gameOver} aria-label={`Choose ${choice.label}`}><i aria-hidden="true" /><b>{choice.symbol}</b><span><em>{choice.japanese}</em><strong>{choice.label}</strong></span></button>)}</div>
         {history.length > 0 && <div className="rps-round-history" aria-label="Recent rounds"><span>RECENT</span>{history.map((round, index) => { const first = RPS_CHOICES.find((choice) => choice.id === round.player)!; const second = RPS_CHOICES.find((choice) => choice.id === round.opponent)!; return <i className={round.result < 0 ? "tie" : round.result === 0 ? "win" : "loss"} key={`${rounds}-${index}`}>{first.symbol}<b>×</b>{second.symbol}</i>; })}</div>}
-        <div className="simple-status" role="status"><strong>{gameOver ? scores[0] > scores[1] ? mode === "multi" ? "Player 1 wins!" : "You win!" : mode === "multi" ? "Player 2 wins!" : "CPU wins." : message}</strong><span>{gameOver ? `Final score ${scores[0]}–${scores[1]}.` : `Round ${rounds + 1}`}</span></div>
-        {gameOver && <button className="primary-button simple-reset" onClick={reset}>Play again</button>}
+        {gameOver ? <GameResult outcome={scores[0] > scores[1] ? mode === "multi" ? "Player 1 Wins!" : "You Win!" : mode === "multi" ? "Player 2 Wins!" : "CPU Wins!"} detail={`Final score ${scores[0]}–${scores[1]}.`} onPlayAgain={reset} /> : <div className="simple-status" role="status"><strong>{message}</strong><span>Round {rounds + 1}</span></div>}
       </section>
     </main>
   );
@@ -1896,8 +1887,7 @@ function DiceRace({ mode, onBack, onScore }: { mode: GameMode; onBack: () => voi
         <div className="dice-racers">
           {positions.map((position, index) => <div key={index}><span>{mode === "solo" && index === 1 ? "CPU" : `PLAYER ${index + 1}`}</span><b>{faces[index] ? DICE_FACES[faces[index] - 1] : "□"}</b><strong>{Math.min(position, 20)}<small>/20</small></strong><i><em style={{ width: `${Math.min(position / 20 * 100, 100)}%` }} /></i></div>)}
         </div>
-        <button className="primary-button dice-roll" onClick={winner == null ? roll : reset}>{winner == null ? `Roll ${mode === "multi" ? `for Player ${currentPlayer + 1}` : "the dice"}` : "Play again"}</button>
-        <div className="simple-status" role="status"><strong>{winner == null ? mode === "multi" ? `Player ${currentPlayer + 1}'s roll` : "Your roll also rolls for the CPU." : mode === "solo" ? winner === 0 ? "You win!" : "CPU wins." : `Player ${winner + 1} wins!`}</strong><span>{rolls} {rolls === 1 ? "roll" : "rolls"} played</span></div>
+        {winner == null ? <><button className="primary-button dice-roll" onClick={roll}>{`Roll ${mode === "multi" ? `for Player ${currentPlayer + 1}` : "the dice"}`}</button><div className="simple-status" role="status"><strong>{mode === "multi" ? `Player ${currentPlayer + 1}'s roll` : "Your roll also rolls for the CPU."}</strong><span>{rolls} {rolls === 1 ? "roll" : "rolls"} played</span></div></> : <GameResult outcome={mode === "solo" ? winner === 0 ? "You Win!" : "CPU Wins!" : `Player ${winner + 1} Wins!`} detail={`${rolls} ${rolls === 1 ? "roll" : "rolls"} played.`} onPlayAgain={reset} />}
       </section>
     </main>
   );

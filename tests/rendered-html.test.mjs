@@ -40,6 +40,7 @@ test("routes every game through a start menu", async () => {
   const onlineSource = await readFile(new URL("../app/online-games.tsx", import.meta.url), "utf8");
   const battleshipSource = await readFile(new URL("../app/battleship-game.tsx", import.meta.url), "utf8");
   const dotsBoxesSource = await readFile(new URL("../app/dots-boxes-game.tsx", import.meta.url), "utf8");
+  const gameResultSource = await readFile(new URL("../app/game-result.tsx", import.meta.url), "utf8");
   const barricadeDragSource = await readFile(new URL("../app/barricade-drag.tsx", import.meta.url), "utf8");
   const chatSource = await readFile(new URL("../app/chat-chrome.tsx", import.meta.url), "utf8");
   const onlineStyles = await readFile(new URL("../app/online-games.css", import.meta.url), "utf8");
@@ -164,6 +165,15 @@ test("routes every game through a start menu", async () => {
   assert.match(onlineSource, /playDotsBoxes/);
   assert.match(styles, /\.dots-boxes-board/);
   assert.match(styles, /game-dots-boxes\.png/);
+  assert.match(gameResultSource, /MATCH WINNER/);
+  assert.match(gameResultSource, /PLAY AGAIN/);
+  assert.match(gameResultSource, /aria-live="assertive"/);
+  assert.match(styles, /\.game-result-banner/);
+  assert.match(styles, /\.game-result-replay/);
+  assert.match(source, /<GameResult outcome=/);
+  assert.match(onlineSource, /const finish = <GameResult/);
+  assert.match(battleshipSource, /<GameResult outcome=/);
+  assert.match(dotsBoxesSource, /<GameResult outcome=/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);
   assert.match(source, /blocksWin \? 120/);

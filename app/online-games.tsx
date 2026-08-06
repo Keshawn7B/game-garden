@@ -11,6 +11,7 @@ import { battleshipFleetDefeated, battleshipShipAt, decodeBattleshipFleet, encod
 import { BattleshipGrid, BattleshipPlacement } from "./battleship-game";
 import { DOTS_BOX_COUNT, DOTS_EDGE_COUNT, applyDotsBoxesEdge } from "./dots-boxes";
 import { DotsBoxesBoard } from "./dots-boxes-game";
+import { GameResult } from "./game-result";
 
 export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes";
 
@@ -413,8 +414,8 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const playerIndex = state.players.indexOf(user.uid) as 0 | 1;
   const otherIndex = playerIndex === 0 ? 1 : 0;
   const myTurn = state.turnUid === user.uid && state.phase === "playing";
-  const winnerName = state.winnerUid === "draw" ? "Draw match" : state.winnerUid ? `${state.names[state.players.indexOf(state.winnerUid)]} wins` : "";
-  const finish = <div className="online-result" role="status"><span>勝</span><div><small>ONLINE MATCH COMPLETE</small><h2>{winnerName}!</h2><p>Both players saw every move live on their own device.</p></div>{user.uid === room.hostUid ? <button className="primary-button" onClick={() => void reset()}>Rematch</button> : <em>Waiting for host rematch…</em>}</div>;
+  const winnerName = state.winnerUid === "draw" ? "Draw Match" : state.winnerUid ? `${state.names[state.players.indexOf(state.winnerUid)]} Wins!` : "";
+  const finish = <GameResult outcome={winnerName} detail="The final result synchronized live on both devices." onPlayAgain={user.uid === room.hostUid ? () => void reset() : undefined} waitingText={`Waiting for ${room.hostName} to play again…`} draw={state.winnerUid === "draw"} />;
   const status = state.phase === "complete" ? winnerName : myTurn ? "Your turn" : `Waiting for ${state.names[otherIndex]}`;
 
   const submitCode = () => {
