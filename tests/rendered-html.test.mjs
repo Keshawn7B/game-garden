@@ -128,9 +128,13 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /legalBarricadeWall/);
   assert.match(onlineSource, /onlineBarricadeMoves/);
   assert.match(onlineSource, /placeBarricade/);
-  assert.match(source, /<BarricadeDragPiece kind="pawn"/);
+  assert.doesNotMatch(source, /<BarricadeDragPiece kind="pawn"/);
+  assert.doesNotMatch(onlineSource, /<BarricadeDragPiece kind="pawn"/);
   assert.match(source, /<BarricadeDragPiece kind="h"/);
   assert.match(source, /<BarricadeDragPiece kind="v"/);
+  assert.match(source, /onClick=\{\(\) => movePawn\(0, index\)\}/);
+  assert.match(onlineSource, /onClick=\{\(\) => moveBarricadePawn\(index\)\}/);
+  assert.match(source, /TAP A SPACE OR DRAG A WALL/);
   assert.match(onlineSource, /dropOnlineBarricadePiece/);
   assert.match(barricadeDragSource, /onPointerDown/);
   assert.match(barricadeDragSource, /onPointerMove/);

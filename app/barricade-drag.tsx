@@ -2,7 +2,7 @@
 
 import { useState, type PointerEvent } from "react";
 
-export type BarricadeDragKind = "pawn" | "h" | "v";
+export type BarricadeDragKind = "h" | "v";
 
 export function BarricadeDragPiece({
   kind,
