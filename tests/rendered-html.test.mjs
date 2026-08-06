@@ -181,9 +181,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /<GameMenu game="airhockey"/);
   assert.match(source, /recordScore\("airhockey", score\)/);
   assert.match(airHockeySource, /export function AirHockeyRink/);
-  assert.match(airHockeySource, /airHockeyVelocityFromMallet/);
+  assert.match(airHockeySource, /stepAirHockeyLive/);
+  assert.match(airHockeySource, /moveAirHockeyCpu/);
+  assert.match(airHockeySource, /requestAnimationFrame/);
   assert.match(airHockeySource, /LOCK RINK/);
-  assert.match(airHockeySource, /MOVE YOUR MALLET/);
+  assert.match(airHockeySource, /PUCK LIVE/);
   assert.doesNotMatch(airHockeySource, /PULL PUCK|beginPull|movePull|releasePull/);
   assert.match(onlineSource, /OnlineAirHockeyRink/);
   assert.match(onlineSource, /SIMULTANEOUS ONLINE/);

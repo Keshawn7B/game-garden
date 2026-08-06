@@ -5,7 +5,7 @@ export type AirHockeyBody = AirHockeyPoint & { vx: number; vy: number };
 
 export const AIR_HOCKEY_WIN_SCORE = 5;
 export const AIR_HOCKEY_CENTER: AirHockeyPoint = { x: 50, y: 75 };
-export const AIR_HOCKEY_LIVE_START: AirHockeyBody = { ...AIR_HOCKEY_CENTER, vx: 0, vy: 0 };
+export const AIR_HOCKEY_LIVE_START: AirHockeyBody = { ...AIR_HOCKEY_CENTER, vx: 16, vy: 28 };
 
 export type AirHockeyShot = {
   trajectory: AirHockeyPoint[];
@@ -59,10 +59,29 @@ export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint,
     const drag = Math.pow(0.992, elapsed * 60);
     vx *= drag;
     vy *= drag;
-    if (Math.hypot(vx, vy) < 0.7) { vx = 0; vy = 0; }
+    const speed = Math.hypot(vx, vy);
+    if (speed < 9) {
+      if (speed < 0.1) { vx = 5.2; vy = 7.4; }
+      else { vx = vx / speed * 9; vy = vy / speed * 9; }
+    }
   }
 
   return { puck: goal == null ? { x, y, vx, vy } : { ...AIR_HOCKEY_LIVE_START }, goal };
+}
+
+export function moveAirHockeyCpu(mallet: AirHockeyPoint, puck: AirHockeyBody, difficulty: AirHockeyDifficulty, elapsedMs: number) {
+  const home = { x: 50, y: 27 };
+  const defending = puck.y < 82;
+  const target = defending
+    ? { x: clamp(puck.x, 12, 88), y: clamp(puck.y - 11, 13, 66) }
+    : home;
+  const speed = difficulty === "easy" ? 19 : difficulty === "normal" ? 27 : 35;
+  const dx = target.x - mallet.x;
+  const dy = target.y - mallet.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 0.01) return { ...mallet };
+  const movement = Math.min(distance, speed * clamp(elapsedMs, 0, 34) / 1000);
+  return { x: mallet.x + dx / distance * movement, y: mallet.y + dy / distance * movement };
 }
 
 export function airHockeyVelocityFromMallet(previous: AirHockeyPoint, current: AirHockeyPoint, elapsedMs = 16) {

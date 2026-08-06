@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AIR_HOCKEY_CENTER, airHockeyVelocityFromMallet, chooseAirHockeyCpuVelocity, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, simulateAirHockeyShot, stepAirHockeyLive } from "../app/air-hockey.ts";
+import { AIR_HOCKEY_CENTER, airHockeyVelocityFromMallet, chooseAirHockeyCpuVelocity, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, moveAirHockeyCpu, simulateAirHockeyShot, stepAirHockeyLive } from "../app/air-hockey.ts";
 
 test("moving the mallet creates puck velocity in the same direction", () => {
   const velocity = airHockeyVelocityFromMallet({ x: 50, y: 100 }, { x: 50, y: 90 });
@@ -53,4 +53,21 @@ test("either live mallet can strike the puck", () => {
     16,
   );
   assert.ok(result.puck.vy < 0);
+});
+
+test("the live puck keeps moving instead of ending a turn", () => {
+  const result = stepAirHockeyLive(
+    { x: 40, y: 70, vx: 0.01, vy: 0.01 },
+    [{ x: 50, y: 125 }, { x: 50, y: 25 }],
+    [{ x: 0, y: 0 }, { x: 0, y: 0 }],
+    16,
+  );
+  assert.ok(Math.hypot(result.puck.vx, result.puck.vy) >= 8.9);
+});
+
+test("normal CPU tracks the puck at a moderate capped speed", () => {
+  const start = { x: 50, y: 27 };
+  const next = moveAirHockeyCpu(start, { x: 75, y: 40, vx: 0, vy: -20 }, "normal", 1000);
+  assert.ok(Math.hypot(next.x - start.x, next.y - start.y) <= 1);
+  assert.ok(next.x > start.x);
 });

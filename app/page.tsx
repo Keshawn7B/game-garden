@@ -2255,7 +2255,7 @@ const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "mem
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
-  const unit = game === "battleship" || game === "airhockey" ? "shots" : game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" || game === "checkers" || game === "dotsboxes" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
+  const unit = game === "airhockey" ? "seconds" : game === "battleship" ? "shots" : game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" || game === "checkers" || game === "dotsboxes" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
