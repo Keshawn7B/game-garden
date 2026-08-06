@@ -2703,18 +2703,18 @@ function AppHome({
                 ))}
                 {!liveIncoming.length && !liveOutgoing.length && !readyInvites.length && <p className="empty-invites">No active invites. Challenge a friend below.</p>}
               </div>
-              <div className="friend-tools-grid">
-                <div className="friend-code-card">
-                  <span>YOUR FRIEND CODE</span>
+              <div className="friend-connect-card">
+                <div className="friend-connect-code">
+                  <span>YOUR FRIEND CODE · 友達コード</span>
                   <strong>{friendCode}</strong>
-                  <small>Send a direct link or share this code.</small>
+                  <small>Share your code or send your personal friend link.</small>
                   <div className="friend-link-actions">
                     <button className="friend-share-button" onClick={() => void shareFriendLink()}>Share friend link</button>
                     <button className="friend-copy-button" onClick={() => void copyFriendLink()}>Copy link</button>
                   </div>
                   {shareMessage && <p className="friend-share-message" role="status">{shareMessage}</p>}
                 </div>
-                <div className="friend-add-card">
+                <div className="friend-connect-add">
                   <span className="friend-add-glyph">友</span>
                   <label htmlFor="friend-code">ADD A FRIEND <span>友達を追加</span></label>
                   <p>Enter their eight-character code. They must accept before either profile becomes a friend.</p>

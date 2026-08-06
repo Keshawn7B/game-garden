@@ -154,6 +154,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /friendCodeFor/);
   assert.match(source, /friendCodeFromUrl/);
   assert.match(source, /Share friend link/);
+  assert.match(source, /className="friend-connect-card"/);
+  assert.match(source, /className="friend-connect-code"/);
+  assert.match(source, /className="friend-connect-add"/);
+  assert.doesNotMatch(source, /className="friend-tools-grid"/);
+  assert.match(styles, /\.friend-connect-card\s*\{[^}]*grid-template-columns:\.92fr 1\.08fr;[^}]*overflow:hidden;/);
   assert.match(source, /navigator\.share/);
   assert.match(source, /navigator\.clipboard/);
   assert.match(source, /searchParams\.set\("friend"/);
