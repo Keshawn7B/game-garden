@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { HeaderChatButton } from "./chat-chrome";
 import { GameResult } from "./game-result";
-import { AIR_HOCKEY_LIVE_START, AIR_HOCKEY_WIN_SCORE, moveAirHockeyCpu, stepAirHockeyLive, type AirHockeyBody, type AirHockeyDifficulty, type AirHockeyPlayer, type AirHockeyPoint } from "./air-hockey";
+import { AIR_HOCKEY_LIVE_START, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, moveAirHockeyCpu, stepAirHockeyLive, type AirHockeyBody, type AirHockeyDifficulty, type AirHockeyPlayer, type AirHockeyPoint } from "./air-hockey";
 
 const MALLET_STARTS: [AirHockeyPoint, AirHockeyPoint] = [{ x: 50, y: 124 }, { x: 50, y: 26 }];
 const ZERO_VELOCITY: AirHockeyPoint = { x: 0, y: 0 };
@@ -19,12 +19,29 @@ function placeAirHockeyElement(element: HTMLElement | null, point: AirHockeyPoin
   element.style.top = `${point.y / 1.5}%`;
 }
 
-export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["YOU", "CPU"], onGoal }: {
+function airHockeyClock(seconds: number) {
+  const safe = Math.max(0, Math.min(AIR_HOCKEY_MATCH_SECONDS, Math.ceil(seconds)));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+export function AirHockeyFullscreenScoreboard({ scores, names, secondsLeft, onClose }: { scores: [number, number]; names: [string, string]; secondsLeft: number; onClose: () => void }) {
+  return <div className="air-fullscreen-scoreboard" aria-label={`${airHockeyClock(secondsLeft)} remaining. ${names[0]} ${scores[0]}, ${names[1]} ${scores[1]}.`}>
+    <div className="air-fullscreen-player player-one"><small>{names[0]}</small><strong>{scores[0]}</strong></div>
+    <div className="air-fullscreen-clock"><small>FIRST TO 3</small><strong>{airHockeyClock(secondsLeft)}</strong><span>試合時間</span></div>
+    <div className="air-fullscreen-player player-two"><strong>{scores[1]}</strong><small>{names[1]}</small></div>
+    <button className="air-fullscreen-close" onClick={onClose} aria-label="Close rink">×</button>
+  </div>;
+}
+
+export function AirHockeyRink({ difficulty, round, scores, secondsLeft, disabled = false, labels = ["YOU", "CPU"], onGoal, onLockChange }: {
   difficulty: AirHockeyDifficulty;
   round: number;
+  scores: [number, number];
+  secondsLeft: number;
   disabled?: boolean;
   labels?: [string, string];
   onGoal: (scorer: AirHockeyPlayer) => void;
+  onLockChange?: (locked: boolean) => void;
 }) {
   const rinkRef = useRef<HTMLDivElement>(null);
   const puckElementRef = useRef<HTMLSpanElement>(null);
@@ -129,9 +146,13 @@ export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["
     pointerActiveRef.current = false;
     previousPointerRef.current = null;
   };
+  const changeLock = (locked: boolean) => {
+    setControlLocked(locked);
+    onLockChange?.(locked);
+  };
 
   return <div className={`air-rink-controller ${controlLocked ? "is-control-locked" : ""}`}>
-    <button className={`air-control-lock ${controlLocked ? "active" : ""}`} onClick={() => setControlLocked((current) => !current)} aria-pressed={controlLocked}><i>{controlLocked ? "×" : "⌖"}</i><span>{controlLocked ? "UNLOCK SCREEN" : "LOCK RINK"}<small>{controlLocked ? "RETURN TO GAME PAGE" : "MOVE WHILE THE PUCK STAYS LIVE"}</small></span></button>
+    {controlLocked ? <AirHockeyFullscreenScoreboard scores={scores} names={labels} secondsLeft={secondsLeft} onClose={() => changeLock(false)} /> : <button className="air-control-lock" onClick={() => changeLock(true)} aria-pressed={false}><i>⌖</i><span>LOCK RINK<small>MOVE WHILE THE PUCK STAYS LIVE</small></span></button>}
     <div className={`air-hockey-rink live-rink ${disabled ? "is-disabled" : ""} ${controlLocked ? "controls-active" : ""}`} ref={rinkRef} role="application" aria-label={controlLocked ? "Live air hockey rink. Move your mallet to hit and defend." : "Live air hockey rink. Lock the rink to play."} onPointerDown={beginMove} onPointerMove={moveMallet} onPointerUp={endMove} onPointerCancel={endMove}>
       <div className="air-hockey-goal goal-top"><span /></div><div className="air-hockey-goal goal-bottom"><span /></div>
       <i className="air-rink-line center-line" /><i className="air-rink-circle" />
@@ -151,12 +172,29 @@ export function AirHockey({ onBack, onScore }: { onBack: () => void; onScore: (s
   const [goals, setGoals] = useState(0);
   const [round, setRound] = useState(1);
   const [difficulty, setDifficulty] = useState<AirHockeyDifficulty>("normal");
-  const matchStartedAt = useRef(0);
-  const winner = scores[0] >= AIR_HOCKEY_WIN_SCORE ? 0 : scores[1] >= AIR_HOCKEY_WIN_SCORE ? 1 : null;
+  const [secondsLeft, setSecondsLeft] = useState(AIR_HOCKEY_MATCH_SECONDS);
+  const [rinkLocked, setRinkLocked] = useState(false);
+  const recordedWin = useRef(false);
+  const scoreWinner: AirHockeyPlayer | null = scores[0] >= AIR_HOCKEY_WIN_SCORE ? 0 : scores[1] >= AIR_HOCKEY_WIN_SCORE ? 1 : null;
+  const timeWinner: AirHockeyPlayer | "draw" | null = secondsLeft === 0 ? scores[0] === scores[1] ? "draw" : scores[0] > scores[1] ? 0 : 1 : null;
+  const winner = scoreWinner ?? timeWinner;
 
-  useEffect(() => { matchStartedAt.current = Date.now(); }, []);
+  useEffect(() => {
+    if (!rinkLocked || winner != null) return;
+    const timer = window.setInterval(() => setSecondsLeft((current) => {
+      if (current <= 1) {
+        if (scores[0] > scores[1] && !recordedWin.current) {
+          recordedWin.current = true;
+          onScore(AIR_HOCKEY_MATCH_SECONDS);
+        }
+        return 0;
+      }
+      return current - 1;
+    }), 1000);
+    return () => window.clearInterval(timer);
+  }, [onScore, rinkLocked, scores, winner]);
 
-  const reset = () => { setScores([0, 0]); setGoals(0); setRound((current) => current + 1); matchStartedAt.current = Date.now(); };
+  const reset = () => { setScores([0, 0]); setGoals(0); setRound((current) => current + 1); setSecondsLeft(AIR_HOCKEY_MATCH_SECONDS); recordedWin.current = false; };
   const goal = (scorer: AirHockeyPlayer) => {
     if (winner != null) return;
     const next: [number, number] = [...scores];
@@ -164,18 +202,21 @@ export function AirHockey({ onBack, onScore }: { onBack: () => void; onScore: (s
     setScores(next);
     setGoals((current) => current + 1);
     setRound((current) => current + 1);
-    if (scorer === 0 && next[0] >= AIR_HOCKEY_WIN_SCORE) onScore(Math.max(1, Math.round((Date.now() - matchStartedAt.current) / 1000)));
+    if (scorer === 0 && next[0] >= AIR_HOCKEY_WIN_SCORE && !recordedWin.current) {
+      recordedWin.current = true;
+      onScore(Math.max(1, AIR_HOCKEY_MATCH_SECONDS - secondsLeft));
+    }
   };
 
   return <main className="game-shell air-hockey-shell">
     <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><span className="header-title-logo game-header-logo" role="img" aria-label="Game Garden" /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Air Hockey">↻</button></div></header>
     <section className="air-hockey-game">
-      <div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · LIVE VS CPU · {difficulty.toUpperCase()}</p><h1>Air Hockey</h1><p>The puck never stops. Move your red mallet to strike, defend, and race the CPU to five.</p></div><span>氷</span></div>
+      <div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · LIVE VS CPU · {difficulty.toUpperCase()}</p><h1>Air Hockey</h1><p>Two minutes. First to three. Move your red mallet to strike and defend against the CPU.</p></div><span>氷</span></div>
       <div className="cpu-difficulty"><div><span>CPU LEVEL</span><small>難易度</small></div><div className="difficulty-options">{(["easy", "normal", "hard"] as AirHockeyDifficulty[]).map((level) => <button key={level} className={difficulty === level ? "active" : ""} onClick={() => { setDifficulty(level); reset(); }}><span>{level}</span><small>{level === "easy" ? "Slow" : level === "normal" ? "Moderate" : "Quick"}</small></button>)}</div></div>
-      <div className="air-scoreboard"><div className={winner == null ? "active" : ""}><small>YOU</small><strong>{scores[0]}</strong></div><b>FIRST TO 5<small>LIVE MATCH</small></b><div className={winner == null ? "active" : ""}><strong>{scores[1]}</strong><small>CPU</small></div></div>
+      <div className="air-scoreboard"><div className={winner == null ? "active" : ""}><small>YOU</small><strong>{scores[0]}</strong></div><b>FIRST TO 3<small>{airHockeyClock(secondsLeft)}</small></b><div className={winner == null ? "active" : ""}><strong>{scores[1]}</strong><small>CPU</small></div></div>
       <div className="air-turn-status">{winner != null ? "MATCH COMPLETE" : "PUCK LIVE — YOU AND THE CPU MOVE AT THE SAME TIME"}</div>
-      <AirHockeyRink difficulty={difficulty} round={round} disabled={winner != null} onGoal={goal} />
-      {winner != null && <GameResult outcome={winner === 0 ? "You Win!" : "CPU Wins!"} detail={`Final score ${scores[0]}–${scores[1]} after ${goals} goals.`} onPlayAgain={reset} />}
+      <AirHockeyRink difficulty={difficulty} round={round} scores={scores} secondsLeft={secondsLeft} disabled={winner != null} onGoal={goal} onLockChange={setRinkLocked} />
+      {winner != null && <GameResult outcome={winner === "draw" ? "Draw Match" : winner === 0 ? "You Win!" : "CPU Wins!"} detail={`Final score ${scores[0]}–${scores[1]} after ${goals} goals.`} onPlayAgain={reset} draw={winner === "draw"} />}
     </section>
   </main>;
 }

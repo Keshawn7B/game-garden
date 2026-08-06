@@ -3,7 +3,8 @@ export type AirHockeyDifficulty = "easy" | "normal" | "hard";
 export type AirHockeyPlayer = 0 | 1;
 export type AirHockeyBody = AirHockeyPoint & { vx: number; vy: number };
 
-export const AIR_HOCKEY_WIN_SCORE = 5;
+export const AIR_HOCKEY_WIN_SCORE = 3;
+export const AIR_HOCKEY_MATCH_SECONDS = 120;
 export const AIR_HOCKEY_CENTER: AirHockeyPoint = { x: 50, y: 75 };
 export const AIR_HOCKEY_LIVE_START: AirHockeyBody = { ...AIR_HOCKEY_CENTER, vx: 16, vy: 28 };
 

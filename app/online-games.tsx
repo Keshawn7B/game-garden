@@ -12,7 +12,7 @@ import { BattleshipGrid, BattleshipPlacement } from "./battleship-game";
 import { DOTS_BOX_COUNT, DOTS_EDGE_COUNT, applyDotsBoxesEdge } from "./dots-boxes";
 import { DotsBoxesBoard } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
-import { AIR_HOCKEY_CENTER, AIR_HOCKEY_WIN_SCORE, type AirHockeyPlayer } from "./air-hockey";
+import { AIR_HOCKEY_CENTER, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, type AirHockeyPlayer } from "./air-hockey";
 import { OnlineAirHockeyRink } from "./online-air-hockey";
 
 export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey";
@@ -57,6 +57,7 @@ type OnlineState = {
   shots: [number[], number[]];
   ready: [boolean, boolean];
   lastShots: [number, number];
+  airEndsAt?: number;
 };
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
@@ -140,7 +141,13 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     shots: [[], []],
     ready: [false, false],
     lastShots: [-1, -1],
+    airEndsAt: gameId === "airhockey" ? Date.now() + AIR_HOCKEY_MATCH_SECONDS * 1000 : 0,
   };
+}
+
+function onlineAirClock(seconds: number) {
+  const safe = Math.max(0, Math.min(AIR_HOCKEY_MATCH_SECONDS, Math.ceil(seconds)));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
 }
 
 export function makeOnlineGameState(gameId: OnlineGameId, room: Room) {
@@ -306,6 +313,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const [barricadeWallSnap, setBarricadeWallSnap] = useState<{ row: number; column: number; orientation: BarricadeDragKind } | null>(null);
   const [lastCheckersMove, setLastCheckersMove] = useState<CheckersMove | null>(null);
   const [battleshipFleet, setBattleshipFleet] = useState<BattleshipFleet>(() => randomBattleshipFleet());
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const barricadeBoardRef = useRef<HTMLDivElement>(null);
   const latestState = useRef<OnlineState | null>(null);
   const stateRef = useMemo(() => doc(db, "rooms", room.code, "game", "state"), [room.code]);
@@ -378,6 +386,27 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     } catch { setError("Your move did not send. Please try again."); }
   }, [stateRef]);
 
+  useEffect(() => {
+    if (state?.gameId !== "airhockey" || state.phase !== "playing") return;
+    const timer = window.setInterval(() => setClockNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [state?.gameId, state?.phase]);
+
+  useEffect(() => {
+    if (!state || state.gameId !== "airhockey" || user.uid !== room.hostUid) return;
+    if (!state.airEndsAt) {
+      const timer = window.setTimeout(() => void mutateAtomic((current) => current.gameId === "airhockey" && !current.airEndsAt ? { airEndsAt: Date.now() + AIR_HOCKEY_MATCH_SECONDS * 1000 } : null), 0);
+      return () => window.clearTimeout(timer);
+    }
+    if (state.phase !== "playing" || clockNow < state.airEndsAt) return;
+    const timer = window.setTimeout(() => void mutateAtomic((current) => {
+      if (current.gameId !== "airhockey" || current.phase !== "playing" || !current.airEndsAt || Date.now() < current.airEndsAt) return null;
+      const winnerUid = current.scores[0] === current.scores[1] ? "draw" : current.players[current.scores[0] > current.scores[1] ? 0 : 1];
+      return { phase: "complete", winnerUid };
+    }), 0);
+    return () => window.clearTimeout(timer);
+  }, [clockNow, mutateAtomic, room.hostUid, state, user.uid]);
+
   const reset = useCallback(async () => {
     if (user.uid !== room.hostUid || room.gameId === "number") return;
     try { await setDoc(stateRef, { ...emptyState(room.gameId, room), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); }
@@ -437,6 +466,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const winnerName = state.winnerUid === "draw" ? "Draw Match" : state.winnerUid ? `${state.names[state.players.indexOf(state.winnerUid)]} Wins!` : "";
   const finish = <GameResult outcome={winnerName} detail="The final result synchronized live on both devices." onPlayAgain={user.uid === room.hostUid ? () => void reset() : undefined} waitingText={`Waiting for ${room.hostName} to play again…`} draw={state.winnerUid === "draw"} />;
   const status = state.phase === "complete" ? winnerName : myTurn ? "Your turn" : `Waiting for ${state.names[otherIndex]}`;
+  const airSecondsLeft = state.gameId === "airhockey" ? Math.max(0, Math.ceil(((state.airEndsAt ?? clockNow + AIR_HOCKEY_MATCH_SECONDS * 1000) - clockNow) / 1000)) : AIR_HOCKEY_MATCH_SECONDS;
 
   const submitCode = () => {
     if (colors.length !== 4) return;
@@ -662,7 +692,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   }
 
   if (state.gameId === "airhockey") {
-    gameView = <section className="online-game air-hockey-game online-air-hockey"><div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · SIMULTANEOUS ONLINE</p><h1>Air Hockey</h1><p>Lock the rink and move at the same time as your opponent. The puck never waits for a turn.</p></div><span>氷</span></div><PlayerStrip state={state} user={user} simultaneous /><div className="air-scoreboard"><div className={state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong></div><b>FIRST TO 5<small>LIVE MATCH</small></b><div className={state.phase === "playing" ? "active" : ""}><strong>{state.scores[1]}</strong><small>{state.names[1]}</small></div></div><div className="online-turn-status">{state.phase === "complete" ? winnerName : "BOTH PLAYERS LIVE — lock the rink and move your mallet"}</div><OnlineAirHockeyRink roomCode={room.code} players={state.players} names={state.names} userUid={user.uid} round={state.round} disabled={state.phase !== "playing"} onGoal={scoreAirHockeyGoal} onConnectionError={() => setError("The live rink lost connection.")} />{state.phase === "complete" && finish}</section>;
+    gameView = <section className="online-game air-hockey-game online-air-hockey"><div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · SIMULTANEOUS ONLINE</p><h1>Air Hockey</h1><p>Two minutes. First to three. Lock the rink and move at the same time as your opponent.</p></div><span>氷</span></div><PlayerStrip state={state} user={user} simultaneous /><div className="air-scoreboard"><div className={state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong></div><b>FIRST TO 3<small>{onlineAirClock(airSecondsLeft)}</small></b><div className={state.phase === "playing" ? "active" : ""}><strong>{state.scores[1]}</strong><small>{state.names[1]}</small></div></div><div className="online-turn-status">{state.phase === "complete" ? winnerName : "BOTH PLAYERS LIVE — lock the rink and move your mallet"}</div><OnlineAirHockeyRink roomCode={room.code} players={state.players} names={state.names} scores={state.scores} secondsLeft={airSecondsLeft} userUid={user.uid} round={state.round} disabled={state.phase !== "playing"} onGoal={scoreAirHockeyGoal} onConnectionError={() => setError("The live rink lost connection.")} />{state.phase === "complete" && finish}</section>;
   }
 
   if (state.gameId === "rps") {

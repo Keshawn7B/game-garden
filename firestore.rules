@@ -452,6 +452,7 @@ service cloud.firestore {
         && (state.gameId != 'airhockey' || (
           state.board.size() == 2
           && state.open.size() <= 184
+          && (!state.keys().hasAny(['airEndsAt']) || (state.airEndsAt is int && state.airEndsAt >= 0))
           && state.scores[0] is int
           && state.scores[1] is int
           && state.scores[0] >= 0

@@ -2069,7 +2069,7 @@ const GAME_MENUS: Record<LibraryGameId, {
     rules: [
       "Tap Lock Rink, then drag your mallet freely around your half.",
       "In Versus, both players move simultaneously while the puck stays live.",
-      "Score through the opponent's goal; the first player to five wins.",
+      "Play for two minutes; the first player to three goals wins immediately.",
     ],
   },
 };

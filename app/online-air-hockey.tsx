@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { AIR_HOCKEY_LIVE_START, stepAirHockeyLive, type AirHockeyBody, type AirHockeyPlayer, type AirHockeyPoint } from "./air-hockey";
+import { AirHockeyFullscreenScoreboard } from "./air-hockey-game";
 import { db } from "./firebase";
 
 const MALLET_STARTS: [AirHockeyPoint, AirHockeyPoint] = [{ x: 50, y: 124 }, { x: 50, y: 26 }];
@@ -24,10 +25,12 @@ function placeLiveElement(element: HTMLElement | null, point: AirHockeyPoint) {
   element.style.top = `${point.y / 1.5}%`;
 }
 
-export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, disabled, onGoal, onConnectionError }: {
+export function OnlineAirHockeyRink({ roomCode, players, names, scores, secondsLeft, userUid, round, disabled, onGoal, onConnectionError }: {
   roomCode: string;
   players: [string, string];
   names: [string, string];
+  scores: [number, number];
+  secondsLeft: number;
   userUid: string;
   round: number;
   disabled?: boolean;
@@ -185,9 +188,10 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
     pointerActiveRef.current = false;
     previousPointerRef.current = null;
   };
+  const changeLock = (locked: boolean) => setControlLocked(locked);
 
   return <div className={`air-rink-controller ${controlLocked ? "is-control-locked" : ""}`}>
-    <button className={`air-control-lock ${controlLocked ? "active" : ""}`} onClick={() => setControlLocked((current) => !current)} aria-pressed={controlLocked}><i>{controlLocked ? "×" : "⌖"}</i><span>{controlLocked ? "UNLOCK SCREEN" : "LOCK RINK"}<small>{controlLocked ? "RETURN TO GAME PAGE" : "BOTH PLAYERS MOVE LIVE"}</small></span></button>
+    {controlLocked ? <AirHockeyFullscreenScoreboard scores={scores} names={names} secondsLeft={secondsLeft} onClose={() => changeLock(false)} /> : <button className="air-control-lock" onClick={() => changeLock(true)} aria-pressed={false}><i>⌖</i><span>LOCK RINK<small>BOTH PLAYERS MOVE LIVE</small></span></button>}
     <div className={`air-hockey-rink live-rink ${disabled ? "is-disabled" : ""} ${controlLocked ? "controls-active" : ""}`} ref={rinkRef} role="application" aria-label={controlLocked ? "Live air hockey rink. Move your mallet while your opponent moves theirs." : "Live air hockey rink. Lock the rink to play."} onPointerDown={beginMove} onPointerMove={moveMallet} onPointerUp={endMove} onPointerCancel={endMove}>
       <div className="air-hockey-goal goal-top"><span /></div><div className="air-hockey-goal goal-bottom"><span /></div>
       <i className="air-rink-line center-line" /><i className="air-rink-circle" />

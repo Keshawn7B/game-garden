@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AIR_HOCKEY_CENTER, airHockeyVelocityFromMallet, chooseAirHockeyCpuVelocity, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, moveAirHockeyCpu, simulateAirHockeyShot, stepAirHockeyLive } from "../app/air-hockey.ts";
+import { AIR_HOCKEY_CENTER, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, airHockeyVelocityFromMallet, chooseAirHockeyCpuVelocity, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, moveAirHockeyCpu, simulateAirHockeyShot, stepAirHockeyLive } from "../app/air-hockey.ts";
+
+test("air hockey uses a two-minute first-to-three match", () => {
+  assert.equal(AIR_HOCKEY_MATCH_SECONDS, 120);
+  assert.equal(AIR_HOCKEY_WIN_SCORE, 3);
+});
 
 test("moving the mallet creates puck velocity in the same direction", () => {
   const velocity = airHockeyVelocityFromMallet({ x: 50, y: 100 }, { x: 50, y: 90 });
