@@ -135,6 +135,9 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /onClick=\{\(\) => movePawn\(0, index\)\}/);
   assert.match(onlineSource, /onClick=\{\(\) => moveBarricadePawn\(index\)\}/);
   assert.match(source, /TAP A SPACE OR DRAG A WALL/);
+  assert.match(styles, /\/\* Barricade app board \*\//);
+  assert.match(styles, /barricade-drag-piece\.drag-h::after\{content:"Horizontal"\}/);
+  assert.match(styles, /quoridor-cells \.pawn-two\{background:#3f87ff\}/);
   assert.match(onlineSource, /dropOnlineBarricadePiece/);
   assert.match(barricadeDragSource, /onPointerDown/);
   assert.match(barricadeDragSource, /onPointerMove/);
