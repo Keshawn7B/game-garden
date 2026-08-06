@@ -263,6 +263,8 @@ test("routes every game through a start menu", async () => {
   assert.match(onlineStyles, /\.online-player-strip/);
   assert.match(onlineStyles, /\.online-turn-status/);
   assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice', 'barricade'/);
+  assert.match(firestoreRules, /request\.auth\.uid == resource\.data\.fromUid\s*\|\| request\.auth\.uid == resource\.data\.toUid/);
+  assert.doesNotMatch(firestoreRules, /allow read: if request\.auth != null\s*&& request\.auth\.uid in \[resource\.data\.fromUid, resource\.data\.toUid\]/);
   assert.match(source, /friendProfiles/);
   assert.match(source, /selectedFriend\.highScores/);
   assert.match(source, /friendRequests/);

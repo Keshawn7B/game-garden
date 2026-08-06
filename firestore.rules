@@ -28,7 +28,8 @@ service cloud.firestore {
 
     match /friendRequests/{requestId} {
       allow read: if request.auth != null
-        && request.auth.uid in [resource.data.fromUid, resource.data.toUid];
+        && (request.auth.uid == resource.data.fromUid
+          || request.auth.uid == resource.data.toUid);
       allow create: if validNewFriendRequest(requestId, request.resource.data);
       allow update: if request.auth != null
         && (
