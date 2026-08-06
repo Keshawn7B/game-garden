@@ -2384,8 +2384,10 @@ function AppHome({
   const [premiumMessage, setPremiumMessage] = useState("");
   const [premiumBusy, setPremiumBusy] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const activeRanks = leaderboards[rankGame] ?? [];
   const liveIncoming = incomingInvites.filter(inviteIsLive);
   const socialNoticeCount = liveIncoming.length + incomingFriendRequests.length;
@@ -2396,6 +2398,28 @@ function AppHome({
   const displayedFriends = [...friends]
     .filter((friend) => friend.name.toLowerCase().includes(friendSearch.trim().toLowerCase()))
     .sort((left, right) => Number(Boolean(right.isOnline)) - Number(Boolean(left.isOnline)) || left.name.localeCompare(right.name));
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) setProfileMenuOpen(false);
+    };
+    const closeWithKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProfileMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeWithKeyboard);
+    };
+  }, [profileMenuOpen]);
+
+  const chooseProfileMenu = (tab: AppTab, showInvites = false) => {
+    setProfileMenuOpen(false);
+    onTabChange(tab);
+    if (showInvites) window.setTimeout(() => document.getElementById("game-invites")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
 
   const submitPremiumCode = async () => {
     setPremiumBusy(true);
@@ -2497,9 +2521,17 @@ function AppHome({
           {socialNoticeCount > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${socialNoticeCount} pending social alerts`}><b>招</b><span>{socialNoticeCount}</span></button>}
           <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           <HeaderChatButton />
-          <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
-            <PlayerAvatar small avatarId={avatarId} />
-          </button>
+          <div className="profile-menu-wrap" ref={profileMenuRef}>
+            <button className="header-profile" onClick={() => setProfileMenuOpen((open) => !open)} aria-label="Open account menu" aria-haspopup="menu" aria-expanded={profileMenuOpen}>
+              <PlayerAvatar small avatarId={avatarId} />
+            </button>
+            {profileMenuOpen && <div className="profile-dropdown" role="menu" aria-label="Account menu">
+              <button role="menuitem" onClick={() => chooseProfileMenu("profile")}><b>人</b><span>Profile</span></button>
+              <button role="menuitem" onClick={() => chooseProfileMenu("leaderboard")}><b>冠</b><span>Leaderboard</span></button>
+              <button role="menuitem" onClick={() => chooseProfileMenu("friends")}><b>友</b><span>Friends</span></button>
+              <button role="menuitem" onClick={() => chooseProfileMenu("friends", true)}><b>招</b><span>Invites</span>{socialNoticeCount > 0 && <em>{socialNoticeCount}</em>}</button>
+            </div>}
+          </div>
         </div>
       </header>
 
@@ -2675,7 +2707,7 @@ function AppHome({
                 {incomingFriendRequests.map((request) => <div className="friend-request-row" key={request.id}><AvatarGlyph avatarId={request.fromAvatar} className="friend-request-avatar" /><div><small>WANTS TO CONNECT</small><strong>{request.fromName}</strong></div><span><button className="primary-button" onClick={() => void onRespondFriendRequest(request, "accepted")}>Accept</button><button className="secondary-button" onClick={() => void onRespondFriendRequest(request, "declined")}>Decline</button></span></div>)}
                 {outgoingFriendRequests.map((request) => <div className="friend-request-row outgoing" key={request.id}><AvatarGlyph avatarId={request.toAvatar} className="friend-request-avatar" /><div><small>REQUEST SENT</small><strong>{request.toName}</strong></div><span><em>WAITING</em><button className="secondary-button" onClick={() => void onCancelFriendRequest(request)}>Cancel</button></span></div>)}
               </div>}
-              <div className="invite-center">
+              <div className="invite-center" id="game-invites">
                 <div className="invite-center-heading"><span>Game invites</span><span>対戦招待</span></div>
                 {liveIncoming.map((invite) => (
                   <div className="invite-card incoming-invite" key={invite.id}>
