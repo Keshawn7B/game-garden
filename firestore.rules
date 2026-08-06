@@ -221,7 +221,7 @@ service cloud.firestore {
     function validScore(gameId, userId) {
       return request.auth != null
         && request.auth.uid == userId
-        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers']
+        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship']
         && request.resource.data.uid == userId
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
@@ -398,7 +398,7 @@ service cloud.firestore {
     }
 
     function validOnlineGameState(roomCode, state) {
-      return state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers']
+      return state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship']
         && state.roomCode == roomCode
         && state.gameId == get(/databases/$(database)/documents/rooms/$(roomCode)).data.gameId
         && state.players is list
@@ -408,7 +408,7 @@ service cloud.firestore {
         && state.names is list
         && state.names.size() == 2
         && state.turnUid in state.players
-        && state.phase in ['playing', 'revealing', 'relocating', 'complete']
+        && state.phase in ['placing', 'playing', 'revealing', 'relocating', 'complete']
         && state.round is int
         && state.round >= 1
         && state.moves is int
@@ -432,6 +432,28 @@ service cloud.firestore {
         && state.barricades is list
         && state.wallsLeft is list
         && state.wallsLeft.size() == 2
+        && (state.gameId != 'battleship' || (
+          state.fleets is list
+          && state.fleets.size() == 2
+          && state.fleets[0] is list
+          && state.fleets[1] is list
+          && state.fleets[0].size() <= 5
+          && state.fleets[1].size() <= 5
+          && state.shots is list
+          && state.shots.size() == 2
+          && state.shots[0] is list
+          && state.shots[1] is list
+          && state.shots[0].size() <= 100
+          && state.shots[1].size() <= 100
+          && state.ready is list
+          && state.ready.size() == 2
+          && state.ready[0] is bool
+          && state.ready[1] is bool
+          && state.lastShots is list
+          && state.lastShots.size() == 2
+          && state.lastShots[0] is int
+          && state.lastShots[1] is int
+        ))
         && state.winnerUid in ['', 'draw', state.players[0], state.players[1]]
         && state.createdAt is timestamp
         && state.updatedAt is timestamp;
@@ -447,7 +469,8 @@ service cloud.firestore {
         || (gameId == 'rps' && gameName == 'Rock Paper Scissors')
         || (gameId == 'dice' && gameName == 'Dice Race')
         || (gameId == 'barricade' && gameName == 'Barricade')
-        || (gameId == 'checkers' && gameName == 'Checkers');
+        || (gameId == 'checkers' && gameName == 'Checkers')
+        || (gameId == 'battleship' && gameName == 'Battleship');
     }
 
     function validAvatar(avatarId) {

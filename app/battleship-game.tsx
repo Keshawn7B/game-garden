@@ -1,0 +1,164 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { HeaderChatButton } from "./chat-chrome";
+import {
+  BATTLESHIP_SHIPS,
+  battleshipFleetDefeated,
+  battleshipShipAt,
+  battleshipShipSunk,
+  chooseBattleshipCpuShot,
+  placeBattleship,
+  randomBattleshipFleet,
+  validBattleshipFleet,
+  type BattleshipDifficulty,
+  type BattleshipFleet,
+  type BattleshipOrientation,
+} from "./battleship";
+
+export function BattleshipGrid({ fleet, shots, revealShips, onFire, disabled = false, label, lastShot = null }: {
+  fleet: BattleshipFleet;
+  shots: number[];
+  revealShips: boolean;
+  onFire?: (cell: number) => void;
+  disabled?: boolean;
+  label: string;
+  lastShot?: number | null;
+}) {
+  return <div className="battleship-grid" role="grid" aria-label={label}>{Array.from({ length: 100 }, (_, cell) => {
+    const shipIndex = battleshipShipAt(fleet, cell);
+    const shot = shots.includes(cell);
+    const hit = shot && shipIndex >= 0;
+    const sunk = shipIndex >= 0 && battleshipShipSunk(fleet[shipIndex], shots);
+    const row = Math.floor(cell / 10);
+    const column = cell % 10;
+    return <button
+      type="button"
+      role="gridcell"
+      key={cell}
+      className={`${revealShips && shipIndex >= 0 ? "has-ship" : ""} ${shot ? hit ? "is-hit" : "is-miss" : ""} ${sunk ? "is-sunk" : ""} ${lastShot === cell ? "last-shot" : ""}`}
+      disabled={!onFire || disabled || shot}
+      onClick={() => onFire?.(cell)}
+      aria-label={`${String.fromCharCode(65 + column)}${row + 1}${shot ? hit ? ", hit" : ", miss" : revealShips && shipIndex >= 0 ? ", ship" : ""}`}
+    >{hit ? <b>×</b> : shot ? <i /> : revealShips && shipIndex >= 0 ? <span /> : null}</button>;
+  })}</div>;
+}
+
+export function BattleshipPlacement({ fleet, onChange, onReady, readyLabel = "Ready fleet" }: {
+  fleet: BattleshipFleet;
+  onChange: (fleet: BattleshipFleet) => void;
+  onReady: () => void;
+  readyLabel?: string;
+}) {
+  const [selectedShip, setSelectedShip] = useState(0);
+  const [orientation, setOrientation] = useState<BattleshipOrientation>("h");
+  const [note, setNote] = useState("Select a ship, then tap its new bow position.");
+
+  const positionShip = (cell: number) => {
+    const placed = placeBattleship(fleet, selectedShip, cell, orientation);
+    if (!placed) {
+      setNote("That ship does not fit there.");
+      return;
+    }
+    onChange(placed);
+    setNote(`${BATTLESHIP_SHIPS[selectedShip].name} repositioned.`);
+  };
+
+  return <section className="battleship-placement">
+    <div className="battleship-placement-tools">
+      <div className="battleship-fleet-list" aria-label="Choose a ship to reposition">{BATTLESHIP_SHIPS.map((ship, index) => <button type="button" key={ship.id} className={selectedShip === index ? "active" : ""} onClick={() => { setSelectedShip(index); setNote(`Place the ${ship.name.toLowerCase()} (${ship.size} spaces).`); }}><span>{ship.name}</span><i>{Array.from({ length: ship.size }, (_, marker) => <b key={marker} />)}</i></button>)}</div>
+      <div className="battleship-placement-actions">
+        <button type="button" onClick={() => setOrientation((current) => current === "h" ? "v" : "h")}><b className={`ship-direction direction-${orientation}`} />{orientation === "h" ? "Horizontal" : "Vertical"}</button>
+        <button type="button" onClick={() => { onChange(randomBattleshipFleet()); setNote("Fleet randomized."); }}>Shuffle fleet</button>
+      </div>
+      <p role="status">{note}</p>
+    </div>
+    <BattleshipGrid fleet={fleet} shots={[]} revealShips label="Position your fleet" onFire={positionShip} />
+    <button className="primary-button battleship-ready" type="button" disabled={!validBattleshipFleet(fleet)} onClick={onReady}>{readyLabel} <span>→</span></button>
+  </section>;
+}
+
+export function Battleship({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
+  const [difficulty, setDifficulty] = useState<BattleshipDifficulty>("normal");
+  const [phase, setPhase] = useState<"placing" | "playing" | "complete">("placing");
+  const [playerFleet, setPlayerFleet] = useState<BattleshipFleet>(() => randomBattleshipFleet());
+  const [cpuFleet, setCpuFleet] = useState<BattleshipFleet>(() => randomBattleshipFleet());
+  const [playerShots, setPlayerShots] = useState<number[]>([]);
+  const [cpuShots, setCpuShots] = useState<number[]>([]);
+  const [turn, setTurn] = useState<0 | 1>(0);
+  const [winner, setWinner] = useState<0 | 1 | null>(null);
+  const [message, setMessage] = useState("Position your fleet before launch.");
+  const [lastShots, setLastShots] = useState<[number | null, number | null]>([null, null]);
+
+  const reset = () => {
+    setPhase("placing");
+    setPlayerFleet(randomBattleshipFleet());
+    setCpuFleet(randomBattleshipFleet());
+    setPlayerShots([]);
+    setCpuShots([]);
+    setTurn(0);
+    setWinner(null);
+    setLastShots([null, null]);
+    setMessage("Position your fleet before launch.");
+  };
+
+  const playerHits = useMemo(() => playerShots.filter((cell) => battleshipShipAt(cpuFleet, cell) >= 0).length, [cpuFleet, playerShots]);
+  const cpuHits = useMemo(() => cpuShots.filter((cell) => battleshipShipAt(playerFleet, cell) >= 0).length, [cpuShots, playerFleet]);
+
+  const fire = (cell: number) => {
+    if (phase !== "playing" || turn !== 0 || playerShots.includes(cell)) return;
+    const shots = [...playerShots, cell];
+    const hit = battleshipShipAt(cpuFleet, cell) >= 0;
+    setPlayerShots(shots);
+    setLastShots((current) => [cell, current[1]]);
+    if (battleshipFleetDefeated(cpuFleet, shots)) {
+      setWinner(0);
+      setPhase("complete");
+      setMessage("Enemy fleet destroyed. Victory!");
+      onScore(shots.length);
+      return;
+    }
+    setMessage(hit ? "Direct hit! Enemy returning fire…" : "Miss. Enemy returning fire…");
+    setTurn(1);
+  };
+
+  useEffect(() => {
+    if (phase !== "playing" || turn !== 1 || winner != null) return;
+    const timer = window.setTimeout(() => {
+      const cell = chooseBattleshipCpuShot(cpuShots, playerFleet, difficulty);
+      if (cell == null) return;
+      const shots = [...cpuShots, cell];
+      const hit = battleshipShipAt(playerFleet, cell) >= 0;
+      setCpuShots(shots);
+      setLastShots((current) => [current[0], cell]);
+      if (battleshipFleetDefeated(playerFleet, shots)) {
+        setWinner(1);
+        setPhase("complete");
+        setMessage("Your fleet was destroyed.");
+        return;
+      }
+      setMessage(hit ? "Your ship was hit. Choose a target." : "Enemy missed. Choose a target.");
+      setTurn(0);
+    }, 720);
+    return () => window.clearTimeout(timer);
+  }, [cpuShots, difficulty, phase, playerFleet, turn, winner]);
+
+  return <main className="game-shell battleship-shell">
+    <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><span className="header-title-logo game-header-logo" role="img" aria-label="Game Garden" /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Battleship">↻</button></div></header>
+    <section className="battleship-game">
+      <div className="battleship-heading"><div><p className="eyebrow">NAVAL STRATEGY · VS CPU</p><h1>Battleship</h1><p>Hide your fleet. Call your shots. Sink all five enemy ships.</p></div><span>艦</span></div>
+      {phase === "placing" ? <>
+        <div className="cpu-difficulty"><div><span>CPU LEVEL</span><small>難易度</small></div><div className="difficulty-options">{(["easy", "normal", "hard"] as BattleshipDifficulty[]).map((level) => <button key={level} type="button" className={difficulty === level ? "active" : ""} onClick={() => setDifficulty(level)}><strong>{level}</strong><span>{level === "easy" ? "Relaxed" : level === "normal" ? "Balanced" : "Tactical"}</span></button>)}</div></div>
+        <BattleshipPlacement fleet={playerFleet} onChange={setPlayerFleet} onReady={() => { setPhase("playing"); setMessage("Your turn. Choose enemy waters to fire."); }} />
+      </> : <>
+        <div className="battleship-score-strip"><div className={turn === 0 && phase === "playing" ? "active" : ""}><small>YOU</small><strong>{playerHits}<span>/17 HITS</span></strong></div><b>対<small>{playerShots.length + cpuShots.length} SHOTS</small></b><div className={turn === 1 && phase === "playing" ? "active" : ""}><small>CPU · {difficulty.toUpperCase()}</small><strong>{cpuHits}<span>/17 HITS</span></strong></div></div>
+        <div className={`battleship-status ${turn === 1 ? "cpu-turn" : ""}`} role="status"><span>{turn === 1 && phase === "playing" ? "⌁" : winner == null ? "照" : winner === 0 ? "勝" : "敗"}</span><strong>{message}</strong></div>
+        <div className="battleship-boards">
+          <section><div><small>FIRING GRID</small><h2>Enemy waters</h2></div><BattleshipGrid fleet={cpuFleet} shots={playerShots} revealShips={phase === "complete"} onFire={fire} disabled={turn !== 0 || phase !== "playing"} label="Enemy waters" lastShot={lastShots[0]} /></section>
+          <section><div><small>YOUR FLEET</small><h2>Home waters</h2></div><BattleshipGrid fleet={playerFleet} shots={cpuShots} revealShips label="Your fleet" lastShot={lastShots[1]} /></section>
+        </div>
+        {phase === "complete" && <div className="battleship-result"><span>{winner === 0 ? "勝" : "敗"}</span><div><small>BATTLE COMPLETE</small><h2>{winner === 0 ? "You rule the sea." : "The CPU wins."}</h2><p>{playerShots.length + cpuShots.length} shots exchanged.</p></div><button className="primary-button" onClick={reset}>Play again</button></div>}
+      </>}
+    </section>
+  </main>;
+}

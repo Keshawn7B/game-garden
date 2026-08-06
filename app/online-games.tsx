@@ -7,8 +7,10 @@ import { db } from "./firebase";
 import { HeaderChatButton } from "./chat-chrome";
 import { BarricadeDragPiece, type BarricadeDragKind } from "./barricade-drag";
 import { CHECKERS_START, applyCheckersMove, checkersLegalMoves, checkersPieceCount, checkersPieceOwner, checkersWinner, type CheckersMove, type CheckersPiece, type CheckersPlayer } from "./checkers";
+import { battleshipFleetDefeated, battleshipShipAt, decodeBattleshipFleet, encodeBattleshipFleet, randomBattleshipFleet, validBattleshipFleet, type BattleshipFleet } from "./battleship";
+import { BattleshipGrid, BattleshipPlacement } from "./battleship-game";
 
-export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers";
+export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship";
 
 type Room = {
   code: string;
@@ -27,7 +29,7 @@ type OnlineState = {
   players: [string, string];
   names: [string, string];
   turnUid: string;
-  phase: "playing" | "revealing" | "relocating" | "complete";
+  phase: "placing" | "playing" | "revealing" | "relocating" | "complete";
   round: number;
   moves: number;
   scores: [number, number];
@@ -46,6 +48,10 @@ type OnlineState = {
   faces: [number, number];
   barricades: string[];
   wallsLeft: [number, number];
+  fleets: [string[], string[]];
+  shots: [number[], number[]];
+  ready: [boolean, boolean];
+  lastShots: [number, number];
 };
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
@@ -106,7 +112,7 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     players,
     names,
     turnUid: room.hostUid,
-    phase: "playing",
+    phase: gameId === "battleship" ? "placing" : "playing",
     round: 1,
     moves: 0,
     scores: [0, 0],
@@ -125,6 +131,10 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     faces: [0, 0],
     barricades: [],
     wallsLeft: [10, 10],
+    fleets: [[], []],
+    shots: [[], []],
+    ready: [false, false],
+    lastShots: [-1, -1],
   };
 }
 
@@ -290,6 +300,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const [draggingBarricadePiece, setDraggingBarricadePiece] = useState<BarricadeDragKind | null>(null);
   const [barricadeWallSnap, setBarricadeWallSnap] = useState<{ row: number; column: number; orientation: BarricadeDragKind } | null>(null);
   const [lastCheckersMove, setLastCheckersMove] = useState<CheckersMove | null>(null);
+  const [battleshipFleet, setBattleshipFleet] = useState<BattleshipFleet>(() => randomBattleshipFleet());
   const barricadeBoardRef = useRef<HTMLDivElement>(null);
   const latestState = useRef<OnlineState | null>(null);
   const stateRef = useMemo(() => doc(db, "rooms", room.code, "game", "state"), [room.code]);
@@ -298,6 +309,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     if (snapshot.exists()) {
       const next = snapshot.data() as OnlineState;
       const previous = latestState.current;
+      if (previous?.gameId === "battleship" && next.gameId === "battleship" && previous.phase === "complete" && next.phase === "placing") setBattleshipFleet(randomBattleshipFleet());
       if (previous?.gameId === "checkers" && next.gameId === "checkers" && next.moves < previous.moves) {
         setLastCheckersMove(null);
         setSelected(null);
@@ -463,6 +475,32 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return { board: move.board, moves: current.moves + 1, winnerUid: winner ? user.uid : draw ? "draw" : "", phase: winner || draw ? "complete" : "playing", turnUid: current.players[otherIndex] };
   });
 
+  const readyBattleshipFleet = () => {
+    if (!validBattleshipFleet(battleshipFleet)) return;
+    void mutateAtomic((current) => {
+      if (current.gameId !== "battleship" || current.phase !== "placing" || current.ready[playerIndex]) return null;
+      const fleets: [string[], string[]] = [[...current.fleets[0]], [...current.fleets[1]]];
+      const ready: [boolean, boolean] = [current.ready[0], current.ready[1]];
+      fleets[playerIndex] = encodeBattleshipFleet(battleshipFleet);
+      ready[playerIndex] = true;
+      return { fleets, ready, phase: ready[0] && ready[1] ? "playing" : "placing", turnUid: current.players[0] };
+    });
+  };
+
+  const fireBattleship = (cell: number) => void mutate((current) => {
+    if (current.gameId !== "battleship" || current.turnUid !== user.uid || current.phase !== "playing" || current.shots[playerIndex].includes(cell)) return null;
+    const enemyFleet = decodeBattleshipFleet(current.fleets[otherIndex]);
+    if (!validBattleshipFleet(enemyFleet)) return null;
+    const shots: [number[], number[]] = [[...current.shots[0]], [...current.shots[1]]];
+    shots[playerIndex] = [...shots[playerIndex], cell];
+    const scores: [number, number] = [...current.scores];
+    if (battleshipShipAt(enemyFleet, cell) >= 0) scores[playerIndex] += 1;
+    const lastShots: [number, number] = [...current.lastShots];
+    lastShots[playerIndex] = cell;
+    const won = battleshipFleetDefeated(enemyFleet, shots[playerIndex]);
+    return { shots, scores, lastShots, moves: current.moves + 1, winnerUid: won ? user.uid : "", phase: won ? "complete" : "playing", turnUid: won ? user.uid : current.players[otherIndex] };
+  });
+
   const playCheckers = (move: CheckersMove) => void mutate((current) => {
     if (current.gameId !== "checkers" || current.turnUid !== user.uid || current.phase !== "playing") return null;
     const board = current.board as CheckersPiece[];
@@ -582,6 +620,30 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   }
 
   if (state.gameId === "dice") gameView = <section className="online-game simple-game dice-game"><p className="eyebrow">LUCK · LIVE ONLINE</p><h1>Dice Race</h1><p>Roll on your turn. Both racers update live.</p><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="dice-racers">{state.positions.map((position, index) => <div key={index}><span>{state.names[index]}</span><b>{state.faces[index] || "□"}</b><strong>{Math.min(position, 20)}<small>/20</small></strong><i><em style={{ width: `${Math.min(position / 20 * 100, 100)}%` }} /></i></div>)}</div>{state.phase === "complete" ? finish : <button className="primary-button dice-roll" disabled={!myTurn} onClick={() => void roll()}>{myTurn ? "Roll the dice" : "Opponent rolling…"}</button>}</section>;
+
+  if (state.gameId === "battleship") {
+    const ownFleet = state.ready[playerIndex] ? decodeBattleshipFleet(state.fleets[playerIndex]) : battleshipFleet;
+    const enemyFleet = decodeBattleshipFleet(state.fleets[otherIndex]);
+    const ownShots = state.shots[playerIndex];
+    const enemyShots = state.shots[otherIndex];
+    const placementStatus = state.ready[playerIndex] ? `Fleet locked. Waiting for ${state.names[otherIndex]}…` : "Arrange your fleet and lock it in.";
+    gameView = <section className="online-game battleship-game">
+      <div className="battleship-heading"><div><p className="eyebrow">NAVAL STRATEGY · LIVE ONLINE</p><h1>Battleship</h1><p>Each captain hides a fleet, then fires live from their own device.</p></div><span>艦</span></div>
+      <PlayerStrip state={state} user={user} />
+      {state.phase === "placing" ? <>
+        <div className="online-turn-status">{placementStatus}</div>
+        {!state.ready[playerIndex] ? <BattleshipPlacement fleet={battleshipFleet} onChange={setBattleshipFleet} onReady={readyBattleshipFleet} readyLabel="Lock fleet" /> : <div className="battleship-waiting"><BattleshipGrid fleet={ownFleet} shots={[]} revealShips label="Your locked fleet" /><strong>Fleet locked</strong><span>Your opponent is still placing ships.</span></div>}
+      </> : <>
+        <div className="battleship-score-strip"><div className={state.turnUid === state.players[0] && state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}<span>/17 HITS</span></strong></div><b>対<small>{state.moves} SHOTS</small></b><div className={state.turnUid === state.players[1] && state.phase === "playing" ? "active" : ""}><small>{state.names[1]}</small><strong>{state.scores[1]}<span>/17 HITS</span></strong></div></div>
+        <div className="online-turn-status">{status}</div>
+        <div className="battleship-boards">
+          <section><div><small>FIRING GRID</small><h2>{state.names[otherIndex]}&apos;s waters</h2></div><BattleshipGrid fleet={enemyFleet} shots={ownShots} revealShips={state.phase === "complete"} onFire={fireBattleship} disabled={!myTurn} label="Opponent waters" lastShot={state.lastShots[playerIndex]} /></section>
+          <section><div><small>YOUR FLEET</small><h2>Home waters</h2></div><BattleshipGrid fleet={ownFleet} shots={enemyShots} revealShips label="Your fleet" lastShot={state.lastShots[otherIndex]} /></section>
+        </div>
+        {state.phase === "complete" && finish}
+      </>}
+    </section>;
+  }
 
   if (state.gameId === "checkers") {
     const board = state.board as CheckersPiece[];
