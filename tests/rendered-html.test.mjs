@@ -263,6 +263,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.premium-access-card/);
   assert.match(styles, /\.premium-avatar-picker button\.locked::after/);
   assert.match(styles, /\.profile-stats-menu/);
+  assert.match(styles, /\.profile-stats-menu \{ box-shadow:none; \}/);
   assert.match(styles, /\.theme-toggle\[aria-pressed="true"\][^}]*linear-gradient\(#0d0d0d,#0d0d0d\) padding-box/);
   assert.match(styles, /\.friend-link-actions/);
   assert.match(styles, /\.friends-panel \.app-title h1[^}]*color:var\(--red\)/);
