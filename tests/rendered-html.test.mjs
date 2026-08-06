@@ -328,6 +328,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /game-garden-logo-pink\.png/);
   assert.match(styles, /\.game-header-logo/);
   assert.match(styles, /\.barricade-game-shell>\.game-topbar\{color:var\(--black\)\}/);
+  assert.match(styles, /\.grid-barricade \.difficulty-options button>span\{color:var\(--black\)\}/);
   assert.equal((styles.match(/\.hub-nav\{height:65px/g) ?? []).length, 1);
   assert.match(styles, /data-theme="sakura"/);
   assert.match(styles, /content:"桜"/);
