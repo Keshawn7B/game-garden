@@ -210,6 +210,21 @@ service cloud.firestore {
       allow delete: if documentId == 'state' && roomParticipant(roomCode);
     }
 
+    match /rooms/{roomCode}/airhockey/{documentId} {
+      allow read: if roomParticipant(roomCode);
+      allow create, update: if roomParticipant(roomCode)
+        && request.resource.data.updatedAt == request.time
+        && (
+          (documentId == 'live'
+            && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid
+            && validLiveAirHockeyPuck(request.resource.data))
+          ||
+          (documentId == request.auth.uid
+            && validLiveAirHockeyMallet(roomCode, request.resource.data))
+        );
+      allow delete: if roomParticipant(roomCode);
+    }
+
     match /leaderboards/{gameId}/entries/{userId} {
       allow read: if true;
       allow create: if validScore(gameId, userId);
@@ -477,6 +492,40 @@ service cloud.firestore {
         && state.winnerUid in ['', 'draw', state.players[0], state.players[1]]
         && state.createdAt is timestamp
         && state.updatedAt is timestamp;
+    }
+
+    function validLiveAirHockeyPuck(puck) {
+      return puck.keys().hasOnly(['x', 'y', 'vx', 'vy', 'round', 'updatedAt'])
+        && (puck.x is int || puck.x is float)
+        && (puck.y is int || puck.y is float)
+        && (puck.vx is int || puck.vx is float)
+        && (puck.vy is int || puck.vy is float)
+        && puck.x >= 0
+        && puck.x <= 100
+        && puck.y >= 0
+        && puck.y <= 150
+        && puck.vx >= -90
+        && puck.vx <= 90
+        && puck.vy >= -90
+        && puck.vy <= 90
+        && puck.round is int
+        && puck.round >= 1;
+    }
+
+    function validLiveAirHockeyMallet(roomCode, mallet) {
+      let room = get(/databases/$(database)/documents/rooms/$(roomCode)).data;
+      return mallet.keys().hasOnly(['x', 'y', 'player', 'uid', 'updatedAt'])
+        && mallet.uid == request.auth.uid
+        && mallet.player is int
+        && mallet.player in [0, 1]
+        && ((mallet.player == 0 && request.auth.uid == room.hostUid)
+          || (mallet.player == 1 && request.auth.uid == room.guestUid))
+        && (mallet.x is int || mallet.x is float)
+        && (mallet.y is int || mallet.y is float)
+        && mallet.x >= 9
+        && mallet.x <= 91
+        && ((mallet.player == 0 && mallet.y >= 75 && mallet.y <= 139)
+          || (mallet.player == 1 && mallet.y >= 11 && mallet.y <= 75));
     }
 
     function validInviteGame(gameId, gameName) {

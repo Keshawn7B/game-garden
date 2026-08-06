@@ -2068,7 +2068,7 @@ const GAME_MENUS: Record<LibraryGameId, {
     players: "1–2 Players",
     rules: [
       "Tap Lock Rink, then drag your mallet freely around your half.",
-      "Use the side rails for bank shots and defend against the return.",
+      "In Versus, both players move simultaneously while the puck stays live.",
       "Score through the opponent's goal; the first player to five wins.",
     ],
   },

@@ -1,9 +1,11 @@
 export type AirHockeyPoint = { x: number; y: number };
 export type AirHockeyDifficulty = "easy" | "normal" | "hard";
 export type AirHockeyPlayer = 0 | 1;
+export type AirHockeyBody = AirHockeyPoint & { vx: number; vy: number };
 
 export const AIR_HOCKEY_WIN_SCORE = 5;
 export const AIR_HOCKEY_CENTER: AirHockeyPoint = { x: 50, y: 75 };
+export const AIR_HOCKEY_LIVE_START: AirHockeyBody = { ...AIR_HOCKEY_CENTER, vx: 0, vy: 0 };
 
 export type AirHockeyShot = {
   trajectory: AirHockeyPoint[];
@@ -13,6 +15,54 @@ export type AirHockeyShot = {
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint, AirHockeyPoint], malletVelocities: [AirHockeyPoint, AirHockeyPoint], elapsedMs: number) {
+  const elapsed = clamp(elapsedMs, 0, 34) / 1000;
+  let x = puck.x + puck.vx * elapsed;
+  let y = puck.y + puck.vy * elapsed;
+  let vx = puck.vx;
+  let vy = puck.vy;
+  let goal: AirHockeyPlayer | null = null;
+
+  if (x < 5) { x = 5 + (5 - x); vx = Math.abs(vx) * 0.94; }
+  if (x > 95) { x = 95 - (x - 95); vx = -Math.abs(vx) * 0.94; }
+
+  const inGoal = x >= 34 && x <= 66;
+  if (y < 5 && inGoal) goal = 0;
+  else if (y > 145 && inGoal) goal = 1;
+  else {
+    if (y < 5) { y = 5 + (5 - y); vy = Math.abs(vy) * 0.94; }
+    if (y > 145) { y = 145 - (y - 145); vy = -Math.abs(vy) * 0.94; }
+  }
+
+  if (goal == null) {
+    for (let player = 0; player < 2; player += 1) {
+      const mallet = mallets[player];
+      const malletVelocity = malletVelocities[player];
+      const dx = x - mallet.x;
+      const dy = y - mallet.y;
+      const distance = Math.max(0.001, Math.hypot(dx, dy));
+      if (distance > 12.5) continue;
+      const nx = dx / distance;
+      const ny = dy / distance;
+      const closingSpeed = (malletVelocity.x - vx) * nx + (malletVelocity.y - vy) * ny;
+      if (closingSpeed < -2 && distance > 11.7) continue;
+      x = mallet.x + nx * 12.6;
+      y = mallet.y + ny * 12.6;
+      const malletSpeed = Math.hypot(malletVelocity.x, malletVelocity.y);
+      const impact = clamp(Math.max(25, closingSpeed * 1.45 + malletSpeed * 0.5), 25, 82);
+      vx = clamp(nx * impact + malletVelocity.x * 0.32, -82, 82);
+      vy = clamp(ny * impact + malletVelocity.y * 0.32, -82, 82);
+    }
+
+    const drag = Math.pow(0.992, elapsed * 60);
+    vx *= drag;
+    vy *= drag;
+    if (Math.hypot(vx, vy) < 0.7) { vx = 0; vy = 0; }
+  }
+
+  return { puck: goal == null ? { x, y, vx, vy } : { ...AIR_HOCKEY_LIVE_START }, goal };
 }
 
 export function airHockeyVelocityFromMallet(previous: AirHockeyPoint, current: AirHockeyPoint, elapsedMs = 16) {

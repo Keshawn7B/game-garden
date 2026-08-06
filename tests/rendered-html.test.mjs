@@ -43,6 +43,7 @@ test("routes every game through a start menu", async () => {
   const dotsBoxesSource = await readFile(new URL("../app/dots-boxes-game.tsx", import.meta.url), "utf8");
   const gameResultSource = await readFile(new URL("../app/game-result.tsx", import.meta.url), "utf8");
   const airHockeySource = await readFile(new URL("../app/air-hockey-game.tsx", import.meta.url), "utf8");
+  const onlineAirHockeySource = await readFile(new URL("../app/online-air-hockey.tsx", import.meta.url), "utf8");
   const barricadeDragSource = await readFile(new URL("../app/barricade-drag.tsx", import.meta.url), "utf8");
   const chatSource = await readFile(new URL("../app/chat-chrome.tsx", import.meta.url), "utf8");
   const onlineStyles = await readFile(new URL("../app/online-games.css", import.meta.url), "utf8");
@@ -184,7 +185,13 @@ test("routes every game through a start menu", async () => {
   assert.match(airHockeySource, /LOCK RINK/);
   assert.match(airHockeySource, /MOVE YOUR MALLET/);
   assert.doesNotMatch(airHockeySource, /PULL PUCK|beginPull|movePull|releasePull/);
-  assert.match(onlineSource, /playAirHockey/);
+  assert.match(onlineSource, /OnlineAirHockeyRink/);
+  assert.match(onlineSource, /SIMULTANEOUS ONLINE/);
+  assert.doesNotMatch(onlineSource, /Each shot synchronizes/);
+  assert.match(onlineAirHockeySource, /requestAnimationFrame/);
+  assert.match(onlineAirHockeySource, /BOTH PLAYERS LIVE/);
+  assert.match(onlineAirHockeySource, /stepAirHockeyLive/);
+  assert.match(firestoreRules, /validLiveAirHockeyMallet/);
   assert.match(styles, /\.air-hockey-rink/);
   assert.match(styles, /game-air-hockey\.png/);
   assert.match(source, /function chooseBarricadeCpuAction/);

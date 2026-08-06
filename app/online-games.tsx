@@ -12,8 +12,8 @@ import { BattleshipGrid, BattleshipPlacement } from "./battleship-game";
 import { DOTS_BOX_COUNT, DOTS_EDGE_COUNT, applyDotsBoxesEdge } from "./dots-boxes";
 import { DotsBoxesBoard } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
-import { AIR_HOCKEY_CENTER, AIR_HOCKEY_WIN_SCORE, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, simulateAirHockeyShot } from "./air-hockey";
-import { AirHockeyRink } from "./air-hockey-game";
+import { AIR_HOCKEY_CENTER, AIR_HOCKEY_WIN_SCORE, type AirHockeyPlayer } from "./air-hockey";
+import { OnlineAirHockeyRink } from "./online-air-hockey";
 
 export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey";
 
@@ -281,11 +281,11 @@ function HeaderLogo() {
   return <span className="header-title-logo game-header-logo" role="img" aria-label="Game Garden" />;
 }
 
-function PlayerStrip({ state, user }: { state: OnlineState; user: User }) {
+function PlayerStrip({ state, user, simultaneous = false }: { state: OnlineState; user: User; simultaneous?: boolean }) {
   const active = state.phase === "playing" ? state.players.indexOf(state.turnUid) : -1;
   return (
     <div className="online-player-strip" aria-label="Online players">
-      {state.names.map((name, index) => <div className={active === index ? "active" : ""} key={state.players[index]}><small>{state.players[index] === user.uid ? "YOU" : index === 0 ? "HOST" : "GUEST"}</small><strong>{name}</strong><span>{state.scores[index]}</span></div>)}
+      {state.names.map((name, index) => <div className={state.phase === "playing" && (simultaneous || active === index) ? "active" : ""} key={state.players[index]}><small>{state.players[index] === user.uid ? "YOU" : index === 0 ? "HOST" : "GUEST"}</small><strong>{name}</strong><span>{state.scores[index]}</span></div>)}
       <b>LIVE</b>
     </div>
   );
@@ -411,6 +411,24 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return () => window.clearTimeout(timer);
   }, [mutateAtomic, room.hostUid, state, user.uid]);
 
+  const scoreAirHockeyGoal = useCallback((scorer: AirHockeyPlayer, goalRound: number) => void mutateAtomic((current) => {
+    if (current.gameId !== "airhockey" || current.phase !== "playing" || current.round !== goalRound) return null;
+    const scores: [number, number] = [...current.scores];
+    scores[scorer] += 1;
+    const winnerIndex = scores.findIndex((score) => score >= AIR_HOCKEY_WIN_SCORE);
+    const won = winnerIndex >= 0;
+    return {
+      board: [AIR_HOCKEY_CENTER.x, AIR_HOCKEY_CENTER.y],
+      open: [],
+      scores,
+      moves: current.moves + 1,
+      round: current.round + 1,
+      phase: won ? "complete" : "playing",
+      winnerUid: won ? current.players[winnerIndex] : "",
+      turnUid: current.players[0],
+    };
+  }), [mutateAtomic]);
+
   if (!state) return <main className="game-shell"><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><div className="game-header-actions"><HeaderChatButton inGame /><span className="online-room-pill">● {room.code}</span></div></header><section className="online-game waiting"><b>接</b><h1>Connecting match…</h1><p>Synchronizing both players.</p></section></main>;
 
   const playerIndex = state.players.indexOf(user.uid) as 0 | 1;
@@ -497,26 +515,6 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
       phase: complete ? "complete" : "playing",
       winnerUid,
       turnUid: complete || result.completed.length ? user.uid : current.players[otherIndex],
-    };
-  });
-
-  const playAirHockey = (velocity: { x: number; y: number }) => void mutate((current) => {
-    if (current.gameId !== "airhockey" || current.turnUid !== user.uid || current.phase !== "playing") return null;
-    const puck = { x: Number(current.board[0] ?? AIR_HOCKEY_CENTER.x), y: Number(current.board[1] ?? AIR_HOCKEY_CENTER.y) };
-    const shot = simulateAirHockeyShot(puck, velocity);
-    const scores: [number, number] = [...current.scores];
-    if (shot.goal != null) scores[shot.goal] += 1;
-    const winnerIndex = scores.findIndex((score) => score >= AIR_HOCKEY_WIN_SCORE);
-    const won = winnerIndex >= 0;
-    const nextPlayer = shot.goal != null ? shot.goal === 0 ? 1 : 0 : shot.final.y < 75 ? 1 : 0;
-    return {
-      board: [shot.final.x, shot.final.y],
-      open: encodeAirHockeyTrajectory(shot.trajectory),
-      scores,
-      moves: current.moves + 1,
-      phase: won ? "complete" : "playing",
-      winnerUid: won ? current.players[winnerIndex] : "",
-      turnUid: won ? current.players[winnerIndex] : current.players[nextPlayer],
     };
   });
 
@@ -664,8 +662,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   }
 
   if (state.gameId === "airhockey") {
-    const puck = { x: Number(state.board[0] ?? AIR_HOCKEY_CENTER.x), y: Number(state.board[1] ?? AIR_HOCKEY_CENTER.y) };
-    gameView = <section className="online-game air-hockey-game online-air-hockey"><div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · LIVE ONLINE</p><h1>Air Hockey</h1><p>Lock the rink and strike with your mallet. Each shot synchronizes across both screens.</p></div><span>氷</span></div><PlayerStrip state={state} user={user} /><div className="air-scoreboard"><div className={state.turnUid === state.players[0] && state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong></div><b>FIRST TO 5<small>{state.moves} SHOTS</small></b><div className={state.turnUid === state.players[1] && state.phase === "playing" ? "active" : ""}><strong>{state.scores[1]}</strong><small>{state.names[1]}</small></div></div><div className="online-turn-status">{status}{myTurn ? " — lock rink and move your mallet" : ""}</div><AirHockeyRink puck={puck} trajectory={decodeAirHockeyTrajectory(state.open)} activePlayer={state.players.indexOf(state.turnUid) as 0 | 1} controlledPlayer={playerIndex} disabled={!myTurn} labels={[state.names[0], state.names[1]]} onShoot={playAirHockey} />{state.phase === "complete" && finish}</section>;
+    gameView = <section className="online-game air-hockey-game online-air-hockey"><div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · SIMULTANEOUS ONLINE</p><h1>Air Hockey</h1><p>Lock the rink and move at the same time as your opponent. The puck never waits for a turn.</p></div><span>氷</span></div><PlayerStrip state={state} user={user} simultaneous /><div className="air-scoreboard"><div className={state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong></div><b>FIRST TO 5<small>LIVE MATCH</small></b><div className={state.phase === "playing" ? "active" : ""}><strong>{state.scores[1]}</strong><small>{state.names[1]}</small></div></div><div className="online-turn-status">{state.phase === "complete" ? winnerName : "BOTH PLAYERS LIVE — lock the rink and move your mallet"}</div><OnlineAirHockeyRink roomCode={room.code} players={state.players} names={state.names} userUid={user.uid} round={state.round} disabled={state.phase !== "playing"} onGoal={scoreAirHockeyGoal} onConnectionError={() => setError("The live rink lost connection.")} />{state.phase === "complete" && finish}</section>;
   }
 
   if (state.gameId === "rps") {
