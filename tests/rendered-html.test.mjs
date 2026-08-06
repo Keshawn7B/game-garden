@@ -143,9 +143,15 @@ test("routes every game through a start menu", async () => {
   assert.match(battleshipSource, /export function Battleship/);
   assert.match(battleshipSource, /<BattleshipPlacement/);
   assert.match(battleshipSource, /chooseBattleshipCpuShot/);
+  assert.match(battleshipSource, /onPointerDown=\{\(event\) => beginDrag/);
+  assert.match(battleshipSource, /onPointerMove=\{\(event\) => moveDrag/);
+  assert.match(battleshipSource, /onPointerUp=\{\(event\) => finishDrag/);
+  assert.match(battleshipSource, /ship-drop-preview/);
   assert.match(onlineSource, /readyBattleshipFleet/);
   assert.match(onlineSource, /fireBattleship/);
   assert.match(styles, /\.battleship-grid/);
+  assert.match(styles, /\.battleship-drag-ghost/);
+  assert.match(styles, /\.ship-drop-preview/);
   assert.match(styles, /game-battleship\.png/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);

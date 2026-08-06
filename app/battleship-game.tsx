@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { HeaderChatButton } from "./chat-chrome";
 import {
   BATTLESHIP_SHIPS,
+  battleshipCells,
   battleshipFleetDefeated,
   battleshipShipAt,
   battleshipShipSunk,
+  canPlaceBattleship,
   chooseBattleshipCpuShot,
   placeBattleship,
   randomBattleshipFleet,
@@ -16,7 +18,7 @@ import {
   type BattleshipOrientation,
 } from "./battleship";
 
-export function BattleshipGrid({ fleet, shots, revealShips, onFire, disabled = false, label, lastShot = null }: {
+export function BattleshipGrid({ fleet, shots, revealShips, onFire, disabled = false, label, lastShot = null, previewCells = [], previewValid = true, gridRef }: {
   fleet: BattleshipFleet;
   shots: number[];
   revealShips: boolean;
@@ -24,8 +26,11 @@ export function BattleshipGrid({ fleet, shots, revealShips, onFire, disabled = f
   disabled?: boolean;
   label: string;
   lastShot?: number | null;
+  previewCells?: number[];
+  previewValid?: boolean;
+  gridRef?: (element: HTMLDivElement | null) => void;
 }) {
-  return <div className="battleship-grid" role="grid" aria-label={label}>{Array.from({ length: 100 }, (_, cell) => {
+  return <div className="battleship-grid" role="grid" aria-label={label} ref={gridRef}>{Array.from({ length: 100 }, (_, cell) => {
     const shipIndex = battleshipShipAt(fleet, cell);
     const shot = shots.includes(cell);
     const hit = shot && shipIndex >= 0;
@@ -36,11 +41,11 @@ export function BattleshipGrid({ fleet, shots, revealShips, onFire, disabled = f
       type="button"
       role="gridcell"
       key={cell}
-      className={`${revealShips && shipIndex >= 0 ? "has-ship" : ""} ${shot ? hit ? "is-hit" : "is-miss" : ""} ${sunk ? "is-sunk" : ""} ${lastShot === cell ? "last-shot" : ""}`}
+      className={`${revealShips && shipIndex >= 0 ? "has-ship" : ""} ${shot ? hit ? "is-hit" : "is-miss" : ""} ${sunk ? "is-sunk" : ""} ${lastShot === cell ? "last-shot" : ""} ${previewCells.includes(cell) ? previewValid ? "ship-drop-preview valid" : "ship-drop-preview invalid" : ""}`}
       disabled={!onFire || disabled || shot}
       onClick={() => onFire?.(cell)}
       aria-label={`${String.fromCharCode(65 + column)}${row + 1}${shot ? hit ? ", hit" : ", miss" : revealShips && shipIndex >= 0 ? ", ship" : ""}`}
-    >{hit ? <b>×</b> : shot ? <i /> : revealShips && shipIndex >= 0 ? <span /> : null}</button>;
+    >{previewCells.includes(cell) ? <em /> : hit ? <b>×</b> : shot ? <i /> : revealShips && shipIndex >= 0 ? <span /> : null}</button>;
   })}</div>;
 }
 
@@ -52,7 +57,77 @@ export function BattleshipPlacement({ fleet, onChange, onReady, readyLabel = "Re
 }) {
   const [selectedShip, setSelectedShip] = useState(0);
   const [orientation, setOrientation] = useState<BattleshipOrientation>("h");
-  const [note, setNote] = useState("Select a ship, then tap its new bow position.");
+  const [note, setNote] = useState("Drag a ship onto the grid. Tap placement also works.");
+  const [draggingShip, setDraggingShip] = useState<number | null>(null);
+  const [dragPoint, setDragPoint] = useState({ x: 0, y: 0 });
+  const [hoverCell, setHoverCell] = useState<number | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const dragOrigin = useRef({ x: 0, y: 0 });
+
+  const cellAtPoint = (clientX: number, clientY: number) => {
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect || clientX < rect.left || clientX >= rect.right || clientY < rect.top || clientY >= rect.bottom) return null;
+    const column = Math.min(9, Math.floor((clientX - rect.left) / rect.width * 10));
+    const row = Math.min(9, Math.floor((clientY - rect.top) / rect.height * 10));
+    return row * 10 + column;
+  };
+
+  const placementAt = (anchor: number | null, shipIndex: number) => {
+    if (anchor == null) return { start: -1, cells: [] as number[], valid: false };
+    const size = BATTLESHIP_SHIPS[shipIndex].size;
+    const offset = Math.floor((size - 1) / 2);
+    const start = orientation === "h" ? anchor - offset : anchor - offset * 10;
+    const cells = battleshipCells(start, size, orientation);
+    const visibleCells = cells?.filter((cell) => cell >= 0 && cell < 100) ?? [];
+    const valid = Boolean(cells && canPlaceBattleship(fleet, shipIndex, cells));
+    return { start, cells: visibleCells.length ? visibleCells : [anchor], valid };
+  };
+
+  const dragPreview = draggingShip == null ? { cells: [] as number[], valid: false } : placementAt(hoverCell, draggingShip);
+
+  const beginDrag = (event: ReactPointerEvent<HTMLButtonElement>, shipIndex: number) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelectedShip(shipIndex);
+    setDraggingShip(shipIndex);
+    dragOrigin.current = { x: event.clientX, y: event.clientY };
+    setDragPoint({ x: event.clientX, y: event.clientY });
+    setHoverCell(cellAtPoint(event.clientX, event.clientY));
+    setNote(`Dragging ${BATTLESHIP_SHIPS[shipIndex].name.toLowerCase()}…`);
+  };
+
+  const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>, shipIndex: number) => {
+    if (draggingShip !== shipIndex) return;
+    event.preventDefault();
+    setDragPoint({ x: event.clientX, y: event.clientY });
+    setHoverCell(cellAtPoint(event.clientX, event.clientY));
+  };
+
+  const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>, shipIndex: number) => {
+    if (draggingShip !== shipIndex) return;
+    const anchor = cellAtPoint(event.clientX, event.clientY);
+    const moved = Math.hypot(event.clientX - dragOrigin.current.x, event.clientY - dragOrigin.current.y) > 7;
+    if (!moved && anchor == null) {
+      setDraggingShip(null);
+      setHoverCell(null);
+      setNote(`Tap the grid or drag the ${BATTLESHIP_SHIPS[shipIndex].name.toLowerCase()} (${BATTLESHIP_SHIPS[shipIndex].size} spaces).`);
+      return;
+    }
+    const placement = placementAt(anchor, shipIndex);
+    const placed = placement.valid ? placeBattleship(fleet, shipIndex, placement.start, orientation) : null;
+    if (placed) {
+      onChange(placed);
+      setNote(`${BATTLESHIP_SHIPS[shipIndex].name} snapped into position.`);
+    } else setNote(anchor == null ? "Drop the ship inside the ocean grid." : "That ship does not fit there.");
+    setDraggingShip(null);
+    setHoverCell(null);
+  };
+
+  const cancelDrag = () => {
+    setDraggingShip(null);
+    setHoverCell(null);
+    setNote("Drag a ship onto the grid.");
+  };
 
   const positionShip = (cell: number) => {
     const placed = placeBattleship(fleet, selectedShip, cell, orientation);
@@ -66,14 +141,15 @@ export function BattleshipPlacement({ fleet, onChange, onReady, readyLabel = "Re
 
   return <section className="battleship-placement">
     <div className="battleship-placement-tools">
-      <div className="battleship-fleet-list" aria-label="Choose a ship to reposition">{BATTLESHIP_SHIPS.map((ship, index) => <button type="button" key={ship.id} className={selectedShip === index ? "active" : ""} onClick={() => { setSelectedShip(index); setNote(`Place the ${ship.name.toLowerCase()} (${ship.size} spaces).`); }}><span>{ship.name}</span><i>{Array.from({ length: ship.size }, (_, marker) => <b key={marker} />)}</i></button>)}</div>
+      <div className="battleship-fleet-list" aria-label="Drag a ship onto the ocean grid">{BATTLESHIP_SHIPS.map((ship, index) => <button type="button" key={ship.id} className={`${selectedShip === index ? "active" : ""} ${draggingShip === index ? "is-dragging" : ""}`} aria-grabbed={draggingShip === index} onFocus={() => setSelectedShip(index)} onDragStart={(event) => event.preventDefault()} onPointerDown={(event) => beginDrag(event, index)} onPointerMove={(event) => moveDrag(event, index)} onPointerUp={(event) => finishDrag(event, index)} onPointerCancel={cancelDrag}><span>{ship.name}</span><i>{Array.from({ length: ship.size }, (_, marker) => <b key={marker} />)}</i></button>)}</div>
       <div className="battleship-placement-actions">
         <button type="button" onClick={() => setOrientation((current) => current === "h" ? "v" : "h")}><b className={`ship-direction direction-${orientation}`} />{orientation === "h" ? "Horizontal" : "Vertical"}</button>
         <button type="button" onClick={() => { onChange(randomBattleshipFleet()); setNote("Fleet randomized."); }}>Shuffle fleet</button>
       </div>
       <p role="status">{note}</p>
     </div>
-    <BattleshipGrid fleet={fleet} shots={[]} revealShips label="Position your fleet" onFire={positionShip} />
+    <BattleshipGrid fleet={fleet} shots={[]} revealShips label="Position your fleet" onFire={positionShip} previewCells={dragPreview.cells} previewValid={dragPreview.valid} gridRef={(element) => { boardRef.current = element; }} />
+    {draggingShip != null && <div className={`battleship-drag-ghost direction-${orientation}`} style={{ left: dragPoint.x, top: dragPoint.y }} aria-hidden="true">{Array.from({ length: BATTLESHIP_SHIPS[draggingShip].size }, (_, marker) => <i key={marker} />)}</div>}
     <button className="primary-button battleship-ready" type="button" disabled={!validBattleshipFleet(fleet)} onClick={onReady}>{readyLabel} <span>→</span></button>
   </section>;
 }
