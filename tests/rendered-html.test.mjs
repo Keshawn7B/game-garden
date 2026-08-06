@@ -124,6 +124,12 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /じゃんけん/);
   assert.match(source, /function DiceRace/);
   assert.match(source, /function Barricade/);
+  assert.match(source, /function chooseBarricadeCpuAction/);
+  assert.match(source, /playerCanWinNext/);
+  assert.match(source, /blocksWin \? 120/);
+  assert.match(source, /barricadeBestReplyPath/);
+  assert.match(source, /rankedWalls\.find\(\(choice\) => choice\.blocksWin\)/);
+  assert.match(source, /chooseBarricadeCpuAction\(positions, walls, wallsLeft\[1\], difficulty\)/);
   assert.match(source, /className="quoridor-board"/);
   assert.match(source, /legalBarricadeWall/);
   assert.match(onlineSource, /onlineBarricadeMoves/);

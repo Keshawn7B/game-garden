@@ -1438,6 +1438,66 @@ function shortestBarricadeMove(position: number, opponent: number, goalRow: numb
   return moves.sort((left, right) => barricadePathLength(left, goalRow, walls) - barricadePathLength(right, goalRow, walls))[0];
 }
 
+type BarricadeCpuAction = { kind: "move"; destination: number } | { kind: "wall"; wall: GridWall };
+
+function barricadeBestReplyPath(position: number, opponent: number, goalRow: number, walls: GridWall[]) {
+  const replies = barricadeMoves(position, opponent, walls);
+  if (!replies.length) return barricadePathLength(position, goalRow, walls);
+  return Math.min(...replies.map((reply) => barricadePathLength(reply, goalRow, walls)));
+}
+
+function chooseBarricadeCpuAction(positions: [number, number], walls: GridWall[], cpuWallsLeft: number, difficulty: CpuDifficulty): BarricadeCpuAction {
+  const playerPosition = positions[0];
+  const cpuPosition = positions[1];
+  const cpuMoves = barricadeMoves(cpuPosition, playerPosition, walls);
+  const winningMove = cpuMoves.find((move) => Math.floor(move / BARRICADE_SIZE) === 8);
+  if (winningMove != null) return { kind: "move", destination: winningMove };
+
+  const bestMove = shortestBarricadeMove(cpuPosition, playerPosition, 8, walls) ?? cpuMoves[0];
+  if (bestMove == null || cpuWallsLeft <= 0) return { kind: "move", destination: bestMove ?? cpuPosition };
+
+  const playerPath = barricadePathLength(playerPosition, 0, walls);
+  const cpuPath = barricadePathLength(cpuPosition, 8, walls);
+  const playerCanWinNext = barricadeMoves(playerPosition, cpuPosition, walls).some((move) => Math.floor(move / BARRICADE_SIZE) === 0);
+  const moveReplyPath = barricadeBestReplyPath(playerPosition, bestMove, 0, walls);
+  const moveScore = (moveReplyPath - barricadePathLength(bestMove, 8, walls)) * 4;
+
+  const rankedWalls: Array<{ wall: GridWall; score: number; delay: number; blocksWin: boolean }> = [];
+  for (let row = 0; row < 8; row += 1) for (let column = 0; column < 8; column += 1) for (const orientation of ["h", "v"] as const) {
+    const wall: GridWall = { row, column, orientation, owner: 1 };
+    if (!legalBarricadeWall(wall, walls, positions)) continue;
+    const nextWalls = [...walls, wall];
+    const nextPlayerPath = barricadePathLength(playerPosition, 0, nextWalls);
+    const nextCpuPath = barricadePathLength(cpuPosition, 8, nextWalls);
+    const delay = nextPlayerPath - playerPath;
+    const selfDelay = nextCpuPath - cpuPath;
+    const playerWinsAfterWall = barricadeMoves(playerPosition, cpuPosition, nextWalls).some((move) => Math.floor(move / BARRICADE_SIZE) === 0);
+    const blocksWin = playerCanWinNext && !playerWinsAfterWall;
+    const replyPath = barricadeBestReplyPath(playerPosition, cpuPosition, 0, nextWalls);
+    const replyAdvantage = replyPath - nextCpuPath;
+    const conservationPenalty = cpuWallsLeft <= 2 ? 2 : cpuWallsLeft <= 4 ? .75 : 0;
+    const threatScore = blocksWin ? 120 : playerWinsAfterWall ? -120 : 0;
+    rankedWalls.push({ wall, delay, blocksWin, score: threatScore + replyAdvantage * 4 + delay * 6 - selfDelay * 8 - conservationPenalty });
+  }
+  rankedWalls.sort((left, right) => right.score - left.score);
+  const bestWall = rankedWalls[0];
+  if (!bestWall) return { kind: "move", destination: bestMove };
+
+  const blockingWall = rankedWalls.find((choice) => choice.blocksWin);
+  if (playerCanWinNext && blockingWall && difficulty !== "easy") return { kind: "wall", wall: blockingWall.wall };
+  if (difficulty === "easy") {
+    const usefulWalls = rankedWalls.filter((choice) => choice.delay > 0 && choice.score > -10).slice(0, 10);
+    if (usefulWalls.length && Math.random() < .16) return { kind: "wall", wall: usefulWalls[Math.floor(Math.random() * usefulWalls.length)].wall };
+    const destination = Math.random() < .48 ? cpuMoves[Math.floor(Math.random() * cpuMoves.length)] : bestMove;
+    return { kind: "move", destination };
+  }
+
+  const wallThreshold = difficulty === "hard" ? moveScore + 1 : moveScore + 5;
+  const raceIsClose = playerPath <= cpuPath + (difficulty === "hard" ? 3 : 1);
+  if (bestWall.delay > 0 && raceIsClose && bestWall.score >= wallThreshold) return { kind: "wall", wall: bestWall.wall };
+  return { kind: "move", destination: bestMove };
+}
+
 function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
   const [difficulty, setDifficulty] = useState<CpuDifficulty>("normal");
   const [positions, setPositions] = useState<[number, number]>(BARRICADE_START);
@@ -1528,26 +1588,9 @@ function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
   useEffect(() => {
     if (mode !== "solo" || turn !== 1 || winner != null) return;
     const timer = window.setTimeout(() => {
-      const cpuPath = barricadePathLength(positions[1], 8, walls);
-      const playerPath = barricadePathLength(positions[0], 0, walls);
-      const candidates: GridWall[] = [];
-      if (wallsLeft[1] > 0) for (let row = 0; row < 8; row += 1) for (let column = 0; column < 8; column += 1) for (const nextOrientation of ["h", "v"] as const) {
-        const candidate: GridWall = { row, column, orientation: nextOrientation, owner: 1 };
-        if (legalBarricadeWall(candidate, walls, positions)) candidates.push(candidate);
-      }
-      const shouldWall = candidates.length > 0 && (difficulty === "hard" ? playerPath <= cpuPath + 2 : difficulty === "normal" ? playerPath < cpuPath : Math.random() < .18);
-      if (shouldWall) {
-        const ranked = candidates.map((candidate) => {
-          const nextWalls = [...walls, candidate];
-          return { candidate, value: barricadePathLength(positions[0], 0, nextWalls) - playerPath - Math.max(0, barricadePathLength(positions[1], 8, nextWalls) - cpuPath) };
-        }).sort((left, right) => right.value - left.value);
-        const choice = difficulty === "easy" ? ranked[Math.floor(Math.random() * ranked.length)] : ranked[0];
-        placeWall(1, choice.candidate.row, choice.candidate.column, choice.candidate.orientation);
-      } else {
-        const legalMoves = barricadeMoves(positions[1], positions[0], walls);
-        const destination = difficulty === "easy" && Math.random() < .45 ? legalMoves[Math.floor(Math.random() * legalMoves.length)] : shortestBarricadeMove(positions[1], positions[0], 8, walls);
-        movePawn(1, destination);
-      }
+      const action = chooseBarricadeCpuAction(positions, walls, wallsLeft[1], difficulty);
+      if (action.kind === "wall") placeWall(1, action.wall.row, action.wall.column, action.wall.orientation);
+      else movePawn(1, action.destination);
     }, 520);
     return () => window.clearTimeout(timer);
   }, [difficulty, mode, movePawn, placeWall, positions, turn, walls, wallsLeft, winner]);
