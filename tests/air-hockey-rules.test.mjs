@@ -77,16 +77,28 @@ test("normal CPU tracks the puck at a moderate capped speed", () => {
   assert.ok(next.x > start.x);
 });
 
-test("a corner-trapped puck is redirected toward open ice", () => {
+test("the puck travels through the full corner until reaching a real rail", () => {
   const result = stepAirHockeyLive(
-    { x: 7, y: 8, vx: -3, vy: -2 },
+    { x: 15, y: 19, vx: -12, vy: -12 },
+    [{ x: 50, y: 125 }, { x: 50, y: 25 }],
+    [{ x: 0, y: 0 }, { x: 0, y: 0 }],
+    16,
+  );
+  assert.ok(result.puck.x < 15);
+  assert.ok(result.puck.y < 19);
+  assert.ok(result.puck.vx < 0);
+  assert.ok(result.puck.vy < 0);
+});
+
+test("the physical corner rails bounce both axes", () => {
+  const result = stepAirHockeyLive(
+    { x: 5.05, y: 5.05, vx: -20, vy: -20 },
     [{ x: 50, y: 125 }, { x: 50, y: 25 }],
     [{ x: 0, y: 0 }, { x: 0, y: 0 }],
     16,
   );
   assert.ok(result.puck.vx > 0);
   assert.ok(result.puck.vy > 0);
-  assert.ok(Math.hypot(result.puck.vx, result.puck.vy) >= 18);
 });
 
 test("CPU retreats instead of pinning a puck in its corner", () => {

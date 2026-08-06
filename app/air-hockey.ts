@@ -66,12 +66,6 @@ export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint,
       else { vx = vx / speed * 9; vy = vy / speed * 9; }
     }
 
-    const escapeX = x < 16 ? 1 : x > 84 ? -1 : 0;
-    const escapeY = y < 20 ? 1 : y > 130 ? -1 : 0;
-    if (escapeX && escapeY) {
-      vx = escapeX * Math.max(13, Math.abs(vx));
-      vy = escapeY * Math.max(13, Math.abs(vy));
-    }
   }
 
   return { puck: goal == null ? { x, y, vx, vy } : { ...AIR_HOCKEY_LIVE_START }, goal };
