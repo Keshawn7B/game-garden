@@ -221,7 +221,7 @@ service cloud.firestore {
     function validScore(gameId, userId) {
       return request.auth != null
         && request.auth.uid == userId
-        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship']
+        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes']
         && request.resource.data.uid == userId
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
@@ -398,7 +398,7 @@ service cloud.firestore {
     }
 
     function validOnlineGameState(roomCode, state) {
-      return state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship']
+      return state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes']
         && state.roomCode == roomCode
         && state.gameId == get(/databases/$(database)/documents/rooms/$(roomCode)).data.gameId
         && state.players is list
@@ -424,6 +424,16 @@ service cloud.firestore {
         && state.deck is list
         && state.open is list
         && state.matched is list
+        && (state.gameId != 'dotsboxes' || (
+          state.board.size() == 40
+          && state.matched.size() == 16
+          && state.moves <= 40
+          && state.scores[0] is int
+          && state.scores[1] is int
+          && state.scores[0] >= 0
+          && state.scores[1] >= 0
+          && state.scores[0] + state.scores[1] <= 16
+        ))
         && state.choices is list
         && state.positions is list
         && state.positions.size() == 2
@@ -470,7 +480,8 @@ service cloud.firestore {
         || (gameId == 'dice' && gameName == 'Dice Race')
         || (gameId == 'barricade' && gameName == 'Barricade')
         || (gameId == 'checkers' && gameName == 'Checkers')
-        || (gameId == 'battleship' && gameName == 'Battleship');
+        || (gameId == 'battleship' && gameName == 'Battleship')
+        || (gameId == 'dotsboxes' && gameName == 'Dots & Boxes');
     }
 
     function validAvatar(avatarId) {

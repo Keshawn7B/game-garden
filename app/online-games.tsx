@@ -9,8 +9,10 @@ import { BarricadeDragPiece, type BarricadeDragKind } from "./barricade-drag";
 import { CHECKERS_START, applyCheckersMove, checkersLegalMoves, checkersPieceCount, checkersPieceOwner, checkersWinner, type CheckersMove, type CheckersPiece, type CheckersPlayer } from "./checkers";
 import { battleshipFleetDefeated, battleshipShipAt, decodeBattleshipFleet, encodeBattleshipFleet, randomBattleshipFleet, validBattleshipFleet, type BattleshipFleet } from "./battleship";
 import { BattleshipGrid, BattleshipPlacement } from "./battleship-game";
+import { DOTS_BOX_COUNT, DOTS_EDGE_COUNT, applyDotsBoxesEdge } from "./dots-boxes";
+import { DotsBoxesBoard } from "./dots-boxes-game";
 
-export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship";
+export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes";
 
 type Room = {
   code: string;
@@ -117,7 +119,7 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     moves: 0,
     scores: [0, 0],
     winnerUid: "",
-    board: gameId === "tictactoe" ? Array(9).fill("") : gameId === "connect4" ? Array(42).fill(0) : gameId === "checkers" ? [...CHECKERS_START] : [],
+    board: gameId === "tictactoe" ? Array(9).fill("") : gameId === "connect4" ? Array(42).fill(0) : gameId === "checkers" ? [...CHECKERS_START] : gameId === "dotsboxes" ? Array(DOTS_EDGE_COUNT).fill(0) : [],
     secret: gameId === "codebreaker" ? Array.from({ length: 4 }, () => COLORS[Math.floor(Math.random() * COLORS.length)].id) : [],
     guesses: [],
     target: gameId === "order" ? order.target : [],
@@ -125,7 +127,7 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     checks: [],
     deck: gameId === "memory" ? shuffle([...MEMORY_SYMBOLS, ...MEMORY_SYMBOLS]) : [],
     open: [],
-    matched: [],
+    matched: gameId === "dotsboxes" ? Array(DOTS_BOX_COUNT).fill(0) : [],
     choices: gameId === "rps" ? ["", ""] : [],
     positions: gameId === "barricade" ? [76, 4] : [0, 0],
     faces: [0, 0],
@@ -475,6 +477,26 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return { board: move.board, moves: current.moves + 1, winnerUid: winner ? user.uid : draw ? "draw" : "", phase: winner || draw ? "complete" : "playing", turnUid: current.players[otherIndex] };
   });
 
+  const playDotsBoxes = (edge: number) => void mutate((current) => {
+    if (current.gameId !== "dotsboxes" || current.turnUid !== user.uid || current.phase !== "playing") return null;
+    const result = applyDotsBoxesEdge(current.board.map(Number), current.matched.map(Number), edge, playerIndex);
+    if (!result) return null;
+    const scores: [number, number] = [...current.scores];
+    scores[playerIndex] += result.completed.length;
+    const complete = result.edges.every(Boolean);
+    const winnerUid = complete ? scores[0] === scores[1] ? "draw" : current.players[scores[0] > scores[1] ? 0 : 1] : "";
+    return {
+      board: result.edges,
+      matched: result.boxes,
+      scores,
+      moves: current.moves + 1,
+      open: [edge],
+      phase: complete ? "complete" : "playing",
+      winnerUid,
+      turnUid: complete || result.completed.length ? user.uid : current.players[otherIndex],
+    };
+  });
+
   const readyBattleshipFleet = () => {
     if (!validBattleshipFleet(battleshipFleet)) return;
     void mutateAtomic((current) => {
@@ -612,6 +634,10 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     const winning = new Set(winner?.cells ?? []);
     const preview = hoveredColumn == null ? null : dropPiece(state.board, hoveredColumn, playerIndex + 1)?.index ?? null;
     gameView = <section className="online-game connect-game"><div className="connect-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Connect Four</h1><p>Drop a chip on your device. It appears on both boards instantly.</p></div><span><b>四</b><small>四目並べ</small></span></div><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="connect-stage"><div className="connect-column-controls">{Array.from({ length: 7 }, (_, column) => <button key={column} className={hoveredColumn === column ? "is-preview" : ""} disabled={!myTurn || Boolean(state.board[column])} onMouseEnter={() => setHoveredColumn(column)} onMouseLeave={() => setHoveredColumn(null)} onClick={() => void playConnect(column)}><span>▼</span><b>{column + 1}</b></button>)}</div><div className="connect-board">{state.board.map((piece, index) => { const column = index % 7; return <button key={index} disabled={!myTurn || Boolean(state.board[column])} onMouseEnter={() => setHoveredColumn(column)} onMouseLeave={() => setHoveredColumn(null)} onClick={() => void playConnect(column)} className={`connect-cell ${piece ? `piece-${piece}` : ""} ${winning.has(index) ? "winning-piece" : ""} ${index === preview ? `preview-slot preview-${playerIndex + 1}` : ""}`}><i /></button>; })}</div><div className="connect-feet"><i /><i /></div></div>{state.phase === "complete" && finish}</section>;
+  }
+
+  if (state.gameId === "dotsboxes") {
+    gameView = <section className="online-game dots-boxes-game online-dots-boxes"><div className="dots-boxes-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Dots &amp; Boxes</h1><p>Close a square to score and keep your turn.</p></div><span>点</span></div><PlayerStrip state={state} user={user} /><div className="dots-score-strip"><div className={state.turnUid === state.players[0] && state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong><span>RED BOXES</span></div><b>対<small>{state.moves}/40 LINES</small></b><div className={state.turnUid === state.players[1] && state.phase === "playing" ? "active" : ""}><small>{state.names[1]}</small><strong>{state.scores[1]}</strong><span>INK BOXES</span></div></div><div className="online-turn-status">{status}</div><DotsBoxesBoard edges={state.board.map(Number)} boxes={state.matched.map(Number)} lastEdge={state.open[0] ?? null} onEdge={playDotsBoxes} disabled={!myTurn} labels={[state.names[0].slice(0, 3).toUpperCase(), state.names[1].slice(0, 3).toUpperCase()]} />{state.phase === "complete" && finish}</section>;
   }
 
   if (state.gameId === "rps") {

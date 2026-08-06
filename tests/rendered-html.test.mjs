@@ -24,6 +24,7 @@ test("server-renders the Game Garden hub", async () => {
   assert.match(html, /Memory Flip/);
   assert.match(html, /Connect Four/);
   assert.match(html, /Battleship/);
+  assert.match(html, /Dots &amp; Boxes/);
   assert.doesNotMatch(html, /Meducktion|Deducktion/);
   assert.match(html, /App navigation/);
   assert.match(html, /Ranks/);
@@ -38,6 +39,7 @@ test("routes every game through a start menu", async () => {
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const onlineSource = await readFile(new URL("../app/online-games.tsx", import.meta.url), "utf8");
   const battleshipSource = await readFile(new URL("../app/battleship-game.tsx", import.meta.url), "utf8");
+  const dotsBoxesSource = await readFile(new URL("../app/dots-boxes-game.tsx", import.meta.url), "utf8");
   const barricadeDragSource = await readFile(new URL("../app/barricade-drag.tsx", import.meta.url), "utf8");
   const chatSource = await readFile(new URL("../app/chat-chrome.tsx", import.meta.url), "utf8");
   const onlineStyles = await readFile(new URL("../app/online-games.css", import.meta.url), "utf8");
@@ -52,6 +54,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /rps-menu/);
   assert.match(source, /dice-menu/);
   assert.match(source, /battleship-menu/);
+  assert.match(source, /dotsboxes-menu/);
   assert.doesNotMatch(source, /meducktion|deducktion/i);
   assert.match(source, /function GameMenu/);
   assert.match(source, /Open Lobby/);
@@ -83,7 +86,7 @@ test("routes every game through a start menu", async () => {
   assert.match(onlineSource, /onSnapshot/);
   assert.match(onlineSource, /await updateDoc\(stateRef/);
   assert.match(onlineSource, /latestState\.current = optimistic/);
-  for (const gameId of ["codebreaker", "order", "memory", "tictactoe", "connect4", "rps", "dice", "checkers", "battleship"]) assert.match(onlineSource, new RegExp(`state\\.gameId === "${gameId}"`));
+  for (const gameId of ["codebreaker", "order", "memory", "tictactoe", "connect4", "rps", "dice", "checkers", "battleship", "dotsboxes"]) assert.match(onlineSource, new RegExp(`state\\.gameId === "${gameId}"`));
   assert.match(source, /How to play/);
   assert.match(source, /aria-label="Close game menu"/);
   assert.match(source, /className="menu-close"/);
@@ -154,6 +157,13 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.battleship-drag-ghost/);
   assert.match(styles, /\.ship-drop-preview/);
   assert.match(styles, /game-battleship\.png/);
+  assert.match(source, /<GameMenu game="dotsboxes"/);
+  assert.match(source, /recordScore\("dotsboxes", score\)/);
+  assert.match(dotsBoxesSource, /export function DotsBoxesBoard/);
+  assert.match(dotsBoxesSource, /chooseDotsBoxesCpuEdge/);
+  assert.match(onlineSource, /playDotsBoxes/);
+  assert.match(styles, /\.dots-boxes-board/);
+  assert.match(styles, /game-dots-boxes\.png/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);
   assert.match(source, /blocksWin \? 120/);
@@ -333,9 +343,10 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.dice-racers/);
   assert.match(onlineStyles, /\.online-player-strip/);
   assert.match(onlineStyles, /\.online-turn-status/);
-  assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship'/);
+  assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes'/);
   assert.match(firestoreRules, /gameId == 'checkers' && gameName == 'Checkers'/);
   assert.match(firestoreRules, /gameId == 'battleship' && gameName == 'Battleship'/);
+  assert.match(firestoreRules, /gameId == 'dotsboxes' && gameName == 'Dots & Boxes'/);
   assert.match(firestoreRules, /request\.auth\.uid == resource\.data\.fromUid\s*\|\| request\.auth\.uid == resource\.data\.toUid/);
   assert.doesNotMatch(firestoreRules, /allow read: if request\.auth != null\s*&& request\.auth\.uid in \[resource\.data\.fromUid, resource\.data\.toUid\]/);
   assert.match(source, /friendProfiles/);
