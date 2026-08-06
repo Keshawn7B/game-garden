@@ -144,6 +144,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /authLoadId\.current !== loadId/);
   assert.match(source, /Reset this profile's scores/);
   assert.match(styles, /\.reset-scores-button/);
+  assert.match(styles, /\.score-art\s*\{[^}]*position:relative;[^}]*overflow:hidden;[^}]*contain:paint;/);
   assert.match(source, /function AppHome/);
   assert.match(source, /function PlayerAvatar/);
   assert.match(source, /activeTab === "leaderboard"/);
