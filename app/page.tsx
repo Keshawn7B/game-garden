@@ -7,8 +7,9 @@ import { auth, db, googleProvider } from "./firebase";
 import { ChatChromeProvider, HeaderChatButton } from "./chat-chrome";
 import { makeOnlineGameState, OnlineVersusGame, type OnlineGameId } from "./online-games";
 import { BarricadeDragPiece, type BarricadeDragKind } from "./barricade-drag";
+import { CHECKERS_START, applyCheckersMove, checkersLegalMoves, checkersPieceCount, checkersPieceOwner, checkersWinner, chooseCheckersCpuTurn, type CheckersMove, type CheckersPlayer } from "./checkers";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers";
 type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile";
 type ThemeMode = "classic" | "sakura";
@@ -1245,6 +1246,123 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
   );
 }
 
+function Checkers({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
+  const [difficulty, setDifficulty] = useState<CpuDifficulty>("normal");
+  const [board, setBoard] = useState([...CHECKERS_START]);
+  const [turn, setTurn] = useState<CheckersPlayer>(0);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [forcedFrom, setForcedFrom] = useState<number | null>(null);
+  const [winner, setWinner] = useState<CheckersPlayer | null>(null);
+  const [moves, setMoves] = useState(0);
+  const [message, setMessage] = useState("Select a red piece to begin.");
+  const cpuThinking = turn === 1 && winner == null;
+
+  const reset = useCallback(() => {
+    setBoard([...CHECKERS_START]);
+    setTurn(0);
+    setSelected(null);
+    setForcedFrom(null);
+    setWinner(null);
+    setMoves(0);
+    setMessage("Select a red piece to begin.");
+  }, []);
+
+  const legalMoves = useMemo(() => winner == null ? checkersLegalMoves(board, turn, forcedFrom) : [], [board, forcedFrom, turn, winner]);
+  const selectable = useMemo(() => new Set(legalMoves.map((move) => move.from)), [legalMoves]);
+  const destinations = useMemo(() => new Map(legalMoves.filter((move) => move.from === selected).map((move) => [move.to, move])), [legalMoves, selected]);
+  const captureRequired = legalMoves.some((move) => move.captured != null);
+
+  const finishPlayerTurn = useCallback((nextBoard: typeof board, nextMoves: number) => {
+    const nextWinner = checkersWinner(nextBoard, 1);
+    setBoard(nextBoard);
+    setSelected(null);
+    setForcedFrom(null);
+    setMoves(nextMoves);
+    if (nextWinner != null) {
+      setWinner(nextWinner);
+      setMessage("You cleared the board. Victory!");
+      onScore(nextMoves);
+      return;
+    }
+    setTurn(1);
+    setMessage("CPU is planning its move.");
+  }, [onScore]);
+
+  const playPlayerMove = (move: CheckersMove) => {
+    if (turn !== 0 || winner != null || cpuThinking) return;
+    const applied = applyCheckersMove(board, move);
+    const followUps = move.captured != null && !applied.promoted ? checkersLegalMoves(applied.board, 0, move.to) : [];
+    setBoard(applied.board);
+    if (followUps.length) {
+      setSelected(move.to);
+      setForcedFrom(move.to);
+      setMessage("Great jump—keep capturing with the same piece.");
+      return;
+    }
+    finishPlayerTurn(applied.board, moves + 1);
+  };
+
+  const handleSquare = (index: number) => {
+    const destination = destinations.get(index);
+    if (destination) return playPlayerMove(destination);
+    if (selectable.has(index)) {
+      setSelected(index);
+      setMessage(captureRequired ? "Capture required. Choose the highlighted landing square." : "Choose a highlighted diagonal square.");
+    }
+  };
+
+  useEffect(() => {
+    if (turn !== 1 || winner != null) return;
+    const timer = window.setTimeout(() => {
+      const choice = chooseCheckersCpuTurn(board, difficulty);
+      if (!choice) {
+        setWinner(0);
+        setMessage("CPU has no legal move. You win!");
+        onScore(moves);
+        return;
+      }
+      const nextMoves = moves + 1;
+      const nextWinner = checkersWinner(choice.board, 0);
+      setBoard(choice.board);
+      setMoves(nextMoves);
+      setWinner(nextWinner);
+      setTurn(0);
+      setMessage(nextWinner === 1 ? "CPU wins this match." : choice.captures > 1 ? `CPU made a ${choice.captures}-piece combo. Your move.` : choice.captures ? "CPU captured a piece. Your move." : "Your move.");
+    }, 480);
+    return () => window.clearTimeout(timer);
+  }, [board, difficulty, moves, onScore, turn, winner]);
+
+  const redPieces = checkersPieceCount(board, 0);
+  const blackPieces = checkersPieceCount(board, 1);
+
+  return (
+    <main className="game-shell simple-game-shell checkers-game-shell">
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Checkers">↻</button></div></header>
+      <section className="checkers-game">
+        <div className="checkers-heading"><div><p className="eyebrow">STRATEGY · VS CPU · {difficulty.toUpperCase()}</p><h1>Checkers</h1><p>Capture every rival piece or leave the CPU without a legal move.</p></div><span>棋</span></div>
+        <CpuDifficultyPicker difficulty={difficulty} onChange={(next) => { setDifficulty(next); reset(); }} gameName="Checkers" />
+        <div className="checkers-score-strip" aria-label="Pieces remaining"><div className={turn === 0 && winner == null ? "active" : ""}><i className="red-piece" /><span>YOU</span><strong>{redPieces}<small>PIECES</small></strong></div><b>対<small>{moves} MOVES</small></b><div className={turn === 1 && winner == null ? "active" : ""}><strong>{blackPieces}<small>PIECES</small></strong><span>CPU</span><i className="black-piece" /></div></div>
+        <div className="checkers-board" role="grid" aria-label="Checkers board">
+          {board.map((piece, index) => {
+            const row = Math.floor(index / 8);
+            const column = index % 8;
+            const playable = (row + column) % 2 === 1;
+            const owner = checkersPieceOwner(piece);
+            const isKing = piece === "R" || piece === "B";
+            const isDestination = destinations.has(index);
+            const canSelect = turn === 0 && winner == null && selectable.has(index);
+            return <button type="button" role="gridcell" key={index} className={`${playable ? "dark-square" : "light-square"} ${selected === index ? "selected" : ""} ${isDestination ? "legal-target" : ""} ${canSelect ? "selectable" : ""}`} disabled={turn !== 0 || winner != null || cpuThinking || (!canSelect && !isDestination)} onClick={() => handleSquare(index)} aria-label={`Row ${row + 1}, column ${column + 1}${piece ? `, ${owner === 0 ? "red" : "black"}${isKing ? " king" : " piece"}` : isDestination ? ", legal move" : ", empty"}`}>
+              {piece && <span className={`checkers-piece ${owner === 0 ? "red" : "black"} ${isKing ? "king" : ""}`}>{isKing && <b>王</b>}</span>}
+              {isDestination && <i className={destinations.get(index)?.captured != null ? "capture-dot" : "move-dot"} />}
+            </button>;
+          })}
+        </div>
+        <div className={`checkers-status ${winner != null ? "finished" : ""}`} role="status"><span>{winner != null ? "勝" : captureRequired && turn === 0 ? "取" : cpuThinking ? "考" : "手"}</span><div><strong>{winner === 0 ? "You win!" : winner === 1 ? "CPU wins." : message}</strong><small>{winner != null ? `${moves} turns played` : captureRequired && turn === 0 ? "A capture is available and must be taken." : "Red moves upward. Kings move both directions."}</small></div>{winner != null && <button className="primary-button" onClick={reset}>Rematch →</button>}</div>
+      </section>
+    </main>
+  );
+}
+
 /* Legacy track-based prototype retained in source history only.
 const BARRICADE_FINISH = 28;
 const BARRICADE_STARTS = [6, 12, 18, 23];
@@ -1668,7 +1786,7 @@ function RockPaperScissors({ mode, onBack, onScore }: { mode: GameMode; onBack: 
     const player = mode === "multi" ? pending! : choice;
     const result = rpsWinner(player, opponent);
     const nextScores: [number, number] = [...scores];
-    if (result >= 0) nextScores[result] += 1;
+    if (result === 0 || result === 1) nextScores[result] += 1;
     const playerLabel = RPS_CHOICES.find((item) => item.id === player)!.label;
     const opponentLabel = RPS_CHOICES.find((item) => item.id === opponent)!.label;
     setScores(nextScores);
@@ -1902,6 +2020,19 @@ const GAME_MENUS: Record<LibraryGameId, {
       "Jump an adjacent opponent when the square behind them is open.",
     ],
   },
+  checkers: {
+    title: "Checkers",
+    japanese: "チェッカー",
+    category: "Strategy",
+    glyph: "王",
+    color: "checkers",
+    players: "1–2 Players",
+    rules: [
+      "Move diagonally on dark squares; red moves first toward the top.",
+      "Captures are mandatory, and a piece must continue a multi-jump.",
+      "Reach the far edge to become a king, or capture every rival piece.",
+    ],
+  },
 };
 
 function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
@@ -2075,13 +2206,14 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "rps", number: "07", name: "Rock Paper Scissors", japanese: "じゃんけん", meta: "QUICK", scoreGame: "rps" },
   { id: "dice", number: "08", name: "Dice Race", japanese: "サイコロ競走", meta: "LUCK", scoreGame: "dice" },
   { id: "barricade", number: "09", name: "Barricade", japanese: "バリケード", meta: "STRATEGY", scoreGame: "barricade" },
+  { id: "checkers", number: "10", name: "Checkers", japanese: "チェッカー", meta: "STRATEGY", scoreGame: "checkers" },
 ];
 
-const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade"];
+const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers"];
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
-  const unit = game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
+  const unit = game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" || game === "checkers" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
@@ -3596,6 +3728,7 @@ export default function Home() {
     if (game === "rps-menu") return <GameMenu game="rps" onPlay={(mode) => playFromMenu("rps", mode)} onBack={() => selectGame("games")} />;
     if (game === "dice-menu") return <GameMenu game="dice" onPlay={(mode) => playFromMenu("dice", mode)} onBack={() => selectGame("games")} />;
     if (game === "barricade-menu") return <GameMenu game="barricade" onPlay={(mode) => playFromMenu("barricade", mode)} onBack={() => selectGame("games")} />;
+    if (game === "checkers-menu") return <GameMenu game="checkers" onPlay={(mode) => playFromMenu("checkers", mode)} onBack={() => selectGame("games")} />;
     if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && SCORE_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
     if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
@@ -3606,6 +3739,7 @@ export default function Home() {
     if (game === "rps") return <RockPaperScissors mode="solo" onBack={() => selectGame("rps-menu")} onScore={(score) => recordScore("rps", score)} />;
     if (game === "dice") return <DiceRace mode="solo" onBack={() => selectGame("dice-menu")} onScore={(score) => recordScore("dice", score)} />;
     if (game === "barricade") return <Barricade mode="solo" onBack={() => selectGame("barricade-menu")} onScore={(score) => recordScore("barricade", score)} />;
+    if (game === "checkers") return <Checkers onBack={() => selectGame("checkers-menu")} onScore={(score) => recordScore("checkers", score)} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" ? game : "games";
     return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
   }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);

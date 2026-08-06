@@ -6,8 +6,9 @@ import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } f
 import { db } from "./firebase";
 import { HeaderChatButton } from "./chat-chrome";
 import { BarricadeDragPiece, type BarricadeDragKind } from "./barricade-drag";
+import { CHECKERS_START, applyCheckersMove, checkersLegalMoves, checkersPieceCount, checkersPieceOwner, checkersWinner, type CheckersMove, type CheckersPiece, type CheckersPlayer } from "./checkers";
 
-export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade";
+export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers";
 
 type Room = {
   code: string;
@@ -110,7 +111,7 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     moves: 0,
     scores: [0, 0],
     winnerUid: "",
-    board: gameId === "tictactoe" ? Array(9).fill("") : gameId === "connect4" ? Array(42).fill(0) : [],
+    board: gameId === "tictactoe" ? Array(9).fill("") : gameId === "connect4" ? Array(42).fill(0) : gameId === "checkers" ? [...CHECKERS_START] : [],
     secret: gameId === "codebreaker" ? Array.from({ length: 4 }, () => COLORS[Math.floor(Math.random() * COLORS.length)].id) : [],
     guesses: [],
     target: gameId === "order" ? order.target : [],
@@ -447,6 +448,25 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return { board: move.board, moves: current.moves + 1, winnerUid: winner ? user.uid : draw ? "draw" : "", phase: winner || draw ? "complete" : "playing", turnUid: current.players[otherIndex] };
   });
 
+  const playCheckers = (move: CheckersMove) => void mutate((current) => {
+    if (current.gameId !== "checkers" || current.turnUid !== user.uid || current.phase !== "playing") return null;
+    const board = current.board as CheckersPiece[];
+    const player = playerIndex as CheckersPlayer;
+    const forcedFrom = current.open[0] ?? null;
+    const legalMove = checkersLegalMoves(board, player, forcedFrom).find((candidate) => candidate.from === move.from && candidate.to === move.to && candidate.captured === move.captured);
+    if (!legalMove) return null;
+    const applied = applyCheckersMove(board, legalMove);
+    const followUps = legalMove.captured != null && !applied.promoted ? checkersLegalMoves(applied.board, player, legalMove.to) : [];
+    if (followUps.length) {
+      setSelected(legalMove.to);
+      return { board: applied.board, open: [legalMove.to] };
+    }
+    setSelected(null);
+    const nextPlayer = otherIndex as CheckersPlayer;
+    const winner = checkersWinner(applied.board, nextPlayer);
+    return { board: applied.board, open: [], moves: current.moves + 1, winnerUid: winner == null ? "" : current.players[winner], phase: winner == null ? "playing" : "complete", turnUid: winner == null ? current.players[otherIndex] : user.uid };
+  });
+
   const chooseRps = (choice: RpsChoice) => void mutateAtomic((current) => {
     if (current.gameId !== "rps" || current.phase !== "playing" || current.choices[playerIndex]) return null;
     const choices = [...current.choices];
@@ -454,7 +474,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     if (!choices[0] || !choices[1]) return { choices };
     const winner = rpsWinner(choices[0] as RpsChoice, choices[1] as RpsChoice);
     const scores: [number, number] = [...current.scores];
-    if (winner >= 0) scores[winner] += 1;
+    if (winner === 0 || winner === 1) scores[winner] += 1;
     const matchWinner = scores[0] >= 3 ? current.players[0] : scores[1] >= 3 ? current.players[1] : "";
     return { choices, scores, moves: current.moves + 1, phase: matchWinner ? "complete" : "revealing", winnerUid: matchWinner };
   });
@@ -546,6 +566,21 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   }
 
   if (state.gameId === "dice") gameView = <section className="online-game simple-game dice-game"><p className="eyebrow">LUCK · LIVE ONLINE</p><h1>Dice Race</h1><p>Roll on your turn. Both racers update live.</p><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="dice-racers">{state.positions.map((position, index) => <div key={index}><span>{state.names[index]}</span><b>{state.faces[index] || "□"}</b><strong>{Math.min(position, 20)}<small>/20</small></strong><i><em style={{ width: `${Math.min(position / 20 * 100, 100)}%` }} /></i></div>)}</div>{state.phase === "complete" ? finish : <button className="primary-button dice-roll" disabled={!myTurn} onClick={() => void roll()}>{myTurn ? "Roll the dice" : "Opponent rolling…"}</button>}</section>;
+
+  if (state.gameId === "checkers") {
+    const board = state.board as CheckersPiece[];
+    const forcedFrom = state.open[0] ?? null;
+    const legalMoves = myTurn ? checkersLegalMoves(board, playerIndex as CheckersPlayer, forcedFrom) : [];
+    const selectable = new Set(legalMoves.map((move) => move.from));
+    const destinations = new Map(legalMoves.filter((move) => move.from === selected).map((move) => [move.to, move]));
+    const captureRequired = legalMoves.some((move) => move.captured != null);
+    const chooseSquare = (index: number) => {
+      const destination = destinations.get(index);
+      if (destination) return playCheckers(destination);
+      if (selectable.has(index)) setSelected(index);
+    };
+    gameView = <section className="online-game checkers-game"><div className="checkers-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Checkers</h1><p>Mandatory captures and multi-jumps update live on both boards.</p></div><span>棋</span></div><PlayerStrip state={state} user={user} /><div className="online-turn-status">{forcedFrom != null && myTurn ? "Continue your jump with the same piece" : captureRequired && myTurn ? "Capture required" : status}</div><div className="checkers-score-strip"><div className={state.turnUid === state.players[0] && state.phase !== "complete" ? "active" : ""}><i className="red-piece" /><span>{state.names[0]}</span><strong>{checkersPieceCount(board, 0)}<small>PIECES</small></strong></div><b>対<small>{state.moves} MOVES</small></b><div className={state.turnUid === state.players[1] && state.phase !== "complete" ? "active" : ""}><strong>{checkersPieceCount(board, 1)}<small>PIECES</small></strong><span>{state.names[1]}</span><i className="black-piece" /></div></div><div className={`checkers-board ${playerIndex === 1 ? "is-flipped" : ""}`} role="grid" aria-label="Online Checkers board">{board.map((piece, index) => { const row = Math.floor(index / 8); const column = index % 8; const playable = (row + column) % 2 === 1; const owner = checkersPieceOwner(piece); const isKing = piece === "R" || piece === "B"; const isDestination = destinations.has(index); const canSelect = myTurn && selectable.has(index); return <button type="button" role="gridcell" key={index} className={`${playable ? "dark-square" : "light-square"} ${selected === index ? "selected" : ""} ${isDestination ? "legal-target" : ""} ${canSelect ? "selectable" : ""}`} disabled={!myTurn || (!canSelect && !isDestination)} onClick={() => chooseSquare(index)} aria-label={`Row ${row + 1}, column ${column + 1}${piece ? `, ${owner === 0 ? "red" : "black"}${isKing ? " king" : " piece"}` : isDestination ? ", legal move" : ", empty"}`}>{piece && <span className={`checkers-piece ${owner === 0 ? "red" : "black"} ${isKing ? "king" : ""}`}>{isKing && <b>王</b>}</span>}{isDestination && <i className={destinations.get(index)?.captured != null ? "capture-dot" : "move-dot"} />}</button>; })}</div>{state.phase === "complete" && finish}</section>;
+  }
 
   if (state.gameId === "barricade") {
     const decodedWalls = decodeOnlineWalls(state.barricades);

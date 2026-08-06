@@ -80,7 +80,7 @@ test("routes every game through a start menu", async () => {
   assert.match(onlineSource, /onSnapshot/);
   assert.match(onlineSource, /await updateDoc\(stateRef/);
   assert.match(onlineSource, /latestState\.current = optimistic/);
-  for (const gameId of ["codebreaker", "order", "memory", "tictactoe", "connect4", "rps", "dice"]) assert.match(onlineSource, new RegExp(`state\\.gameId === "${gameId}"`));
+  for (const gameId of ["codebreaker", "order", "memory", "tictactoe", "connect4", "rps", "dice", "checkers"]) assert.match(onlineSource, new RegExp(`state\\.gameId === "${gameId}"`));
   assert.match(source, /How to play/);
   assert.match(source, /aria-label="Close game menu"/);
   assert.match(source, /className="menu-close"/);
@@ -124,6 +124,12 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /じゃんけん/);
   assert.match(source, /function DiceRace/);
   assert.match(source, /function Barricade/);
+  assert.match(source, /function Checkers/);
+  assert.match(source, /<GameMenu game="checkers"/);
+  assert.match(source, /recordScore\("checkers", score\)/);
+  assert.match(onlineSource, /playCheckers/);
+  assert.match(styles, /\.checkers-board/);
+  assert.match(styles, /game-checkers\.png/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);
   assert.match(source, /blocksWin \? 120/);
@@ -299,7 +305,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.dice-racers/);
   assert.match(onlineStyles, /\.online-player-strip/);
   assert.match(onlineStyles, /\.online-turn-status/);
-  assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice', 'barricade'/);
+  assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers'/);
+  assert.match(firestoreRules, /gameId == 'checkers' && gameName == 'Checkers'/);
   assert.match(firestoreRules, /request\.auth\.uid == resource\.data\.fromUid\s*\|\| request\.auth\.uid == resource\.data\.toUid/);
   assert.doesNotMatch(firestoreRules, /allow read: if request\.auth != null\s*&& request\.auth\.uid in \[resource\.data\.fromUid, resource\.data\.toUid\]/);
   assert.match(source, /friendProfiles/);
@@ -315,7 +322,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /const HEADER_META/);
   assert.match(source, /header-title-logo/);
   assert.match(source, /function HeaderLogo/);
-  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 12);
+  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 13);
   assert.match(source, /<button className="header-brand"[\s\S]*?<HeaderLogo \/>/);
   assert.doesNotMatch(source, /wordmark small-wordmark/);
   assert.match(source, /className="header-context"/);
