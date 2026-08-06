@@ -429,6 +429,8 @@ service cloud.firestore {
         && state.faces is list
         && state.faces.size() == 2
         && state.barricades is list
+        && state.wallsLeft is list
+        && state.wallsLeft.size() == 2
         && state.winnerUid in ['', 'draw', state.players[0], state.players[1]]
         && state.createdAt is timestamp
         && state.updatedAt is timestamp;

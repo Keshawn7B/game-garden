@@ -42,7 +42,8 @@ type OnlineState = {
   choices: string[];
   positions: [number, number];
   faces: [number, number];
-  barricades: number[];
+  barricades: string[];
+  wallsLeft: [number, number];
 };
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
@@ -118,9 +119,10 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     open: [],
     matched: [],
     choices: gameId === "rps" ? ["", ""] : [],
-    positions: [0, 0],
+    positions: gameId === "barricade" ? [76, 4] : [0, 0],
     faces: [0, 0],
-    barricades: gameId === "barricade" ? [6, 12, 18, 23] : [],
+    barricades: [],
+    wallsLeft: [10, 10],
   };
 }
 
@@ -172,6 +174,92 @@ function rpsWinner(first: RpsChoice, second: RpsChoice) {
   return (first === "rock" && second === "scissors") || (first === "paper" && second === "rock") || (first === "scissors" && second === "paper") ? 0 : 1;
 }
 
+type OnlineWall = { row: number; column: number; orientation: "h" | "v"; owner: 0 | 1 };
+const GRID_SIZE = 9;
+
+function encodeOnlineWall(wall: OnlineWall) {
+  return `${wall.orientation}:${wall.row}:${wall.column}:${wall.owner}`;
+}
+
+function decodeOnlineWalls(walls: string[]) {
+  return walls.map((value) => {
+    const [orientation, row, column, owner] = value.split(":");
+    return { orientation: orientation as "h" | "v", row: Number(row), column: Number(column), owner: Number(owner) as 0 | 1 };
+  });
+}
+
+function onlineEdgeBlocked(from: number, to: number, walls: OnlineWall[]) {
+  const fromRow = Math.floor(from / GRID_SIZE);
+  const fromColumn = from % GRID_SIZE;
+  const toRow = Math.floor(to / GRID_SIZE);
+  const toColumn = to % GRID_SIZE;
+  if (fromRow !== toRow) {
+    const boundary = Math.min(fromRow, toRow);
+    return walls.some((wall) => wall.orientation === "h" && wall.row === boundary && (wall.column === fromColumn || wall.column + 1 === fromColumn));
+  }
+  const boundary = Math.min(fromColumn, toColumn);
+  return walls.some((wall) => wall.orientation === "v" && wall.column === boundary && (wall.row === fromRow || wall.row + 1 === fromRow));
+}
+
+function onlineNeighbors(position: number, walls: OnlineWall[]) {
+  const row = Math.floor(position / GRID_SIZE);
+  const column = position % GRID_SIZE;
+  return [[row - 1, column], [row + 1, column], [row, column - 1], [row, column + 1]]
+    .filter(([nextRow, nextColumn]) => nextRow >= 0 && nextRow < GRID_SIZE && nextColumn >= 0 && nextColumn < GRID_SIZE)
+    .map(([nextRow, nextColumn]) => nextRow * GRID_SIZE + nextColumn)
+    .filter((next) => !onlineEdgeBlocked(position, next, walls));
+}
+
+function onlineBarricadeMoves(position: number, opponent: number, walls: OnlineWall[]) {
+  const moves = new Set<number>();
+  for (const next of onlineNeighbors(position, walls)) {
+    if (next !== opponent) {
+      moves.add(next);
+      continue;
+    }
+    const rowDelta = Math.floor(opponent / GRID_SIZE) - Math.floor(position / GRID_SIZE);
+    const columnDelta = opponent % GRID_SIZE - position % GRID_SIZE;
+    const behindRow = Math.floor(opponent / GRID_SIZE) + rowDelta;
+    const behindColumn = opponent % GRID_SIZE + columnDelta;
+    if (behindRow >= 0 && behindRow < GRID_SIZE && behindColumn >= 0 && behindColumn < GRID_SIZE) {
+      const behind = behindRow * GRID_SIZE + behindColumn;
+      if (!onlineEdgeBlocked(opponent, behind, walls)) {
+        moves.add(behind);
+        continue;
+      }
+    }
+    for (const side of onlineNeighbors(opponent, walls)) {
+      const sideRow = Math.floor(side / GRID_SIZE);
+      const sideColumn = side % GRID_SIZE;
+      if ((rowDelta !== 0 && sideRow === Math.floor(opponent / GRID_SIZE)) || (columnDelta !== 0 && sideColumn === opponent % GRID_SIZE)) moves.add(side);
+    }
+  }
+  return [...moves];
+}
+
+function onlinePathExists(start: number, goalRow: number, walls: OnlineWall[]) {
+  const queue = [start];
+  const seen = new Set(queue);
+  while (queue.length) {
+    const position = queue.shift()!;
+    if (Math.floor(position / GRID_SIZE) === goalRow) return true;
+    for (const next of onlineNeighbors(position, walls)) if (!seen.has(next)) {
+      seen.add(next);
+      queue.push(next);
+    }
+  }
+  return false;
+}
+
+function legalOnlineWall(candidate: OnlineWall, walls: OnlineWall[], positions: [number, number]) {
+  const overlaps = walls.some((wall) => wall.orientation === candidate.orientation
+    ? candidate.orientation === "h" ? wall.row === candidate.row && Math.abs(wall.column - candidate.column) < 2 : wall.column === candidate.column && Math.abs(wall.row - candidate.row) < 2
+    : wall.row === candidate.row && wall.column === candidate.column);
+  if (overlaps) return false;
+  const nextWalls = [...walls, candidate];
+  return onlinePathExists(positions[0], 0, nextWalls) && onlinePathExists(positions[1], 8, nextWalls);
+}
+
 function HeaderLogo() {
   return <span className="header-title-logo game-header-logo" role="img" aria-label="Game Garden" />;
 }
@@ -197,6 +285,8 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const [colors, setColors] = useState<ColorId[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [hoveredColumn, setHoveredColumn] = useState<number | null>(null);
+  const [barricadeAction, setBarricadeAction] = useState<"move" | "wall">("move");
+  const [barricadeOrientation, setBarricadeOrientation] = useState<"h" | "v">("h");
   const latestState = useRef<OnlineState | null>(null);
   const stateRef = useMemo(() => doc(db, "rooms", room.code, "game", "state"), [room.code]);
 
@@ -378,25 +468,24 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return { positions, faces, moves: current.moves + 1, winnerUid: won ? user.uid : "", phase: won ? "complete" : "playing", turnUid: current.players[otherIndex] };
   });
 
-  const rollBarricade = () => void mutate((current) => {
+  const moveBarricadePawn = (destination: number) => void mutate((current) => {
     if (current.gameId !== "barricade" || current.turnUid !== user.uid || current.phase !== "playing") return null;
-    const face = Math.floor(Math.random() * 6) + 1;
+    const walls = decodeOnlineWalls(current.barricades);
+    if (!onlineBarricadeMoves(current.positions[playerIndex], current.positions[otherIndex], walls).includes(destination)) return null;
     const positions: [number, number] = [...current.positions];
-    const faces: [number, number] = [...current.faces];
-    faces[playerIndex] = face;
-    const destination = positions[playerIndex] + face;
-    const blocked = destination > 28 || current.barricades.some((space) => space > positions[playerIndex] && space < destination);
-    if (blocked) return { faces, moves: current.moves + 1, turnUid: current.players[otherIndex] };
     positions[playerIndex] = destination;
-    if (destination === positions[otherIndex]) positions[otherIndex] = 0;
-    if (destination === 28) return { positions, faces, moves: current.moves + 1, phase: "complete", winnerUid: user.uid };
-    if (current.barricades.includes(destination)) return { positions, faces, moves: current.moves + 1, barricades: current.barricades.filter((space) => space !== destination), phase: "relocating" };
-    return { positions, faces, moves: current.moves + 1, turnUid: current.players[otherIndex] };
+    const won = Math.floor(destination / GRID_SIZE) === (playerIndex === 0 ? 0 : 8);
+    return { positions, moves: current.moves + 1, phase: won ? "complete" : "playing", winnerUid: won ? user.uid : "", turnUid: won ? user.uid : current.players[otherIndex] };
   });
 
-  const placeBarricade = (space: number) => void mutate((current) => {
-    if (current.gameId !== "barricade" || current.turnUid !== user.uid || current.phase !== "relocating" || space <= 1 || space >= 28 || current.barricades.includes(space) || current.positions.includes(space)) return null;
-    return { barricades: [...current.barricades, space].sort((left, right) => left - right), phase: "playing", turnUid: current.players[otherIndex] };
+  const placeBarricade = (row: number, column: number, orientation: "h" | "v") => void mutate((current) => {
+    if (current.gameId !== "barricade" || current.turnUid !== user.uid || current.phase !== "playing" || current.wallsLeft[playerIndex] <= 0) return null;
+    const walls = decodeOnlineWalls(current.barricades);
+    const candidate: OnlineWall = { row, column, orientation, owner: playerIndex };
+    if (!legalOnlineWall(candidate, walls, current.positions)) return null;
+    const wallsLeft: [number, number] = [...current.wallsLeft];
+    wallsLeft[playerIndex] -= 1;
+    return { barricades: [...current.barricades, encodeOnlineWall(candidate)], wallsLeft, moves: current.moves + 1, turnUid: current.players[otherIndex] };
   });
 
   let gameView = null;
@@ -426,8 +515,9 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   if (state.gameId === "dice") gameView = <section className="online-game simple-game dice-game"><p className="eyebrow">LUCK · LIVE ONLINE</p><h1>Dice Race</h1><p>Roll on your turn. Both racers update live.</p><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="dice-racers">{state.positions.map((position, index) => <div key={index}><span>{state.names[index]}</span><b>{state.faces[index] || "□"}</b><strong>{Math.min(position, 20)}<small>/20</small></strong><i><em style={{ width: `${Math.min(position / 20 * 100, 100)}%` }} /></i></div>)}</div>{state.phase === "complete" ? finish : <button className="primary-button dice-roll" disabled={!myTurn} onClick={() => void roll()}>{myTurn ? "Roll the dice" : "Opponent rolling…"}</button>}</section>;
 
   if (state.gameId === "barricade") {
-    const relocating = state.phase === "relocating" && state.turnUid === user.uid;
-    gameView = <section className="online-game barricade-game"><div className="barricade-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Barricade</h1><p>Land exactly on a barrier, relocate it, and reach the gate first.</p></div><span>塞</span></div><PlayerStrip state={state} user={user} /><div className="online-turn-status">{relocating ? "Tap an open space to relocate the barricade" : status}</div><div className="barricade-score-strip"><div className={state.turnUid === state.players[0] && state.phase !== "complete" ? "active" : ""}><i className="pawn-one" /><span>{state.names[0]}</span><strong>{state.positions[0]}</strong></div><b className={state.faces[playerIndex] ? "rolled" : ""}>{state.faces[playerIndex] || "—"}<small>YOUR DIE</small></b><div className={state.turnUid === state.players[1] && state.phase !== "complete" ? "active" : ""}><strong>{state.positions[1]}</strong><span>{state.names[1]}</span><i className="pawn-two" /></div></div><div className="barricade-board">{Array.from({ length: 29 }, (_, space) => { const canPlace = relocating && space > 1 && space < 28 && !state.barricades.includes(space) && !state.positions.includes(space); return <button key={space} className={`${space === 28 ? "finish" : ""} ${state.barricades.includes(space) ? "has-barricade" : ""} ${canPlace ? "can-place" : ""}`} onClick={() => canPlace && placeBarricade(space)} disabled={!canPlace}><small>{space === 0 ? "START" : space === 28 ? "GOAL" : space}</small>{state.barricades.includes(space) && <span className="barricade-block">止</span>}<span className="pawn-stack">{state.positions[0] === space && <i className="pawn-one" />}{state.positions[1] === space && <i className="pawn-two" />}</span></button>; })}</div>{state.phase === "complete" ? finish : <div className="barricade-controls"><div><small>{relocating ? "MOVE THE BARRICADE" : myTurn ? "YOUR MOVE" : "OPPONENT MOVE"}</small><strong>{relocating ? "Choose where the barrier goes next." : myTurn ? "Roll the die." : `Waiting for ${state.names[otherIndex]}`}</strong></div>{state.phase === "playing" && <button className="primary-button barricade-roll" disabled={!myTurn} onClick={() => void rollBarricade()}>Roll die</button>}</div>}</section>;
+    const decodedWalls = decodeOnlineWalls(state.barricades);
+    const legalMoves = myTurn ? onlineBarricadeMoves(state.positions[playerIndex], state.positions[otherIndex], decodedWalls) : [];
+    gameView = <section className="online-game barricade-game grid-barricade"><div className="barricade-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Barricade</h1><p>Reach the opposite edge while reshaping both routes with tactical walls.</p></div><span>壁</span></div><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="barricade-score-strip"><div className={state.turnUid === state.players[0] && state.phase !== "complete" ? "active" : ""}><i className="pawn-one" /><span>{state.names[0]}</span><strong>{state.wallsLeft[0]}<small>WALLS</small></strong></div><b>対<small>LIVE</small></b><div className={state.turnUid === state.players[1] && state.phase !== "complete" ? "active" : ""}><strong>{state.wallsLeft[1]}<small>WALLS</small></strong><span>{state.names[1]}</span><i className="pawn-two" /></div></div><div className="barricade-action-bar"><button className={barricadeAction === "move" ? "active" : ""} onClick={() => setBarricadeAction("move")} disabled={!myTurn}>MOVE PAWN</button><button className={barricadeAction === "wall" ? "active" : ""} onClick={() => setBarricadeAction("wall")} disabled={!myTurn || state.wallsLeft[playerIndex] === 0}>PLACE WALL</button>{barricadeAction === "wall" && <span><button className={barricadeOrientation === "h" ? "active" : ""} onClick={() => setBarricadeOrientation("h")}>HORIZONTAL</button><button className={barricadeOrientation === "v" ? "active" : ""} onClick={() => setBarricadeOrientation("v")}>VERTICAL</button></span>}</div><div className="quoridor-board"><div className="quoridor-cells">{Array.from({ length: 81 }, (_, index) => <button key={index} className={`${legalMoves.includes(index) && barricadeAction === "move" ? "legal-move" : ""} ${Math.floor(index / 9) === 0 ? "top-goal" : ""} ${Math.floor(index / 9) === 8 ? "bottom-goal" : ""}`} onClick={() => barricadeAction === "move" && moveBarricadePawn(index)} disabled={!myTurn || barricadeAction !== "move" || !legalMoves.includes(index)}>{state.positions[0] === index && <i className="pawn-one" />}{state.positions[1] === index && <i className="pawn-two" />}</button>)}</div><div className={`quoridor-wall-layer placing-${barricadeOrientation}`}>{Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = index % 8; const canPlace = myTurn && barricadeAction === "wall" && legalOnlineWall({ row, column, orientation: barricadeOrientation, owner: playerIndex }, decodedWalls, state.positions); return <button key={index} className={canPlace ? "wall-target legal" : "wall-target"} style={{ "--wall-row": row, "--wall-column": column } as React.CSSProperties} onClick={() => canPlace && placeBarricade(row, column, barricadeOrientation)} disabled={!canPlace} />; })}{decodedWalls.map((wall, index) => <i key={index} className={`placed-wall wall-${wall.orientation} owner-${wall.owner + 1}`} style={{ "--wall-row": wall.row, "--wall-column": wall.column } as React.CSSProperties} />)}</div></div>{state.phase === "complete" && finish}</section>;
   }
 
   return <main className={`game-shell online-versus-shell online-${state.gameId}`}><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><div className="game-header-actions"><HeaderChatButton inGame /><span className="online-room-pill">● {room.code}</span></div></header>{gameView}{error && <p className="online-game-error" role="alert">{error}</p>}</main>;

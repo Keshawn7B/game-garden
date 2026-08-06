@@ -122,6 +122,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /className="rps-round-history"/);
   assert.match(source, /じゃんけん/);
   assert.match(source, /function DiceRace/);
+  assert.match(source, /function Barricade/);
+  assert.match(source, /className="quoridor-board"/);
+  assert.match(source, /legalBarricadeWall/);
+  assert.match(onlineSource, /onlineBarricadeMoves/);
+  assert.match(onlineSource, /placeBarricade/);
   assert.match(source, /switchObject/);
   assert.match(source, /Check order/);
   assert.match(source, /pocket-play-scores/);

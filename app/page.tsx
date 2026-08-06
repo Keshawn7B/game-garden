@@ -1244,6 +1244,7 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
   );
 }
 
+/* Legacy track-based prototype retained in source history only.
 const BARRICADE_FINISH = 28;
 const BARRICADE_STARTS = [6, 12, 18, 23];
 
@@ -1254,7 +1255,7 @@ function barricadeDestination(position: number, roll: number, barricades: number
   return destination;
 }
 
-function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
+function BarricadeClassic({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
   const [difficulty, setDifficulty] = useState<CpuDifficulty>("normal");
   const [positions, setPositions] = useState<[number, number]>([0, 0]);
   const [barricades, setBarricades] = useState(BARRICADE_STARTS);
@@ -1337,7 +1338,7 @@ function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
 
   return (
     <main className="game-shell simple-game-shell barricade-game-shell">
-      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Barricade">↻</button></div></header>
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Barricade">↻</button></div></header>
       <section className="barricade-game">
         <div className="barricade-heading"><div><p className="eyebrow">STRATEGY · {mode === "solo" ? `VS CPU · ${difficulty.toUpperCase()}` : "2 PLAYERS"}</p><h1>Barricade</h1><p>Land exactly on barriers, move them to new spaces, and reach the gate first.</p></div><span>塞</span></div>
         {mode === "solo" && <CpuDifficultyPicker difficulty={difficulty} onChange={(next) => { setDifficulty(next); reset(); }} gameName="Barricade" />}
@@ -1349,6 +1350,191 @@ function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
           })}
         </div>
         <div className="barricade-controls" role="status"><div><small>{winner != null ? "MATCH COMPLETE" : relocating != null ? "MOVE THE BARRICADE" : turn === 0 ? "YOUR MOVE" : "OPPONENT MOVE"}</small><strong>{message}</strong></div>{winner != null ? <button className="primary-button" onClick={reset}>Rematch</button> : relocating == null && turn === 0 ? <button className="primary-button barricade-roll" onClick={() => movePawn(0, Math.floor(Math.random() * 6) + 1)}>Roll die</button> : <span className="barricade-wait">{turn === 1 ? "CPU THINKING…" : "CHOOSE A SPACE"}</span>}</div>
+      </section>
+    </main>
+  );
+}
+*/
+
+type GridWall = { row: number; column: number; orientation: "h" | "v"; owner: 0 | 1 };
+const BARRICADE_SIZE = 9;
+const BARRICADE_START: [number, number] = [76, 4];
+
+function barricadeEdgeBlocked(from: number, to: number, walls: GridWall[]) {
+  const fromRow = Math.floor(from / BARRICADE_SIZE);
+  const fromColumn = from % BARRICADE_SIZE;
+  const toRow = Math.floor(to / BARRICADE_SIZE);
+  const toColumn = to % BARRICADE_SIZE;
+  if (fromRow !== toRow) {
+    const boundary = Math.min(fromRow, toRow);
+    return walls.some((wall) => wall.orientation === "h" && wall.row === boundary && (wall.column === fromColumn || wall.column + 1 === fromColumn));
+  }
+  const boundary = Math.min(fromColumn, toColumn);
+  return walls.some((wall) => wall.orientation === "v" && wall.column === boundary && (wall.row === fromRow || wall.row + 1 === fromRow));
+}
+
+function barricadeNeighbors(position: number, walls: GridWall[]) {
+  const row = Math.floor(position / BARRICADE_SIZE);
+  const column = position % BARRICADE_SIZE;
+  return [[row - 1, column], [row + 1, column], [row, column - 1], [row, column + 1]]
+    .filter(([nextRow, nextColumn]) => nextRow >= 0 && nextRow < BARRICADE_SIZE && nextColumn >= 0 && nextColumn < BARRICADE_SIZE)
+    .map(([nextRow, nextColumn]) => nextRow * BARRICADE_SIZE + nextColumn)
+    .filter((next) => !barricadeEdgeBlocked(position, next, walls));
+}
+
+function barricadeMoves(position: number, opponent: number, walls: GridWall[]) {
+  const moves = new Set<number>();
+  for (const next of barricadeNeighbors(position, walls)) {
+    if (next !== opponent) {
+      moves.add(next);
+      continue;
+    }
+    const rowDelta = Math.floor(opponent / BARRICADE_SIZE) - Math.floor(position / BARRICADE_SIZE);
+    const columnDelta = opponent % BARRICADE_SIZE - position % BARRICADE_SIZE;
+    const behindRow = Math.floor(opponent / BARRICADE_SIZE) + rowDelta;
+    const behindColumn = opponent % BARRICADE_SIZE + columnDelta;
+    if (behindRow >= 0 && behindRow < BARRICADE_SIZE && behindColumn >= 0 && behindColumn < BARRICADE_SIZE) {
+      const behind = behindRow * BARRICADE_SIZE + behindColumn;
+      if (!barricadeEdgeBlocked(opponent, behind, walls)) {
+        moves.add(behind);
+        continue;
+      }
+    }
+    for (const side of barricadeNeighbors(opponent, walls)) {
+      const sideRow = Math.floor(side / BARRICADE_SIZE);
+      const sideColumn = side % BARRICADE_SIZE;
+      if ((rowDelta !== 0 && sideRow === Math.floor(opponent / BARRICADE_SIZE)) || (columnDelta !== 0 && sideColumn === opponent % BARRICADE_SIZE)) moves.add(side);
+    }
+  }
+  return [...moves];
+}
+
+function barricadePathLength(start: number, goalRow: number, walls: GridWall[]) {
+  const queue: Array<[number, number]> = [[start, 0]];
+  const seen = new Set([start]);
+  while (queue.length) {
+    const [position, distance] = queue.shift()!;
+    if (Math.floor(position / BARRICADE_SIZE) === goalRow) return distance;
+    for (const next of barricadeNeighbors(position, walls)) if (!seen.has(next)) {
+      seen.add(next);
+      queue.push([next, distance + 1]);
+    }
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+function legalBarricadeWall(candidate: GridWall, walls: GridWall[], positions: [number, number]) {
+  const overlaps = walls.some((wall) => wall.orientation === candidate.orientation
+    ? candidate.orientation === "h" ? wall.row === candidate.row && Math.abs(wall.column - candidate.column) < 2 : wall.column === candidate.column && Math.abs(wall.row - candidate.row) < 2
+    : wall.row === candidate.row && wall.column === candidate.column);
+  if (overlaps) return false;
+  const nextWalls = [...walls, candidate];
+  return Number.isFinite(barricadePathLength(positions[0], 0, nextWalls)) && Number.isFinite(barricadePathLength(positions[1], 8, nextWalls));
+}
+
+function shortestBarricadeMove(position: number, opponent: number, goalRow: number, walls: GridWall[]) {
+  const moves = barricadeMoves(position, opponent, walls);
+  return moves.sort((left, right) => barricadePathLength(left, goalRow, walls) - barricadePathLength(right, goalRow, walls))[0];
+}
+
+function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
+  const [difficulty, setDifficulty] = useState<CpuDifficulty>("normal");
+  const [positions, setPositions] = useState<[number, number]>(BARRICADE_START);
+  const [walls, setWalls] = useState<GridWall[]>([]);
+  const [wallsLeft, setWallsLeft] = useState<[number, number]>([10, 10]);
+  const [turn, setTurn] = useState<0 | 1>(0);
+  const [action, setAction] = useState<"move" | "wall">("move");
+  const [orientation, setOrientation] = useState<"h" | "v">("h");
+  const [moves, setMoves] = useState(0);
+  const [winner, setWinner] = useState<0 | 1 | null>(null);
+  const [message, setMessage] = useState("Move your pawn or place a barricade.");
+
+  const reset = useCallback(() => {
+    setPositions(BARRICADE_START);
+    setWalls([]);
+    setWallsLeft([10, 10]);
+    setTurn(0);
+    setAction("move");
+    setMoves(0);
+    setWinner(null);
+    setMessage("Move your pawn or place a barricade.");
+  }, []);
+
+  const finishAction = useCallback((player: 0 | 1, nextPositions: [number, number]) => {
+    const won = Math.floor(nextPositions[player] / BARRICADE_SIZE) === (player === 0 ? 0 : 8);
+    if (player === 0) setMoves((value) => value + 1);
+    if (won) {
+      setWinner(player);
+      setMessage(player === 0 ? "You reached the far side!" : "CPU reached the far side.");
+      if (player === 0) onScore(moves + 1);
+    } else {
+      setTurn(player === 0 ? 1 : 0);
+      setAction("move");
+      setMessage(player === 0 ? "Opponent turn." : "Your turn.");
+    }
+  }, [moves, onScore]);
+
+  const movePawn = useCallback((player: 0 | 1, destination: number) => {
+    if (!barricadeMoves(positions[player], positions[player === 0 ? 1 : 0], walls).includes(destination)) return;
+    const nextPositions: [number, number] = [...positions];
+    nextPositions[player] = destination;
+    setPositions(nextPositions);
+    finishAction(player, nextPositions);
+  }, [finishAction, positions, walls]);
+
+  const placeWall = useCallback((player: 0 | 1, row: number, column: number, wallOrientation: "h" | "v") => {
+    if (wallsLeft[player] <= 0) return;
+    const candidate: GridWall = { row, column, orientation: wallOrientation, owner: player };
+    if (!legalBarricadeWall(candidate, walls, positions)) {
+      if (player === 0) setMessage("That wall would overlap or remove every route.");
+      return;
+    }
+    setWalls((current) => [...current, candidate]);
+    setWallsLeft((current) => current.map((count, index) => index === player ? count - 1 : count) as [number, number]);
+    finishAction(player, positions);
+  }, [finishAction, positions, walls, wallsLeft]);
+
+  useEffect(() => {
+    if (mode !== "solo" || turn !== 1 || winner != null) return;
+    const timer = window.setTimeout(() => {
+      const cpuPath = barricadePathLength(positions[1], 8, walls);
+      const playerPath = barricadePathLength(positions[0], 0, walls);
+      const candidates: GridWall[] = [];
+      if (wallsLeft[1] > 0) for (let row = 0; row < 8; row += 1) for (let column = 0; column < 8; column += 1) for (const nextOrientation of ["h", "v"] as const) {
+        const candidate: GridWall = { row, column, orientation: nextOrientation, owner: 1 };
+        if (legalBarricadeWall(candidate, walls, positions)) candidates.push(candidate);
+      }
+      const shouldWall = candidates.length > 0 && (difficulty === "hard" ? playerPath <= cpuPath + 2 : difficulty === "normal" ? playerPath < cpuPath : Math.random() < .18);
+      if (shouldWall) {
+        const ranked = candidates.map((candidate) => {
+          const nextWalls = [...walls, candidate];
+          return { candidate, value: barricadePathLength(positions[0], 0, nextWalls) - playerPath - Math.max(0, barricadePathLength(positions[1], 8, nextWalls) - cpuPath) };
+        }).sort((left, right) => right.value - left.value);
+        const choice = difficulty === "easy" ? ranked[Math.floor(Math.random() * ranked.length)] : ranked[0];
+        placeWall(1, choice.candidate.row, choice.candidate.column, choice.candidate.orientation);
+      } else {
+        const legalMoves = barricadeMoves(positions[1], positions[0], walls);
+        const destination = difficulty === "easy" && Math.random() < .45 ? legalMoves[Math.floor(Math.random() * legalMoves.length)] : shortestBarricadeMove(positions[1], positions[0], 8, walls);
+        movePawn(1, destination);
+      }
+    }, 520);
+    return () => window.clearTimeout(timer);
+  }, [difficulty, mode, movePawn, placeWall, positions, turn, walls, wallsLeft, winner]);
+
+  const legalMoves = turn === 0 && winner == null ? barricadeMoves(positions[0], positions[1], walls) : [];
+  return (
+    <main className="game-shell simple-game-shell barricade-game-shell">
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Barricade">↻</button></div></header>
+      <section className="barricade-game grid-barricade">
+        <div className="barricade-heading"><div><p className="eyebrow">STRATEGY · {mode === "solo" ? `VS CPU · ${difficulty.toUpperCase()}` : "2 PLAYERS"}</p><h1>Barricade</h1><p>Reach the opposite edge while reshaping both routes with tactical walls.</p></div><span>壁</span></div>
+        {mode === "solo" && <CpuDifficultyPicker difficulty={difficulty} onChange={(next) => { setDifficulty(next); reset(); }} gameName="Barricade" />}
+        <div className="barricade-score-strip"><div className={turn === 0 && winner == null ? "active" : ""}><i className="pawn-one" /><span>YOU</span><strong>{wallsLeft[0]}<small>WALLS</small></strong></div><b>対<small>RACE</small></b><div className={turn === 1 && winner == null ? "active" : ""}><strong>{wallsLeft[1]}<small>WALLS</small></strong><span>{mode === "solo" ? "CPU" : "PLAYER 2"}</span><i className="pawn-two" /></div></div>
+        <div className="barricade-action-bar"><button className={action === "move" ? "active" : ""} onClick={() => setAction("move")} disabled={turn !== 0 || winner != null}>MOVE PAWN</button><button className={action === "wall" ? "active" : ""} onClick={() => setAction("wall")} disabled={turn !== 0 || winner != null || wallsLeft[0] === 0}>PLACE WALL</button>{action === "wall" && <span><button className={orientation === "h" ? "active" : ""} onClick={() => setOrientation("h")}>HORIZONTAL</button><button className={orientation === "v" ? "active" : ""} onClick={() => setOrientation("v")}>VERTICAL</button></span>}</div>
+        <div className="quoridor-board">
+          <div className="quoridor-cells">{Array.from({ length: 81 }, (_, index) => <button key={index} className={`${legalMoves.includes(index) && action === "move" ? "legal-move" : ""} ${Math.floor(index / 9) === 0 ? "top-goal" : ""} ${Math.floor(index / 9) === 8 ? "bottom-goal" : ""}`} onClick={() => action === "move" && movePawn(0, index)} disabled={action !== "move" || !legalMoves.includes(index)} aria-label={`Board row ${Math.floor(index / 9) + 1}, column ${index % 9 + 1}`}>{positions[0] === index && <i className="pawn-one" />}{positions[1] === index && <i className="pawn-two" />}</button>)}</div>
+          <div className={`quoridor-wall-layer placing-${orientation}`}>{Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = index % 8; const canPlace = action === "wall" && turn === 0 && legalBarricadeWall({ row, column, orientation, owner: 0 }, walls, positions); return <button key={index} className={canPlace ? "wall-target legal" : "wall-target"} style={{ "--wall-row": row, "--wall-column": column } as React.CSSProperties} onClick={() => canPlace && placeWall(0, row, column, orientation)} disabled={!canPlace} aria-label={`Place ${orientation === "h" ? "horizontal" : "vertical"} wall at row ${row + 1}, column ${column + 1}`} />; })}{walls.map((wall, index) => <i key={index} className={`placed-wall wall-${wall.orientation} owner-${wall.owner + 1}`} style={{ "--wall-row": wall.row, "--wall-column": wall.column } as React.CSSProperties} />)}</div>
+        </div>
+        <div className="barricade-controls" role="status"><div><small>{winner != null ? "MATCH COMPLETE" : turn === 0 ? action === "wall" ? "PLACE ONE WALL" : "CHOOSE A HIGHLIGHTED SPACE" : "OPPONENT MOVE"}</small><strong>{message}</strong></div>{winner != null && <button className="primary-button" onClick={reset}>Rematch</button>}</div>
       </section>
     </main>
   );
@@ -1622,9 +1808,9 @@ const GAME_MENUS: Record<LibraryGameId, {
     color: "barricade",
     players: "1–2 Players",
     rules: [
-      "Roll and move the full number without crossing a barricade.",
-      "Land exactly on a barricade to move it onto another open space.",
-      "Reach the garden gate with an exact roll before your opponent.",
+      "Move one square toward the opposite edge, or place one wall.",
+      "Walls span two gaps and may never remove every route to a goal.",
+      "Jump an adjacent opponent when the square behind them is open.",
     ],
   },
 };
