@@ -184,6 +184,7 @@ test("routes every game through a start menu", async () => {
   assert.match(airHockeySource, /stepAirHockeyLive/);
   assert.match(airHockeySource, /moveAirHockeyCpu/);
   assert.match(airHockeySource, /requestAnimationFrame/);
+  assert.doesNotMatch(airHockeySource, /setDisplayPuck|setDisplayMallets/);
   assert.match(airHockeySource, /LOCK RINK/);
   assert.match(airHockeySource, /PUCK LIVE/);
   assert.doesNotMatch(airHockeySource, /PULL PUCK|beginPull|movePull|releasePull/);
@@ -191,10 +192,12 @@ test("routes every game through a start menu", async () => {
   assert.match(onlineSource, /SIMULTANEOUS ONLINE/);
   assert.doesNotMatch(onlineSource, /Each shot synchronizes/);
   assert.match(onlineAirHockeySource, /requestAnimationFrame/);
+  assert.doesNotMatch(onlineAirHockeySource, /setDisplayPuck|setDisplayMallets/);
   assert.match(onlineAirHockeySource, /BOTH PLAYERS LIVE/);
   assert.match(onlineAirHockeySource, /stepAirHockeyLive/);
   assert.match(firestoreRules, /validLiveAirHockeyMallet/);
   assert.match(styles, /\.air-hockey-rink/);
+  assert.match(styles, /\.live-rink \.air-mallet\.is-controlled\{transition:none\}/);
   assert.match(styles, /game-air-hockey\.png/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);

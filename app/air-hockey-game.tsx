@@ -13,6 +13,12 @@ function servePuck(round: number): AirHockeyBody {
   return { ...AIR_HOCKEY_LIVE_START, vx: 16 * direction, vy: 28 * direction };
 }
 
+function placeAirHockeyElement(element: HTMLElement | null, point: AirHockeyPoint) {
+  if (!element) return;
+  element.style.left = `${point.x}%`;
+  element.style.top = `${point.y / 1.5}%`;
+}
+
 export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["YOU", "CPU"], onGoal }: {
   difficulty: AirHockeyDifficulty;
   round: number;
@@ -21,6 +27,9 @@ export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["
   onGoal: (scorer: AirHockeyPlayer) => void;
 }) {
   const rinkRef = useRef<HTMLDivElement>(null);
+  const puckElementRef = useRef<HTMLSpanElement>(null);
+  const playerMalletElementRef = useRef<HTMLSpanElement>(null);
+  const cpuMalletElementRef = useRef<HTMLSpanElement>(null);
   const puckRef = useRef<AirHockeyBody>(servePuck(round));
   const malletsRef = useRef<[AirHockeyPoint, AirHockeyPoint]>(MALLET_STARTS.map((point) => ({ ...point })) as [AirHockeyPoint, AirHockeyPoint]);
   const velocitiesRef = useRef<[AirHockeyPoint, AirHockeyPoint]>([{ ...ZERO_VELOCITY }, { ...ZERO_VELOCITY }]);
@@ -30,8 +39,6 @@ export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["
   const goalLockedRef = useRef(false);
   const onGoalRef = useRef(onGoal);
   const [controlLocked, setControlLocked] = useState(false);
-  const [displayPuck, setDisplayPuck] = useState<AirHockeyBody>(() => servePuck(round));
-  const [displayMallets, setDisplayMallets] = useState<[AirHockeyPoint, AirHockeyPoint]>(() => MALLET_STARTS.map((point) => ({ ...point })) as [AirHockeyPoint, AirHockeyPoint]);
 
   useEffect(() => { onGoalRef.current = onGoal; }, [onGoal]);
   useEffect(() => {
@@ -39,6 +46,9 @@ export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["
     puckRef.current = servePuck(round);
     malletsRef.current = MALLET_STARTS.map((point) => ({ ...point })) as [AirHockeyPoint, AirHockeyPoint];
     velocitiesRef.current = [{ ...ZERO_VELOCITY }, { ...ZERO_VELOCITY }];
+    placeAirHockeyElement(puckElementRef.current, puckRef.current);
+    placeAirHockeyElement(playerMalletElementRef.current, malletsRef.current[0]);
+    placeAirHockeyElement(cpuMalletElementRef.current, malletsRef.current[1]);
   }, [round]);
 
   useEffect(() => {
@@ -67,8 +77,8 @@ export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["
 
       const stepped = stepAirHockeyLive(puckRef.current, malletsRef.current, velocitiesRef.current, elapsed);
       puckRef.current = stepped.puck;
-      setDisplayPuck(stepped.puck);
-      setDisplayMallets([malletsRef.current[0], cpu]);
+      placeAirHockeyElement(puckElementRef.current, stepped.puck);
+      placeAirHockeyElement(cpuMalletElementRef.current, cpu);
       if (stepped.goal != null && !goalLockedRef.current) {
         goalLockedRef.current = true;
         onGoalRef.current(stepped.goal);
@@ -99,7 +109,7 @@ export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["
     previousPointerRef.current = { point, time: now };
     playerUpdatedAtRef.current = now;
     malletsRef.current[0] = point;
-    setDisplayMallets((current) => [point, current[1]]);
+    placeAirHockeyElement(playerMalletElementRef.current, point);
   };
   const beginMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!controlLocked || disabled) return;
@@ -127,9 +137,9 @@ export function AirHockeyRink({ difficulty, round, disabled = false, labels = ["
       <i className="air-rink-line center-line" /><i className="air-rink-circle" />
       <div className="air-player-label label-top active"><i />{labels[1]}</div>
       <div className="air-player-label label-bottom active"><i />{labels[0]}</div>
-      <span className="air-mallet mallet-top" style={{ left: `${displayMallets[1].x}%`, top: `${displayMallets[1].y / 1.5}%` }} />
-      <span className="air-mallet mallet-bottom is-controlled" style={{ left: `${displayMallets[0].x}%`, top: `${displayMallets[0].y / 1.5}%` }} />
-      <span className="air-puck" style={{ left: `${displayPuck.x}%`, top: `${displayPuck.y / 1.5}%` }} aria-label="Air hockey puck"><i /></span>
+      <span ref={cpuMalletElementRef} className="air-mallet mallet-top" style={{ left: `${MALLET_STARTS[1].x}%`, top: `${MALLET_STARTS[1].y / 1.5}%` }} />
+      <span ref={playerMalletElementRef} className="air-mallet mallet-bottom is-controlled" style={{ left: `${MALLET_STARTS[0].x}%`, top: `${MALLET_STARTS[0].y / 1.5}%` }} />
+      <span ref={puckElementRef} className="air-puck" style={{ left: `${AIR_HOCKEY_LIVE_START.x}%`, top: `${AIR_HOCKEY_LIVE_START.y / 1.5}%` }} aria-label="Air hockey puck"><i /></span>
       {controlLocked && !disabled && <div className="air-live-badge"><i /> PUCK LIVE · CPU ACTIVE</div>}
       {!controlLocked && <div className="air-lock-overlay"><b>⌖</b><span>LOCK RINK TO PLAY LIVE</span></div>}
     </div>

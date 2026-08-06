@@ -18,6 +18,12 @@ function boundedMallet(point: AirHockeyPoint, player: AirHockeyPlayer) {
   };
 }
 
+function placeLiveElement(element: HTMLElement | null, point: AirHockeyPoint) {
+  if (!element) return;
+  element.style.left = `${point.x}%`;
+  element.style.top = `${point.y / 1.5}%`;
+}
+
 export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, disabled, onGoal, onConnectionError }: {
   roomCode: string;
   players: [string, string];
@@ -33,6 +39,9 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
   const liveRef = useMemo(() => doc(db, "rooms", roomCode, "airhockey", "live"), [roomCode]);
   const malletRefs = useMemo(() => players.map((uid) => doc(db, "rooms", roomCode, "airhockey", uid)) as [ReturnType<typeof doc>, ReturnType<typeof doc>], [players, roomCode]);
   const rinkRef = useRef<HTMLDivElement>(null);
+  const puckElementRef = useRef<HTMLSpanElement>(null);
+  const topMalletElementRef = useRef<HTMLSpanElement>(null);
+  const bottomMalletElementRef = useRef<HTMLSpanElement>(null);
   const puckRef = useRef<AirHockeyBody>({ ...AIR_HOCKEY_LIVE_START });
   const malletsRef = useRef<[AirHockeyPoint, AirHockeyPoint]>(MALLET_STARTS.map((point) => ({ ...point })) as [AirHockeyPoint, AirHockeyPoint]);
   const malletVelocitiesRef = useRef<[AirHockeyPoint, AirHockeyPoint]>(ZERO_VELOCITIES.map((point) => ({ ...point })) as [AirHockeyPoint, AirHockeyPoint]);
@@ -43,8 +52,6 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
   const lastPuckSendRef = useRef(0);
   const goalLockedRef = useRef(false);
   const onGoalRef = useRef(onGoal);
-  const [displayPuck, setDisplayPuck] = useState<AirHockeyBody>({ ...AIR_HOCKEY_LIVE_START });
-  const [displayMallets, setDisplayMallets] = useState<[AirHockeyPoint, AirHockeyPoint]>(() => MALLET_STARTS.map((point) => ({ ...point })) as [AirHockeyPoint, AirHockeyPoint]);
   const [controlLocked, setControlLocked] = useState(false);
 
   useEffect(() => { onGoalRef.current = onGoal; }, [onGoal]);
@@ -52,6 +59,7 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
   useEffect(() => {
     goalLockedRef.current = false;
     puckRef.current = { ...AIR_HOCKEY_LIVE_START };
+    placeLiveElement(puckElementRef.current, puckRef.current);
     if (!isHost || disabled) return;
     void setDoc(liveRef, { ...AIR_HOCKEY_LIVE_START, round, updatedAt: serverTimestamp() }).catch(() => onConnectionError?.());
   }, [disabled, isHost, liveRef, onConnectionError, round]);
@@ -69,7 +77,7 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
     const puck = { x: Number(incoming.x), y: Number(incoming.y), vx: Number(incoming.vx), vy: Number(incoming.vy) };
     if (Object.values(puck).every(Number.isFinite)) {
       puckRef.current = puck;
-      setDisplayPuck(puck);
+      placeLiveElement(puckElementRef.current, puck);
     }
   }, () => onConnectionError?.()), [isHost, liveRef, onConnectionError, round]);
 
@@ -87,7 +95,7 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
       };
       malletTimesRef.current[player] = now;
       malletsRef.current[player] = next;
-      setDisplayMallets(([first, second]) => player === 0 ? [next, second] : [first, next]);
+      placeLiveElement(player === 0 ? bottomMalletElementRef.current : topMalletElementRef.current, next);
     }, () => onConnectionError?.()));
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [controlledPlayer, malletRefs, onConnectionError]);
@@ -118,11 +126,11 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
         elapsed,
       );
       puckRef.current = stepped.puck;
-      setDisplayPuck(stepped.puck);
+      placeLiveElement(puckElementRef.current, stepped.puck);
       if (isHost && stepped.goal != null && !goalLockedRef.current) {
         goalLockedRef.current = true;
         onGoalRef.current(stepped.goal, round);
-      } else if (isHost && stepped.goal == null && now - lastPuckSendRef.current >= 110) {
+      } else if (isHost && stepped.goal == null && now - lastPuckSendRef.current >= 90) {
         lastPuckSendRef.current = now;
         const puck = stepped.puck;
         void setDoc(liveRef, { x: puck.x, y: puck.y, vx: puck.vx, vy: puck.vy, round, updatedAt: serverTimestamp() }).catch(() => onConnectionError?.());
@@ -151,8 +159,8 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
     previousPointerRef.current = { point, time: now };
     malletTimesRef.current[controlledPlayer] = now;
     malletsRef.current[controlledPlayer] = point;
-    setDisplayMallets(([first, second]) => controlledPlayer === 0 ? [point, second] : [first, point]);
-    if (forceSend || now - lastMalletSendRef.current >= 85) {
+    placeLiveElement(controlledPlayer === 0 ? bottomMalletElementRef.current : topMalletElementRef.current, point);
+    if (forceSend || now - lastMalletSendRef.current >= 70) {
       lastMalletSendRef.current = now;
       void setDoc(malletRefs[controlledPlayer], { ...point, player: controlledPlayer, uid: userUid, updatedAt: serverTimestamp() }).catch(() => onConnectionError?.());
     }
@@ -185,9 +193,9 @@ export function OnlineAirHockeyRink({ roomCode, players, names, userUid, round, 
       <i className="air-rink-line center-line" /><i className="air-rink-circle" />
       <div className="air-player-label label-top active"><i />{names[1]}</div>
       <div className="air-player-label label-bottom active"><i />{names[0]}</div>
-      <span className={`air-mallet mallet-top ${controlledPlayer === 1 ? "is-controlled" : ""}`} style={{ left: `${displayMallets[1].x}%`, top: `${displayMallets[1].y / 1.5}%` }} />
-      <span className={`air-mallet mallet-bottom ${controlledPlayer === 0 ? "is-controlled" : ""}`} style={{ left: `${displayMallets[0].x}%`, top: `${displayMallets[0].y / 1.5}%` }} />
-      <span className="air-puck" style={{ left: `${displayPuck.x}%`, top: `${displayPuck.y / 1.5}%` }} aria-label="Air hockey puck"><i /></span>
+      <span ref={topMalletElementRef} className={`air-mallet mallet-top ${controlledPlayer === 1 ? "is-controlled" : ""}`} style={{ left: `${MALLET_STARTS[1].x}%`, top: `${MALLET_STARTS[1].y / 1.5}%` }} />
+      <span ref={bottomMalletElementRef} className={`air-mallet mallet-bottom ${controlledPlayer === 0 ? "is-controlled" : ""}`} style={{ left: `${MALLET_STARTS[0].x}%`, top: `${MALLET_STARTS[0].y / 1.5}%` }} />
+      <span ref={puckElementRef} className="air-puck" style={{ left: `${AIR_HOCKEY_LIVE_START.x}%`, top: `${AIR_HOCKEY_LIVE_START.y / 1.5}%` }} aria-label="Air hockey puck"><i /></span>
       {controlLocked && !disabled && <div className="air-live-badge"><i /> BOTH PLAYERS LIVE</div>}
       {!controlLocked && <div className="air-lock-overlay"><b>⌖</b><span>LOCK RINK TO PLAY LIVE</span></div>}
     </div>
