@@ -64,6 +64,13 @@ export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint,
       if (speed < 0.1) { vx = 5.2; vy = 7.4; }
       else { vx = vx / speed * 9; vy = vy / speed * 9; }
     }
+
+    const escapeX = x < 16 ? 1 : x > 84 ? -1 : 0;
+    const escapeY = y < 20 ? 1 : y > 130 ? -1 : 0;
+    if (escapeX && escapeY) {
+      vx = escapeX * Math.max(13, Math.abs(vx));
+      vy = escapeY * Math.max(13, Math.abs(vy));
+    }
   }
 
   return { puck: goal == null ? { x, y, vx, vy } : { ...AIR_HOCKEY_LIVE_START }, goal };
@@ -71,7 +78,9 @@ export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint,
 
 export function moveAirHockeyCpu(mallet: AirHockeyPoint, puck: AirHockeyBody, difficulty: AirHockeyDifficulty, elapsedMs: number) {
   const home = { x: 50, y: 27 };
-  const defending = puck.y < 82;
+  const puckInCorner = puck.y < 36 && (puck.x < 20 || puck.x > 80);
+  const puckApproaching = puck.vy < 8;
+  const defending = puck.y < 82 && puckApproaching && !puckInCorner;
   const target = defending
     ? { x: clamp(puck.x, 12, 88), y: clamp(puck.y - 11, 13, 66) }
     : home;
