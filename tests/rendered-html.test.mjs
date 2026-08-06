@@ -254,6 +254,9 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /onUnlockPremium/);
   assert.match(source, /Premium unlocked for this account/);
   assert.match(source, /className="store-code-form"/);
+  assert.match(source, /className="store-coming-card"/);
+  assert.match(source, /Items coming soon\./);
+  assert.doesNotMatch(source, /Codes, drops &amp; rewards|Legendary Icons|Seasonal drops/);
   assert.match(source, /activeTab === "store"/);
   assert.match(source, /<details className="profile-stats-menu">/);
   assert.match(source, /Stats &amp; high scores/);

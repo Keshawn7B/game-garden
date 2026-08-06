@@ -2863,21 +2863,16 @@ function AppHome({
         {activeTab === "store" && (
           <section className="app-panel store-panel">
             <div className="app-title"><div><p>DISCOVER</p><h1>Store <span>売店</span></h1></div><strong>店<small>SHOP</small></strong></div>
-            <div className="store-hero">
-              <div><small>GAME GARDEN COLLECTION</small><h2>Codes, drops &amp; rewards.</h2><p>Redeem account codes here. New avatar sets, events, and featured releases can appear in this space.</p></div>
-              <span>庭</span>
+            <div className="store-coming-card">
+              <span aria-hidden="true">未</span>
+              <small>GAME GARDEN STORE · 売店</small>
+              <h2>Items coming soon.</h2>
+              <p>Check back later.</p>
             </div>
-            <div className="store-grid">
-              <div className={`store-code-card ${premiumUnlocked ? "unlocked" : ""}`}>
-                <div className="store-card-heading"><span>鍵</span><div><small>REDEEM A CODE</small><strong>{premiumUnlocked ? "Legendary collection active" : "Unlock account rewards"}</strong></div><b>{premiumUnlocked ? "OWNED" : "CODE"}</b></div>
-                {firebaseUser && !firebaseUser.isAnonymous ? <div className="store-code-form"><input value={premiumCode} maxLength={12} onChange={(event) => setPremiumCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && premiumCode) void submitPremiumCode(); }} placeholder="ENTER CODE" aria-label="Store access code" autoComplete="off" /><button onClick={() => void submitPremiumCode()} disabled={!premiumCode || premiumBusy}>{premiumBusy ? "Checking…" : "Redeem"}</button></div> : <button className="primary-button store-signin" onClick={() => onTabChange("profile")}>Sign in to redeem</button>}
-                {premiumMessage && <p className="store-code-message" role="status">{premiumMessage}</p>}
-              </div>
-              <div className="store-feature-card">
-                <div className="store-avatar-stack">{AVATARS.filter((item) => item.premium).slice(-3).map((item) => <AvatarGlyph key={item.id} avatarId={item.id} className="store-avatar" />)}</div>
-                <small>FEATURED COLLECTION</small><strong>Legendary Icons</strong><p>Premium profile pictures stay attached to the account that redeems access.</p>
-              </div>
-              <div className="store-promo-card"><span>COMING NEXT</span><strong>Seasonal drops</strong><p>Reserved for future Game Garden events and announcements.</p><b>予告</b></div>
+            <div className={`store-code-card store-code-minimal ${premiumUnlocked ? "unlocked" : ""}`}>
+              <div className="store-code-label"><small>CODE</small><span>入力</span></div>
+              <div className="store-code-form"><input value={premiumCode} maxLength={12} onChange={(event) => setPremiumCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && premiumCode) void submitPremiumCode(); }} placeholder="ENTER CODE" aria-label="Enter a store code" autoComplete="off" /><button onClick={() => void submitPremiumCode()} disabled={!premiumCode || premiumBusy} aria-label="Submit code">{premiumBusy ? "…" : "→"}</button></div>
+              {premiumMessage && <p className="store-code-message" role="status">{premiumMessage}</p>}
             </div>
           </section>
         )}
