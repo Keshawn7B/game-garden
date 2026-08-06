@@ -6,6 +6,7 @@ import { collection, deleteDoc, doc, getDoc, getDocs, limit, limitToLast, onSnap
 import { auth, db, googleProvider } from "./firebase";
 import { ChatChromeProvider, HeaderChatButton } from "./chat-chrome";
 import { makeOnlineGameState, OnlineVersusGame, type OnlineGameId } from "./online-games";
+import { BarricadeDragPiece, type BarricadeDragKind } from "./barricade-drag";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade";
 type LibraryGameId = PlayableGameId;
@@ -1443,18 +1444,18 @@ function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
   const [walls, setWalls] = useState<GridWall[]>([]);
   const [wallsLeft, setWallsLeft] = useState<[number, number]>([10, 10]);
   const [turn, setTurn] = useState<0 | 1>(0);
-  const [action, setAction] = useState<"move" | "wall">("move");
-  const [orientation, setOrientation] = useState<"h" | "v">("h");
+  const [draggingPiece, setDraggingPiece] = useState<BarricadeDragKind | null>(null);
   const [moves, setMoves] = useState(0);
   const [winner, setWinner] = useState<0 | 1 | null>(null);
   const [message, setMessage] = useState("Move your pawn or place a barricade.");
+  const boardRef = useRef<HTMLDivElement>(null);
 
   const reset = useCallback(() => {
     setPositions(BARRICADE_START);
     setWalls([]);
     setWallsLeft([10, 10]);
     setTurn(0);
-    setAction("move");
+    setDraggingPiece(null);
     setMoves(0);
     setWinner(null);
     setMessage("Move your pawn or place a barricade.");
@@ -1469,7 +1470,6 @@ function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
       if (player === 0) onScore(moves + 1);
     } else {
       setTurn(player === 0 ? 1 : 0);
-      setAction("move");
       setMessage(player === 0 ? "Opponent turn." : "Your turn.");
     }
   }, [moves, onScore]);
@@ -1493,6 +1493,36 @@ function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
     setWallsLeft((current) => current.map((count, index) => index === player ? count - 1 : count) as [number, number]);
     finishAction(player, positions);
   }, [finishAction, positions, walls, wallsLeft]);
+
+  const dropBarricadePiece = useCallback((clientX: number, clientY: number, kind: BarricadeDragKind) => {
+    const cells = boardRef.current?.querySelector<HTMLElement>(".quoridor-cells");
+    if (!cells || turn !== 0 || winner != null) return;
+    const rect = cells.getBoundingClientRect();
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      setMessage("Drop the piece on the board.");
+      return;
+    }
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    if (kind === "pawn") {
+      const row = Math.min(8, Math.max(0, Math.floor(y * 9)));
+      const column = Math.min(8, Math.max(0, Math.floor(x * 9)));
+      const destination = row * 9 + column;
+      if (!barricadeMoves(positions[0], positions[1], walls).includes(destination)) {
+        setMessage("Drop your pawn on a highlighted space.");
+        return;
+      }
+      movePawn(0, destination);
+      return;
+    }
+    const row = Math.round(y * 9 - 1);
+    const column = Math.round(x * 9 - 1);
+    if (row < 0 || row > 7 || column < 0 || column > 7 || !legalBarricadeWall({ row, column, orientation: kind, owner: 0 }, walls, positions)) {
+      setMessage("That wall cannot be placed there.");
+      return;
+    }
+    placeWall(0, row, column, kind);
+  }, [movePawn, placeWall, positions, turn, walls, winner]);
 
   useEffect(() => {
     if (mode !== "solo" || turn !== 1 || winner != null) return;
@@ -1529,12 +1559,16 @@ function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => vo
         <div className="barricade-heading"><div><p className="eyebrow">STRATEGY · {mode === "solo" ? `VS CPU · ${difficulty.toUpperCase()}` : "2 PLAYERS"}</p><h1>Barricade</h1><p>Reach the opposite edge while reshaping both routes with tactical walls.</p></div><span>壁</span></div>
         {mode === "solo" && <CpuDifficultyPicker difficulty={difficulty} onChange={(next) => { setDifficulty(next); reset(); }} gameName="Barricade" />}
         <div className="barricade-score-strip"><div className={turn === 0 && winner == null ? "active" : ""}><i className="pawn-one" /><span>YOU</span><strong>{wallsLeft[0]}<small>WALLS</small></strong></div><b>対<small>RACE</small></b><div className={turn === 1 && winner == null ? "active" : ""}><strong>{wallsLeft[1]}<small>WALLS</small></strong><span>{mode === "solo" ? "CPU" : "PLAYER 2"}</span><i className="pawn-two" /></div></div>
-        <div className="barricade-action-bar"><button className={action === "move" ? "active" : ""} onClick={() => setAction("move")} disabled={turn !== 0 || winner != null}>MOVE PAWN</button><button className={action === "wall" ? "active" : ""} onClick={() => setAction("wall")} disabled={turn !== 0 || winner != null || wallsLeft[0] === 0}>PLACE WALL</button>{action === "wall" && <span><button className={orientation === "h" ? "active" : ""} onClick={() => setOrientation("h")}>HORIZONTAL</button><button className={orientation === "v" ? "active" : ""} onClick={() => setOrientation("v")}>VERTICAL</button></span>}</div>
-        <div className="quoridor-board">
-          <div className="quoridor-cells">{Array.from({ length: 81 }, (_, index) => <button key={index} className={`${legalMoves.includes(index) && action === "move" ? "legal-move" : ""} ${Math.floor(index / 9) === 0 ? "top-goal" : ""} ${Math.floor(index / 9) === 8 ? "bottom-goal" : ""}`} onClick={() => action === "move" && movePawn(0, index)} disabled={action !== "move" || !legalMoves.includes(index)} aria-label={`Board row ${Math.floor(index / 9) + 1}, column ${index % 9 + 1}`}>{positions[0] === index && <i className="pawn-one" />}{positions[1] === index && <i className="pawn-two" />}</button>)}</div>
-          <div className={`quoridor-wall-layer placing-${orientation}`}>{Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = index % 8; const canPlace = action === "wall" && turn === 0 && legalBarricadeWall({ row, column, orientation, owner: 0 }, walls, positions); return <button key={index} className={canPlace ? "wall-target legal" : "wall-target"} style={{ "--wall-row": row, "--wall-column": column } as React.CSSProperties} onClick={() => canPlace && placeWall(0, row, column, orientation)} disabled={!canPlace} aria-label={`Place ${orientation === "h" ? "horizontal" : "vertical"} wall at row ${row + 1}, column ${column + 1}`} />; })}{walls.map((wall, index) => <i key={index} className={`placed-wall wall-${wall.orientation} owner-${wall.owner + 1}`} style={{ "--wall-row": wall.row, "--wall-column": wall.column } as React.CSSProperties} />)}</div>
+        <div className="barricade-piece-tray" aria-label="Drag a wall onto the board">
+          <BarricadeDragPiece kind="h" label="Drag a horizontal wall" disabled={turn !== 0 || winner != null || wallsLeft[0] === 0} onDragStart={setDraggingPiece} onDragEnd={() => setDraggingPiece(null)} onDrop={dropBarricadePiece} />
+          <span><strong>{wallsLeft[0]}</strong><small>WALLS</small></span>
+          <BarricadeDragPiece kind="v" label="Drag a vertical wall" disabled={turn !== 0 || winner != null || wallsLeft[0] === 0} onDragStart={setDraggingPiece} onDragEnd={() => setDraggingPiece(null)} onDrop={dropBarricadePiece} />
         </div>
-        <div className="barricade-controls" role="status"><div><small>{winner != null ? "MATCH COMPLETE" : turn === 0 ? action === "wall" ? "PLACE ONE WALL" : "CHOOSE A HIGHLIGHTED SPACE" : "OPPONENT MOVE"}</small><strong>{message}</strong></div>{winner != null && <button className="primary-button" onClick={reset}>Rematch</button>}</div>
+        <div className="quoridor-board" ref={boardRef}>
+          <div className="quoridor-cells" role="grid">{Array.from({ length: 81 }, (_, index) => <div key={index} role="gridcell" className={`${legalMoves.includes(index) && draggingPiece === "pawn" ? "legal-move" : ""} ${Math.floor(index / 9) === 0 ? "top-goal" : ""} ${Math.floor(index / 9) === 8 ? "bottom-goal" : ""}`} aria-label={`Board row ${Math.floor(index / 9) + 1}, column ${index % 9 + 1}`}>{positions[0] === index && <BarricadeDragPiece kind="pawn" label="Drag your pawn" disabled={turn !== 0 || winner != null} onDragStart={setDraggingPiece} onDragEnd={() => setDraggingPiece(null)} onDrop={dropBarricadePiece} />}{positions[1] === index && <i className="pawn-two" />}</div>)}</div>
+          <div className={`quoridor-wall-layer dragging-${draggingPiece ?? "none"}`}>{Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = index % 8; const wallOrientation = draggingPiece === "h" || draggingPiece === "v" ? draggingPiece : null; const canPlace = wallOrientation != null && turn === 0 && legalBarricadeWall({ row, column, orientation: wallOrientation, owner: 0 }, walls, positions); return <span key={index} className={canPlace ? `wall-target legal wall-${wallOrientation}` : "wall-target"} style={{ "--wall-row": row, "--wall-column": column } as React.CSSProperties} />; })}{walls.map((wall, index) => <i key={index} className={`placed-wall wall-${wall.orientation} owner-${wall.owner + 1}`} style={{ "--wall-row": wall.row, "--wall-column": wall.column } as React.CSSProperties} />)}</div>
+        </div>
+        <div className="barricade-controls" role="status"><div><small>{winner != null ? "MATCH COMPLETE" : turn === 0 ? "DRAG A PAWN OR WALL" : "OPPONENT MOVE"}</small><strong>{message}</strong></div>{winner != null && <button className="primary-button" onClick={reset}>Rematch</button>}</div>
       </section>
     </main>
   );

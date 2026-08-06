@@ -5,6 +5,7 @@ import type { User } from "firebase/auth";
 import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { HeaderChatButton } from "./chat-chrome";
+import { BarricadeDragPiece, type BarricadeDragKind } from "./barricade-drag";
 
 export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade";
 
@@ -285,8 +286,8 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const [colors, setColors] = useState<ColorId[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [hoveredColumn, setHoveredColumn] = useState<number | null>(null);
-  const [barricadeAction, setBarricadeAction] = useState<"move" | "wall">("move");
-  const [barricadeOrientation, setBarricadeOrientation] = useState<"h" | "v">("h");
+  const [draggingBarricadePiece, setDraggingBarricadePiece] = useState<BarricadeDragKind | null>(null);
+  const barricadeBoardRef = useRef<HTMLDivElement>(null);
   const latestState = useRef<OnlineState | null>(null);
   const stateRef = useMemo(() => doc(db, "rooms", room.code, "game", "state"), [room.code]);
 
@@ -488,6 +489,39 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return { barricades: [...current.barricades, encodeOnlineWall(candidate)], wallsLeft, moves: current.moves + 1, turnUid: current.players[otherIndex] };
   });
 
+  const dropOnlineBarricadePiece = (clientX: number, clientY: number, kind: BarricadeDragKind) => {
+    const cells = barricadeBoardRef.current?.querySelector<HTMLElement>(".quoridor-cells");
+    if (!cells || !myTurn || state.phase !== "playing") return;
+    const rect = cells.getBoundingClientRect();
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      setError("Drop the piece on the board.");
+      return;
+    }
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    const decodedWalls = decodeOnlineWalls(state.barricades);
+    if (kind === "pawn") {
+      const row = Math.min(8, Math.max(0, Math.floor(y * 9)));
+      const column = Math.min(8, Math.max(0, Math.floor(x * 9)));
+      const destination = row * 9 + column;
+      if (!onlineBarricadeMoves(state.positions[playerIndex], state.positions[otherIndex], decodedWalls).includes(destination)) {
+        setError("Drop your pawn on a highlighted space.");
+        return;
+      }
+      setError("");
+      moveBarricadePawn(destination);
+      return;
+    }
+    const row = Math.round(y * 9 - 1);
+    const column = Math.round(x * 9 - 1);
+    if (row < 0 || row > 7 || column < 0 || column > 7 || !legalOnlineWall({ row, column, orientation: kind, owner: playerIndex }, decodedWalls, state.positions)) {
+      setError("That wall cannot be placed there.");
+      return;
+    }
+    setError("");
+    placeBarricade(row, column, kind);
+  };
+
   let gameView = null;
   if (state.gameId === "codebreaker") gameView = <section className="online-game codebreaker-online"><p className="eyebrow">LOGIC · LIVE ONLINE</p><h1>Crack the shared code.</h1><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="secret-row"><span>SECRET CODE</span><div className="peg-row">{state.secret.map((color, index) => <Peg key={index} color={color} hidden={state.phase !== "complete"} />)}</div></div><div className="online-code-history">{state.guesses.map((guess, index) => <div key={index}><b>{guess.uid === user.uid ? "YOU" : state.names[otherIndex]}</b><span>{guess.colors.map((color, peg) => <Peg key={peg} color={color} />)}</span><em>● {guess.exact} exact · ○ {guess.close} close</em></div>)}</div>{state.phase === "complete" ? finish : <div className="picker-panel"><p>{myTurn ? "Choose four colors" : "Opponent is choosing"}<span>{colors.length}/4</span></p><div className="color-picker">{COLORS.map((color) => <button key={color.id} className="color-choice" style={{ backgroundColor: color.hex }} disabled={!myTurn || colors.length >= 4} onClick={() => setColors((current) => [...current, color.id])} aria-label={`Add ${color.label}`} />)}</div><div className="picker-actions"><button className="text-button" disabled={!myTurn || !colors.length} onClick={() => setColors((current) => current.slice(0, -1))}>Undo</button><button className="primary-button" disabled={!myTurn || colors.length !== 4} onClick={submitCode}>Send guess</button></div></div>}</section>;
 
@@ -517,7 +551,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   if (state.gameId === "barricade") {
     const decodedWalls = decodeOnlineWalls(state.barricades);
     const legalMoves = myTurn ? onlineBarricadeMoves(state.positions[playerIndex], state.positions[otherIndex], decodedWalls) : [];
-    gameView = <section className="online-game barricade-game grid-barricade"><div className="barricade-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Barricade</h1><p>Reach the opposite edge while reshaping both routes with tactical walls.</p></div><span>壁</span></div><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="barricade-score-strip"><div className={state.turnUid === state.players[0] && state.phase !== "complete" ? "active" : ""}><i className="pawn-one" /><span>{state.names[0]}</span><strong>{state.wallsLeft[0]}<small>WALLS</small></strong></div><b>対<small>LIVE</small></b><div className={state.turnUid === state.players[1] && state.phase !== "complete" ? "active" : ""}><strong>{state.wallsLeft[1]}<small>WALLS</small></strong><span>{state.names[1]}</span><i className="pawn-two" /></div></div><div className="barricade-action-bar"><button className={barricadeAction === "move" ? "active" : ""} onClick={() => setBarricadeAction("move")} disabled={!myTurn}>MOVE PAWN</button><button className={barricadeAction === "wall" ? "active" : ""} onClick={() => setBarricadeAction("wall")} disabled={!myTurn || state.wallsLeft[playerIndex] === 0}>PLACE WALL</button>{barricadeAction === "wall" && <span><button className={barricadeOrientation === "h" ? "active" : ""} onClick={() => setBarricadeOrientation("h")}>HORIZONTAL</button><button className={barricadeOrientation === "v" ? "active" : ""} onClick={() => setBarricadeOrientation("v")}>VERTICAL</button></span>}</div><div className="quoridor-board"><div className="quoridor-cells">{Array.from({ length: 81 }, (_, index) => <button key={index} className={`${legalMoves.includes(index) && barricadeAction === "move" ? "legal-move" : ""} ${Math.floor(index / 9) === 0 ? "top-goal" : ""} ${Math.floor(index / 9) === 8 ? "bottom-goal" : ""}`} onClick={() => barricadeAction === "move" && moveBarricadePawn(index)} disabled={!myTurn || barricadeAction !== "move" || !legalMoves.includes(index)}>{state.positions[0] === index && <i className="pawn-one" />}{state.positions[1] === index && <i className="pawn-two" />}</button>)}</div><div className={`quoridor-wall-layer placing-${barricadeOrientation}`}>{Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = index % 8; const canPlace = myTurn && barricadeAction === "wall" && legalOnlineWall({ row, column, orientation: barricadeOrientation, owner: playerIndex }, decodedWalls, state.positions); return <button key={index} className={canPlace ? "wall-target legal" : "wall-target"} style={{ "--wall-row": row, "--wall-column": column } as React.CSSProperties} onClick={() => canPlace && placeBarricade(row, column, barricadeOrientation)} disabled={!canPlace} />; })}{decodedWalls.map((wall, index) => <i key={index} className={`placed-wall wall-${wall.orientation} owner-${wall.owner + 1}`} style={{ "--wall-row": wall.row, "--wall-column": wall.column } as React.CSSProperties} />)}</div></div>{state.phase === "complete" && finish}</section>;
+    gameView = <section className="online-game barricade-game grid-barricade"><div className="barricade-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Barricade</h1><p>Reach the opposite edge while reshaping both routes with tactical walls.</p></div><span>壁</span></div><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="barricade-score-strip"><div className={state.turnUid === state.players[0] && state.phase !== "complete" ? "active" : ""}><i className="pawn-one" /><span>{state.names[0]}</span><strong>{state.wallsLeft[0]}<small>WALLS</small></strong></div><b>対<small>LIVE</small></b><div className={state.turnUid === state.players[1] && state.phase !== "complete" ? "active" : ""}><strong>{state.wallsLeft[1]}<small>WALLS</small></strong><span>{state.names[1]}</span><i className="pawn-two" /></div></div><div className="barricade-piece-tray" aria-label="Drag a wall onto the board"><BarricadeDragPiece kind="h" owner={playerIndex === 0 ? 1 : 2} label="Drag a horizontal wall" disabled={!myTurn || state.wallsLeft[playerIndex] === 0} onDragStart={setDraggingBarricadePiece} onDragEnd={() => setDraggingBarricadePiece(null)} onDrop={dropOnlineBarricadePiece} /><span><strong>{state.wallsLeft[playerIndex]}</strong><small>WALLS</small></span><BarricadeDragPiece kind="v" owner={playerIndex === 0 ? 1 : 2} label="Drag a vertical wall" disabled={!myTurn || state.wallsLeft[playerIndex] === 0} onDragStart={setDraggingBarricadePiece} onDragEnd={() => setDraggingBarricadePiece(null)} onDrop={dropOnlineBarricadePiece} /></div><div className="quoridor-board" ref={barricadeBoardRef}><div className="quoridor-cells" role="grid">{Array.from({ length: 81 }, (_, index) => <div key={index} role="gridcell" className={`${legalMoves.includes(index) && draggingBarricadePiece === "pawn" ? "legal-move" : ""} ${Math.floor(index / 9) === 0 ? "top-goal" : ""} ${Math.floor(index / 9) === 8 ? "bottom-goal" : ""}`}>{state.positions[0] === index && (playerIndex === 0 ? <BarricadeDragPiece kind="pawn" owner={1} label="Drag your pawn" disabled={!myTurn} onDragStart={setDraggingBarricadePiece} onDragEnd={() => setDraggingBarricadePiece(null)} onDrop={dropOnlineBarricadePiece} /> : <i className="pawn-one" />)}{state.positions[1] === index && (playerIndex === 1 ? <BarricadeDragPiece kind="pawn" owner={2} label="Drag your pawn" disabled={!myTurn} onDragStart={setDraggingBarricadePiece} onDragEnd={() => setDraggingBarricadePiece(null)} onDrop={dropOnlineBarricadePiece} /> : <i className="pawn-two" />)}</div>)}</div><div className={`quoridor-wall-layer dragging-${draggingBarricadePiece ?? "none"}`}>{Array.from({ length: 64 }, (_, index) => { const row = Math.floor(index / 8); const column = index % 8; const wallOrientation = draggingBarricadePiece === "h" || draggingBarricadePiece === "v" ? draggingBarricadePiece : null; const canPlace = myTurn && wallOrientation != null && legalOnlineWall({ row, column, orientation: wallOrientation, owner: playerIndex }, decodedWalls, state.positions); return <span key={index} className={canPlace ? `wall-target legal wall-${wallOrientation}` : "wall-target"} style={{ "--wall-row": row, "--wall-column": column } as React.CSSProperties} />; })}{decodedWalls.map((wall, index) => <i key={index} className={`placed-wall wall-${wall.orientation} owner-${wall.owner + 1}`} style={{ "--wall-row": wall.row, "--wall-column": wall.column } as React.CSSProperties} />)}</div></div>{state.phase === "complete" && finish}</section>;
   }
 
   return <main className={`game-shell online-versus-shell online-${state.gameId}`}><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><div className="game-header-actions"><HeaderChatButton inGame /><span className="online-room-pill">● {room.code}</span></div></header>{gameView}{error && <p className="online-game-error" role="alert">{error}</p>}</main>;

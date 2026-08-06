@@ -36,6 +36,7 @@ test("routes every game through a start menu", async () => {
   const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const onlineSource = await readFile(new URL("../app/online-games.tsx", import.meta.url), "utf8");
+  const barricadeDragSource = await readFile(new URL("../app/barricade-drag.tsx", import.meta.url), "utf8");
   const chatSource = await readFile(new URL("../app/chat-chrome.tsx", import.meta.url), "utf8");
   const onlineStyles = await readFile(new URL("../app/online-games.css", import.meta.url), "utf8");
   const firebaseSource = await readFile(new URL("../app/firebase.ts", import.meta.url), "utf8");
@@ -127,6 +128,15 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /legalBarricadeWall/);
   assert.match(onlineSource, /onlineBarricadeMoves/);
   assert.match(onlineSource, /placeBarricade/);
+  assert.match(source, /<BarricadeDragPiece kind="pawn"/);
+  assert.match(source, /<BarricadeDragPiece kind="h"/);
+  assert.match(source, /<BarricadeDragPiece kind="v"/);
+  assert.match(onlineSource, /dropOnlineBarricadePiece/);
+  assert.match(barricadeDragSource, /onPointerDown/);
+  assert.match(barricadeDragSource, /onPointerMove/);
+  assert.match(barricadeDragSource, /onPointerUp/);
+  assert.doesNotMatch(source, /className="barricade-action-bar"/);
+  assert.doesNotMatch(onlineSource, /className="barricade-action-bar"/);
   assert.match(source, /switchObject/);
   assert.match(source, /Check order/);
   assert.match(source, /pocket-play-scores/);
