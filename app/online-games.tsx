@@ -12,8 +12,10 @@ import { BattleshipGrid, BattleshipPlacement } from "./battleship-game";
 import { DOTS_BOX_COUNT, DOTS_EDGE_COUNT, applyDotsBoxesEdge } from "./dots-boxes";
 import { DotsBoxesBoard } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
+import { AIR_HOCKEY_CENTER, AIR_HOCKEY_WIN_SCORE, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, simulateAirHockeyShot } from "./air-hockey";
+import { AirHockeyRink } from "./air-hockey-game";
 
-export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes";
+export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey";
 
 type Room = {
   code: string;
@@ -120,7 +122,7 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     moves: 0,
     scores: [0, 0],
     winnerUid: "",
-    board: gameId === "tictactoe" ? Array(9).fill("") : gameId === "connect4" ? Array(42).fill(0) : gameId === "checkers" ? [...CHECKERS_START] : gameId === "dotsboxes" ? Array(DOTS_EDGE_COUNT).fill(0) : [],
+    board: gameId === "tictactoe" ? Array(9).fill("") : gameId === "connect4" ? Array(42).fill(0) : gameId === "checkers" ? [...CHECKERS_START] : gameId === "dotsboxes" ? Array(DOTS_EDGE_COUNT).fill(0) : gameId === "airhockey" ? [AIR_HOCKEY_CENTER.x, AIR_HOCKEY_CENTER.y] : [],
     secret: gameId === "codebreaker" ? Array.from({ length: 4 }, () => COLORS[Math.floor(Math.random() * COLORS.length)].id) : [],
     guesses: [],
     target: gameId === "order" ? order.target : [],
@@ -498,6 +500,25 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     };
   });
 
+  const playAirHockey = (velocity: { x: number; y: number }) => void mutate((current) => {
+    if (current.gameId !== "airhockey" || current.turnUid !== user.uid || current.phase !== "playing") return null;
+    const puck = { x: Number(current.board[0] ?? AIR_HOCKEY_CENTER.x), y: Number(current.board[1] ?? AIR_HOCKEY_CENTER.y) };
+    const shot = simulateAirHockeyShot(puck, velocity);
+    const scores: [number, number] = [...current.scores];
+    if (shot.goal != null) scores[shot.goal] += 1;
+    const winnerIndex = scores.findIndex((score) => score >= AIR_HOCKEY_WIN_SCORE);
+    const won = winnerIndex >= 0;
+    return {
+      board: [shot.final.x, shot.final.y],
+      open: encodeAirHockeyTrajectory(shot.trajectory),
+      scores,
+      moves: current.moves + 1,
+      phase: won ? "complete" : "playing",
+      winnerUid: won ? current.players[winnerIndex] : "",
+      turnUid: won ? user.uid : current.players[otherIndex],
+    };
+  });
+
   const readyBattleshipFleet = () => {
     if (!validBattleshipFleet(battleshipFleet)) return;
     void mutateAtomic((current) => {
@@ -639,6 +660,11 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
 
   if (state.gameId === "dotsboxes") {
     gameView = <section className="online-game dots-boxes-game online-dots-boxes"><div className="dots-boxes-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Dots &amp; Boxes</h1><p>Close a square to score and keep your turn.</p></div><span>点</span></div><PlayerStrip state={state} user={user} /><div className="dots-score-strip"><div className={state.turnUid === state.players[0] && state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong><span>RED BOXES</span></div><b>対<small>{state.moves}/40 LINES</small></b><div className={state.turnUid === state.players[1] && state.phase === "playing" ? "active" : ""}><small>{state.names[1]}</small><strong>{state.scores[1]}</strong><span>INK BOXES</span></div></div><div className="online-turn-status">{status}</div><DotsBoxesBoard edges={state.board.map(Number)} boxes={state.matched.map(Number)} lastEdge={state.open[0] ?? null} onEdge={playDotsBoxes} disabled={!myTurn} labels={[state.names[0].slice(0, 3).toUpperCase(), state.names[1].slice(0, 3).toUpperCase()]} />{state.phase === "complete" && finish}</section>;
+  }
+
+  if (state.gameId === "airhockey") {
+    const puck = { x: Number(state.board[0] ?? AIR_HOCKEY_CENTER.x), y: Number(state.board[1] ?? AIR_HOCKEY_CENTER.y) };
+    gameView = <section className="online-game air-hockey-game online-air-hockey"><div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · LIVE ONLINE</p><h1>Air Hockey</h1><p>Each complete shot synchronizes instantly across both rinks.</p></div><span>氷</span></div><PlayerStrip state={state} user={user} /><div className="air-scoreboard"><div className={state.turnUid === state.players[0] && state.phase === "playing" ? "active" : ""}><small>{state.names[0]}</small><strong>{state.scores[0]}</strong></div><b>FIRST TO 5<small>{state.moves} SHOTS</small></b><div className={state.turnUid === state.players[1] && state.phase === "playing" ? "active" : ""}><strong>{state.scores[1]}</strong><small>{state.names[1]}</small></div></div><div className="online-turn-status">{status}{myTurn ? " — pull the puck to aim" : ""}</div><AirHockeyRink puck={puck} trajectory={decodeAirHockeyTrajectory(state.open)} activePlayer={state.players.indexOf(state.turnUid) as 0 | 1} disabled={!myTurn} labels={[state.names[0], state.names[1]]} onShoot={playAirHockey} />{state.phase === "complete" && finish}</section>;
   }
 
   if (state.gameId === "rps") {

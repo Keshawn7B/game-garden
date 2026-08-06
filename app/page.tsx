@@ -11,8 +11,9 @@ import { CHECKERS_START, applyCheckersMove, checkersLegalMoves, checkersPieceCou
 import { Battleship } from "./battleship-game";
 import { DotsAndBoxes } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
+import { AirHockey } from "./air-hockey-game";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey";
 type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile";
 type ThemeMode = "classic" | "sakura";
@@ -2058,6 +2059,19 @@ const GAME_MENUS: Record<LibraryGameId, {
       "The player with the most boxes after every line is drawn wins.",
     ],
   },
+  airhockey: {
+    title: "Air Hockey",
+    japanese: "エアホッケー",
+    category: "Arcade",
+    glyph: "氷",
+    color: "airhockey",
+    players: "1–2 Players",
+    rules: [
+      "Pull back from the puck and release to strike it across the rink.",
+      "Use the side rails for bank shots and defend against the return.",
+      "Score through the opponent's goal; the first player to five wins.",
+    ],
+  },
 };
 
 function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
@@ -2234,13 +2248,14 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "checkers", number: "10", name: "Checkers", japanese: "チェッカー", meta: "STRATEGY", scoreGame: "checkers" },
   { id: "battleship", number: "11", name: "Battleship", japanese: "海戦ゲーム", meta: "STRATEGY", scoreGame: "battleship" },
   { id: "dotsboxes", number: "12", name: "Dots & Boxes", japanese: "点と箱", meta: "STRATEGY", scoreGame: "dotsboxes" },
+  { id: "airhockey", number: "13", name: "Air Hockey", japanese: "エアホッケー", meta: "ARCADE", scoreGame: "airhockey" },
 ];
 
-const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes"];
+const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes", "airhockey"];
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
-  const unit = game === "battleship" ? "shots" : game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" || game === "checkers" || game === "dotsboxes" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
+  const unit = game === "battleship" || game === "airhockey" ? "shots" : game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" || game === "checkers" || game === "dotsboxes" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
@@ -3753,6 +3768,7 @@ export default function Home() {
     if (game === "checkers-menu") return <GameMenu game="checkers" onPlay={(mode) => playFromMenu("checkers", mode)} onBack={() => selectGame("games")} />;
     if (game === "battleship-menu") return <GameMenu game="battleship" onPlay={(mode) => playFromMenu("battleship", mode)} onBack={() => selectGame("games")} />;
     if (game === "dotsboxes-menu") return <GameMenu game="dotsboxes" onPlay={(mode) => playFromMenu("dotsboxes", mode)} onBack={() => selectGame("games")} />;
+    if (game === "airhockey-menu") return <GameMenu game="airhockey" onPlay={(mode) => playFromMenu("airhockey", mode)} onBack={() => selectGame("games")} />;
     if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && SCORE_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
     if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
@@ -3766,6 +3782,7 @@ export default function Home() {
     if (game === "checkers") return <Checkers onBack={() => selectGame("checkers-menu")} onScore={(score) => recordScore("checkers", score)} />;
     if (game === "battleship") return <Battleship onBack={() => selectGame("battleship-menu")} onScore={(score) => recordScore("battleship", score)} />;
     if (game === "dotsboxes") return <DotsAndBoxes onBack={() => selectGame("dotsboxes-menu")} onScore={(score) => recordScore("dotsboxes", score)} />;
+    if (game === "airhockey") return <AirHockey onBack={() => selectGame("airhockey-menu")} onScore={(score) => recordScore("airhockey", score)} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" ? game : "games";
     return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
   }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
