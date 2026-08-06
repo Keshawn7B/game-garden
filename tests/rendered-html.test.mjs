@@ -140,7 +140,9 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /quoridor-cells \.pawn-two\{background:#3f87ff\}/);
   assert.match(source, /onDragMove=\{previewBarricadeWall\}/);
   assert.match(onlineSource, /onDragMove=\{previewOnlineBarricadeWall\}/);
-  assert.match(barricadeDragSource, /onDragMove\?\.\(event\.clientX, event\.clientY, kind\)/);
+  assert.match(barricadeDragSource, /clientX \+ 22, y: clientY - 58/);
+  assert.match(barricadeDragSource, /onDragMove\?\.\(point\.x, point\.y, kind\)/);
+  assert.match(styles, /art-barricade[^}]*game-barricade-v2\.png/);
   assert.match(styles, /wall-target\.snap-preview\.legal/);
   assert.match(styles, /wall-target\.snap-preview\.blocked/);
   assert.match(styles, /wall-target\.legal:not\(\.snap-preview\)\{background:transparent;box-shadow:none\}/);

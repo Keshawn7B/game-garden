@@ -4,6 +4,10 @@ import { useState, type PointerEvent } from "react";
 
 export type BarricadeDragKind = "h" | "v";
 
+const dragPoint = (clientX: number, clientY: number, kind: BarricadeDragKind) => kind === "v"
+  ? { x: clientX + 22, y: clientY - 58 }
+  : { x: clientX, y: clientY };
+
 export function BarricadeDragPiece({
   kind,
   disabled = false,
@@ -29,24 +33,26 @@ export function BarricadeDragPiece({
     if (disabled) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDrag({ x: event.clientX, y: event.clientY, pointerId: event.pointerId });
+    const point = dragPoint(event.clientX, event.clientY, kind);
+    setDrag({ ...point, pointerId: event.pointerId });
     onDragStart?.(kind);
   };
 
   const move = (event: PointerEvent<HTMLSpanElement>) => {
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
-    setDrag({ x: event.clientX, y: event.clientY, pointerId: event.pointerId });
-    onDragMove?.(event.clientX, event.clientY, kind);
+    const point = dragPoint(event.clientX, event.clientY, kind);
+    setDrag({ ...point, pointerId: event.pointerId });
+    onDragMove?.(point.x, point.y, kind);
   };
 
   const finish = (event: PointerEvent<HTMLSpanElement>, cancelled = false) => {
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
-    const { clientX, clientY } = event;
+    const point = dragPoint(event.clientX, event.clientY, kind);
     setDrag(null);
     onDragEnd?.();
-    if (!cancelled) onDrop(clientX, clientY, kind);
+    if (!cancelled) onDrop(point.x, point.y, kind);
   };
 
   return (
