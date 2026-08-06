@@ -187,6 +187,9 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(airHockeySource, /setDisplayPuck|setDisplayMallets/);
   assert.match(airHockeySource, /LOCK RINK/);
   assert.match(airHockeySource, /AirHockeyFullscreenScoreboard/);
+  assert.match(airHockeySource, /AirHockeyMatchOverlay/);
+  assert.match(airHockeySource, /PLAY AGAIN/);
+  assert.match(airHockeySource, /EXIT RINK/);
   assert.match(airHockeySource, /FIRST TO 3/);
   assert.match(airHockeySource, /airHockeyClock/);
   assert.doesNotMatch(airHockeySource, /UNLOCK SCREEN/);
@@ -199,12 +202,15 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(onlineAirHockeySource, /setDisplayPuck|setDisplayMallets/);
   assert.match(onlineAirHockeySource, /BOTH PLAYERS LIVE/);
   assert.match(onlineAirHockeySource, /AirHockeyFullscreenScoreboard/);
+  assert.match(onlineAirHockeySource, /AirHockeyMatchOverlay/);
   assert.match(onlineAirHockeySource, /stepAirHockeyLive/);
   assert.match(firestoreRules, /validLiveAirHockeyMallet/);
   assert.match(styles, /\.air-hockey-rink/);
   assert.match(styles, /\.live-rink \.air-mallet\.is-controlled\{transition:none\}/);
   assert.match(styles, /\.air-fullscreen-scoreboard/);
   assert.match(styles, /\.air-fullscreen-close/);
+  assert.match(styles, /\.air-match-overlay/);
+  assert.match(styles, /\.air-match-replay/);
   assert.match(styles, /game-air-hockey\.png/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);

@@ -33,14 +33,39 @@ export function AirHockeyFullscreenScoreboard({ scores, names, secondsLeft, onCl
   </div>;
 }
 
-export function AirHockeyRink({ difficulty, round, scores, secondsLeft, disabled = false, labels = ["YOU", "CPU"], onGoal, onLockChange }: {
+export type AirHockeyMatchResult = {
+  outcome: string;
+  detail: string;
+  draw?: boolean;
+  waitingText?: string;
+};
+
+export function AirHockeyMatchOverlay({ result, onPlayAgain, onExit }: { result: AirHockeyMatchResult; onPlayAgain?: () => void; onExit: () => void }) {
+  return <div className={`air-match-overlay ${result.draw ? "is-draw" : ""}`} role="alertdialog" aria-modal="true" aria-live="assertive" aria-label={result.outcome}>
+    <button className="air-match-overlay-close" onClick={onExit} aria-label="Exit rink">×</button>
+    <div className="air-match-card">
+      <span className="air-match-seal">{result.draw ? "分" : "勝"}</span>
+      <small>{result.draw ? "MATCH COMPLETE" : "MATCH WINNER"}</small>
+      <h2>{result.outcome}</h2>
+      <p>{result.detail}</p>
+      {onPlayAgain
+        ? <button className="air-match-replay" onClick={onPlayAgain}>PLAY AGAIN <span>↻</span></button>
+        : <p className="air-match-waiting">{result.waitingText}</p>}
+      <button className="air-match-exit" onClick={onExit}>EXIT RINK</button>
+    </div>
+  </div>;
+}
+
+export function AirHockeyRink({ difficulty, round, scores, secondsLeft, disabled = false, labels = ["YOU", "CPU"], result, onGoal, onPlayAgain, onLockChange }: {
   difficulty: AirHockeyDifficulty;
   round: number;
   scores: [number, number];
   secondsLeft: number;
   disabled?: boolean;
   labels?: [string, string];
+  result?: AirHockeyMatchResult;
   onGoal: (scorer: AirHockeyPlayer) => void;
+  onPlayAgain?: () => void;
   onLockChange?: (locked: boolean) => void;
 }) {
   const rinkRef = useRef<HTMLDivElement>(null);
@@ -163,6 +188,7 @@ export function AirHockeyRink({ difficulty, round, scores, secondsLeft, disabled
       <span ref={puckElementRef} className="air-puck" style={{ left: `${AIR_HOCKEY_LIVE_START.x}%`, top: `${AIR_HOCKEY_LIVE_START.y / 1.5}%` }} aria-label="Air hockey puck"><i /></span>
       {controlLocked && !disabled && <div className="air-live-badge"><i /> PUCK LIVE · CPU ACTIVE</div>}
       {!controlLocked && <div className="air-lock-overlay"><b>⌖</b><span>LOCK RINK TO PLAY LIVE</span></div>}
+      {controlLocked && disabled && result && <AirHockeyMatchOverlay result={result} onPlayAgain={onPlayAgain} onExit={() => changeLock(false)} />}
     </div>
   </div>;
 }
@@ -215,7 +241,7 @@ export function AirHockey({ onBack, onScore }: { onBack: () => void; onScore: (s
       <div className="cpu-difficulty"><div><span>CPU LEVEL</span><small>難易度</small></div><div className="difficulty-options">{(["easy", "normal", "hard"] as AirHockeyDifficulty[]).map((level) => <button key={level} className={difficulty === level ? "active" : ""} onClick={() => { setDifficulty(level); reset(); }}><span>{level}</span><small>{level === "easy" ? "Slow" : level === "normal" ? "Moderate" : "Quick"}</small></button>)}</div></div>
       <div className="air-scoreboard"><div className={winner == null ? "active" : ""}><small>YOU</small><strong>{scores[0]}</strong></div><b>FIRST TO 3<small>{airHockeyClock(secondsLeft)}</small></b><div className={winner == null ? "active" : ""}><strong>{scores[1]}</strong><small>CPU</small></div></div>
       <div className="air-turn-status">{winner != null ? "MATCH COMPLETE" : "PUCK LIVE — YOU AND THE CPU MOVE AT THE SAME TIME"}</div>
-      <AirHockeyRink difficulty={difficulty} round={round} scores={scores} secondsLeft={secondsLeft} disabled={winner != null} onGoal={goal} onLockChange={setRinkLocked} />
+      <AirHockeyRink difficulty={difficulty} round={round} scores={scores} secondsLeft={secondsLeft} disabled={winner != null} result={winner != null ? { outcome: winner === "draw" ? "Draw Match" : winner === 0 ? "You Win!" : "CPU Wins!", detail: `Final score ${scores[0]}–${scores[1]} after ${goals} goals.`, draw: winner === "draw" } : undefined} onGoal={goal} onPlayAgain={reset} onLockChange={setRinkLocked} />
       {winner != null && <GameResult outcome={winner === "draw" ? "Draw Match" : winner === 0 ? "You Win!" : "CPU Wins!"} detail={`Final score ${scores[0]}–${scores[1]} after ${goals} goals.`} onPlayAgain={reset} draw={winner === "draw"} />}
     </section>
   </main>;

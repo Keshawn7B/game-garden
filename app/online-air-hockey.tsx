@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { AIR_HOCKEY_LIVE_START, stepAirHockeyLive, type AirHockeyBody, type AirHockeyPlayer, type AirHockeyPoint } from "./air-hockey";
-import { AirHockeyFullscreenScoreboard } from "./air-hockey-game";
+import { AirHockeyFullscreenScoreboard, AirHockeyMatchOverlay, type AirHockeyMatchResult } from "./air-hockey-game";
 import { db } from "./firebase";
 
 const MALLET_STARTS: [AirHockeyPoint, AirHockeyPoint] = [{ x: 50, y: 124 }, { x: 50, y: 26 }];
@@ -25,7 +25,7 @@ function placeLiveElement(element: HTMLElement | null, point: AirHockeyPoint) {
   element.style.top = `${point.y / 1.5}%`;
 }
 
-export function OnlineAirHockeyRink({ roomCode, players, names, scores, secondsLeft, userUid, round, disabled, onGoal, onConnectionError }: {
+export function OnlineAirHockeyRink({ roomCode, players, names, scores, secondsLeft, userUid, round, disabled, result, onGoal, onPlayAgain, onConnectionError }: {
   roomCode: string;
   players: [string, string];
   names: [string, string];
@@ -34,7 +34,9 @@ export function OnlineAirHockeyRink({ roomCode, players, names, scores, secondsL
   userUid: string;
   round: number;
   disabled?: boolean;
+  result?: AirHockeyMatchResult;
   onGoal: (scorer: AirHockeyPlayer, round: number) => void;
+  onPlayAgain?: () => void;
   onConnectionError?: () => void;
 }) {
   const controlledPlayer = players.indexOf(userUid) as AirHockeyPlayer;
@@ -202,6 +204,7 @@ export function OnlineAirHockeyRink({ roomCode, players, names, scores, secondsL
       <span ref={puckElementRef} className="air-puck" style={{ left: `${AIR_HOCKEY_LIVE_START.x}%`, top: `${AIR_HOCKEY_LIVE_START.y / 1.5}%` }} aria-label="Air hockey puck"><i /></span>
       {controlLocked && !disabled && <div className="air-live-badge"><i /> BOTH PLAYERS LIVE</div>}
       {!controlLocked && <div className="air-lock-overlay"><b>⌖</b><span>LOCK RINK TO PLAY LIVE</span></div>}
+      {controlLocked && disabled && result && <AirHockeyMatchOverlay result={result} onPlayAgain={onPlayAgain} onExit={() => changeLock(false)} />}
     </div>
   </div>;
 }
