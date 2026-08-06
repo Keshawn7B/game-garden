@@ -266,6 +266,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /className="friend-connect-card"/);
   assert.match(source, /className="friend-connect-code"/);
   assert.match(source, /className="friend-connect-add"/);
+  assert.match(source, /className="friends-account-banner"/);
+  assert.match(source, /className=\{`friend-banner/);
+  assert.match(source, /Search friends by name/);
+  assert.match(source, /profile details/);
+  assert.match(source, /VIEW PROFILE/);
   assert.doesNotMatch(source, /className="friend-tools-grid"/);
   assert.match(styles, /\.friend-connect-card\s*\{[^}]*grid-template-columns:\.92fr 1\.08fr;[^}]*overflow:hidden;/);
   assert.match(source, /navigator\.share/);
@@ -356,6 +361,8 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(styles, /\.bottom-nav button\.active b \{[^}]*border-color:white/);
   assert.match(styles, /\.app-shell[^}]*min-height:100svh/);
   assert.match(styles, /\.friend-list/);
+  assert.match(styles, /\.friends-account-banner/);
+  assert.match(styles, /\.friend-banner-profile/);
   assert.match(styles, /\.friend-score-grid/);
   assert.match(source, /function FriendsChat/);
   assert.match(source, /collection\(db, "directChats"\)/);

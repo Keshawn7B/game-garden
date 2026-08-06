@@ -2922,9 +2922,32 @@ function AppHome({
                 <button className="primary-button" onClick={() => onTabChange("profile")}>Open profile</button>
               </div>
             ) : <>
-              <div className="friends-social-hero">
-                <div className="social-hero-copy"><span>YOUR SOCIAL GARDEN</span><h2>Play together.<br />Stay connected.</h2><p>See who is around, jump into a match, or message a friend without leaving the hub.</p></div>
-                <div className="social-live-count"><span><i /> LIVE NOW</span><strong>{onlineFriends.length}</strong><small>of {friends.length} friends online</small></div>
+              <div className="friends-account-banner">
+                <AvatarGlyph avatarId={avatarId} className="friends-account-avatar" />
+                <div><small>YOUR NAME · あなた</small><strong>{profileName || "Player One"}</strong><span><i /> ONLINE</span></div>
+                <b>{onlineFriends.length}<small>FRIENDS ONLINE</small></b>
+              </div>
+              <div className="friend-list friend-list-primary">
+                <div className="friend-list-heading"><span>Your friends <b>{friends.length}</b></span><span>フレンド</span></div>
+                <label className="friend-list-search"><span>⌕</span><input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Search friends by name" aria-label="Search your friends" /><b>{onlineFriends.length} ONLINE</b></label>
+                {inviteMessage && <p className="invite-message" role="status">{inviteMessage}</p>}
+                {displayedFriends.length ? displayedFriends.map((friend) => (
+                  <article className={`friend-banner ${friend.isOnline ? "is-online" : ""}`} key={friend.uid}>
+                    <button className="friend-banner-profile" onClick={() => setSelectedFriend(friend)} aria-label={`Open ${friend.name}'s profile details`}>
+                      <span className="friend-avatar-wrap"><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" /><i className={friend.isOnline ? "online" : ""} /></span>
+                      <span className="friend-identity"><strong>{friend.name}</strong><small className={friend.isOnline ? "online" : ""}>{friendPresenceLabel(friend)}</small></span>
+                      <span className="friend-banner-view"><small>VIEW PROFILE</small><b>›</b></span>
+                    </button>
+                    <div className="friend-banner-actions"><button className="friend-chat-button" onClick={() => onOpenChat(friend)}><span>話</span> MESSAGE</button><button className="friend-invite-button" onClick={() => { setInviteTarget((current) => current === friend.uid ? null : friend.uid); setInviteMessage(""); }}>PLAY</button><button className="friend-remove-button" onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button></div>
+                    {inviteTarget === friend.uid && (
+                      <div className="friend-invite-picker">
+                        <span>CHOOSE A GAME</span>
+                        <div>{scoredGames.map((game) => <button key={game.id} className={inviteGame === game.scoreGame ? "active" : ""} onClick={() => setInviteGame(game.scoreGame)}>{game.name}</button>)}</div>
+                        <button className="primary-button" disabled={inviteBusy} onClick={() => void submitInvite(friend)}>{inviteBusy ? "Sending…" : `Invite ${friend.name}`}</button>
+                      </div>
+                    )}
+                  </article>
+                )) : <p className="empty-friends">{friends.length ? "No friends match that search." : "No friends yet. Add someone below."}</p>}
               </div>
               {(incomingFriendRequests.length > 0 || outgoingFriendRequests.length > 0) && <div className="friend-request-center">
                 <div className="friend-request-heading"><span>Friend requests</span><b>{incomingFriendRequests.length} TO REVIEW</b></div>
@@ -2977,27 +3000,6 @@ function AppHome({
                   <div><input id="friend-code" value={friendInput} maxLength={8} onChange={(event) => setFriendInput(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="FRIEND CODE" /><button className="primary-button" onClick={submitFriend} disabled={friendBusy || friendInput.length !== 8}>{friendBusy ? "Sending…" : "Request"}</button></div>
                   {friendMessage && <p className="friend-add-message" role="status">{friendMessage}</p>}
                 </div>
-              </div>
-              <div className="friend-list">
-                <div className="friend-list-heading"><span>Friend list <b>{friends.length}</b></span><span>フレンド</span></div>
-                <div className="friend-list-search"><span>⌕</span><input value={friendSearch} onChange={(event) => setFriendSearch(event.target.value)} placeholder="Search your friends" aria-label="Search your friends" /><b>{onlineFriends.length} ONLINE</b></div>
-                {inviteMessage && <p className="invite-message" role="status">{inviteMessage}</p>}
-                {displayedFriends.length ? displayedFriends.map((friend) => (
-                  <div className={`friend-row ${friend.isOnline ? "is-online" : ""}`} key={friend.uid}>
-                    <div className="friend-row-head">
-                      <button className="friend-avatar-button" onClick={() => setSelectedFriend(friend)} aria-label={`Open ${friend.name}'s profile`}><span className="friend-avatar-wrap"><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" /><i className={friend.isOnline ? "online" : ""} /></span></button>
-                      <span className="friend-identity"><strong>{friend.name}</strong><small className={friend.isOnline ? "online" : ""}>{friendPresenceLabel(friend)}</small></span>
-                      <div className="friend-row-actions"><button className="friend-chat-button" onClick={() => onOpenChat(friend)}><span>話</span> CHAT</button><button className="friend-invite-button" onClick={() => { setInviteTarget((current) => current === friend.uid ? null : friend.uid); setInviteMessage(""); }}>PLAY</button><button className="friend-remove-button" onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button></div>
-                    </div>
-                    {inviteTarget === friend.uid && (
-                      <div className="friend-invite-picker">
-                        <span>CHOOSE A GAME</span>
-                        <div>{scoredGames.map((game) => <button key={game.id} className={inviteGame === game.scoreGame ? "active" : ""} onClick={() => setInviteGame(game.scoreGame)}>{game.name}</button>)}</div>
-                        <button className="primary-button" disabled={inviteBusy} onClick={() => void submitInvite(friend)}>{inviteBusy ? "Sending…" : `Invite ${friend.name}`}</button>
-                      </div>
-                    )}
-                  </div>
-                )) : <p className="empty-friends">{friends.length ? "No friends match that search." : "No friends added yet."}</p>}
               </div>
               {selectedFriend && <div className="friend-profile-backdrop" onMouseDown={() => setSelectedFriend(null)}><section className="friend-profile-dialog" role="dialog" aria-modal="true" aria-label={`${selectedFriend.name}'s profile`} onMouseDown={(event) => event.stopPropagation()}><button className="friend-profile-close" onClick={() => setSelectedFriend(null)} aria-label="Close friend profile">×</button><AvatarGlyph avatarId={selectedFriend.avatarId} className="friend-profile-avatar" /><small>FRIEND PROFILE</small><h2>{selectedFriend.name}</h2><p className={selectedFriend.isOnline ? "online" : ""}>{friendPresenceLabel(selectedFriend)}</p><div className="friend-profile-actions"><button className="primary-button" onClick={() => { onOpenChat(selectedFriend); setSelectedFriend(null); }}>Message</button><button className="secondary-button" onClick={() => { setInviteTarget(selectedFriend.uid); setSelectedFriend(null); }}>Invite to play</button></div><div className="friend-profile-scores">{scoredGames.map((game) => <div key={game.id}><span>{game.name}</span><b>{formatScore(game.scoreGame, selectedFriend.highScores?.[game.scoreGame])}</b></div>)}</div></section></div>}
             </>}
