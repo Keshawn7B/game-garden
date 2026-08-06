@@ -10,6 +10,7 @@ export function BarricadeDragPiece({
   owner = 1,
   label,
   onDragStart,
+  onDragMove,
   onDragEnd,
   onDrop,
 }: {
@@ -18,6 +19,7 @@ export function BarricadeDragPiece({
   owner?: 1 | 2;
   label: string;
   onDragStart?: (kind: BarricadeDragKind) => void;
+  onDragMove?: (clientX: number, clientY: number, kind: BarricadeDragKind) => void;
   onDragEnd?: () => void;
   onDrop: (clientX: number, clientY: number, kind: BarricadeDragKind) => void;
 }) {
@@ -35,6 +37,7 @@ export function BarricadeDragPiece({
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     setDrag({ x: event.clientX, y: event.clientY, pointerId: event.pointerId });
+    onDragMove?.(event.clientX, event.clientY, kind);
   };
 
   const finish = (event: PointerEvent<HTMLSpanElement>, cancelled = false) => {

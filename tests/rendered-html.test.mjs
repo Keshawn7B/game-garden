@@ -138,6 +138,11 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\/\* Barricade app board \*\//);
   assert.match(styles, /barricade-drag-piece\.drag-h::after\{content:"Horizontal"\}/);
   assert.match(styles, /quoridor-cells \.pawn-two\{background:#3f87ff\}/);
+  assert.match(source, /onDragMove=\{previewBarricadeWall\}/);
+  assert.match(onlineSource, /onDragMove=\{previewOnlineBarricadeWall\}/);
+  assert.match(barricadeDragSource, /onDragMove\?\.\(event\.clientX, event\.clientY, kind\)/);
+  assert.match(styles, /wall-target\.snap-preview\.legal/);
+  assert.match(styles, /wall-target\.snap-preview\.blocked/);
   assert.match(onlineSource, /dropOnlineBarricadePiece/);
   assert.match(barricadeDragSource, /onPointerDown/);
   assert.match(barricadeDragSource, /onPointerMove/);
