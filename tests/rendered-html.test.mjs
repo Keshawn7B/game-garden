@@ -190,7 +190,8 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /premiumUnlocked/);
   assert.match(source, /onUnlockPremium/);
   assert.match(source, /Premium unlocked for this account/);
-  assert.match(source, /className="premium-code-form"/);
+  assert.match(source, /className="store-code-form"/);
+  assert.match(source, /activeTab === "store"/);
   assert.match(source, /<details className="profile-stats-menu">/);
   assert.match(source, /Stats &amp; high scores/);
   assert.match(styles, /\.premium-access-card/);
@@ -205,7 +206,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.bottom-nav[^}]*position:fixed;inset:auto 0 0/);
   assert.match(styles, /\.bottom-nav[^}]*height:83px/);
   assert.match(styles, /\.bottom-nav\{height:76px/);
-  assert.match(styles, /\.bottom-nav \{[^}]*width:100vw;[^}]*grid-template-columns:repeat\(4,minmax\(0,190px\)\);[^}]*border-top:5px solid var\(--red\)/);
+  assert.match(styles, /\.bottom-nav \{[^}]*width:100vw;[^}]*grid-template-columns:repeat\(5,minmax\(0,152px\)\);[^}]*border-top:5px solid var\(--red\)/);
   assert.doesNotMatch(styles, /\.bottom-nav::before/);
   assert.match(styles, /\.bottom-nav button\.active b \{ border-color:transparent;background:transparent;color:var\(--red\);box-shadow:none;/);
   assert.doesNotMatch(styles, /\.bottom-nav button\.active b \{[^}]*border-color:white/);
@@ -246,9 +247,11 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.dice-racers/);
   assert.match(onlineStyles, /\.online-player-strip/);
   assert.match(onlineStyles, /\.online-turn-status/);
-  assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice'/);
+  assert.match(firestoreRules, /'tictactoe', 'connect4', 'rps', 'dice', 'barricade'/);
   assert.match(source, /friendProfiles/);
-  assert.match(source, /friend\.highScores/);
+  assert.match(source, /selectedFriend\.highScores/);
+  assert.match(source, /friendRequests/);
+  assert.match(source, /onRespondFriendRequest/);
   assert.match(source, /type InviteStatus = "pending" \| "accepted" \| "declined" \| "cancelled"/);
   assert.match(source, /inviteIdFor/);
   assert.match(source, /Game invites/);
@@ -258,7 +261,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /const HEADER_META/);
   assert.match(source, /header-title-logo/);
   assert.match(source, /function HeaderLogo/);
-  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 11);
+  assert.equal((source.match(/<HeaderLogo compact \/>/g) ?? []).length, 12);
   assert.match(source, /<button className="header-brand"[\s\S]*?<HeaderLogo \/>/);
   assert.doesNotMatch(source, /wordmark small-wordmark/);
   assert.match(source, /className="header-context"/);

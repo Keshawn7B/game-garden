@@ -7,9 +7,9 @@ import { auth, db, googleProvider } from "./firebase";
 import { ChatChromeProvider, HeaderChatButton } from "./chat-chrome";
 import { makeOnlineGameState, OnlineVersusGame, type OnlineGameId } from "./online-games";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade";
 type LibraryGameId = PlayableGameId;
-type AppTab = "games" | "leaderboard" | "friends" | "profile";
+type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile";
 type ThemeMode = "classic" | "sakura";
 type GameMode = "solo" | "multi";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu` | `${PlayableGameId}-lobby`;
@@ -19,6 +19,19 @@ type HighScores = Partial<Record<PlayableGameId, number>>;
 type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
 type FriendEntry = { uid: string; name: string; avatarId: AvatarId; highScores?: HighScores; online?: boolean; lastActiveAt?: Timestamp; isOnline?: boolean };
+type FriendRequestStatus = "pending" | "accepted" | "declined" | "cancelled";
+type FriendRequest = {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  fromAvatar: AvatarId;
+  toUid: string;
+  toName: string;
+  toAvatar: AvatarId;
+  status: FriendRequestStatus;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+};
 type DirectChatSummary = {
   id: string;
   userA: string;
@@ -96,10 +109,12 @@ type NumberOnlineState = {
 const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
 const PREMIUM_ACCESS_CODE = "SOKEY";
+const SCORE_SEASON = 2;
 const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: string }> = {
   games: { label: "ARCADE", japanese: "ゲーム", glyph: "遊" },
   leaderboard: { label: "RANKS", japanese: "ランキング", glyph: "冠" },
   friends: { label: "SOCIAL", japanese: "フレンド", glyph: "友" },
+  store: { label: "STORE", japanese: "売店", glyph: "店" },
   profile: { label: "PLAYER", japanese: "プロフィール", glyph: "人" },
 };
 
@@ -168,6 +183,10 @@ function directChatId(leftUid: string, rightUid: string) {
   return [leftUid, rightUid].sort((left, right) => left.localeCompare(right)).join("--");
 }
 
+function friendRequestId(fromUid: string, toUid: string) {
+  return `${fromUid}--${toUid}`;
+}
+
 function friendIsOnline(friend: FriendEntry, now?: number) {
   return friend.online === true && friend.lastActiveAt instanceof Timestamp && (now == null || now - friend.lastActiveAt.toMillis() < PRESENCE_WINDOW_MS);
 }
@@ -221,6 +240,7 @@ async function syncPublicProfile(user: User, name: string, avatarId: AvatarId, h
     avatarId,
     friendCode: friendCodeFor(user.uid),
     highScores,
+    scoreSeason: SCORE_SEASON,
     online: true,
     lastActiveAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -1224,6 +1244,116 @@ function ConnectFour({ mode, onBack, onScore }: { mode: GameMode; onBack: () => 
   );
 }
 
+const BARRICADE_FINISH = 28;
+const BARRICADE_STARTS = [6, 12, 18, 23];
+
+function barricadeDestination(position: number, roll: number, barricades: number[]) {
+  const destination = position + roll;
+  if (destination > BARRICADE_FINISH) return null;
+  if (barricades.some((space) => space > position && space < destination)) return null;
+  return destination;
+}
+
+function Barricade({ mode, onBack, onScore }: { mode: GameMode; onBack: () => void; onScore: (score: number) => void }) {
+  const [difficulty, setDifficulty] = useState<CpuDifficulty>("normal");
+  const [positions, setPositions] = useState<[number, number]>([0, 0]);
+  const [barricades, setBarricades] = useState(BARRICADE_STARTS);
+  const [turn, setTurn] = useState<0 | 1>(0);
+  const [lastRoll, setLastRoll] = useState(0);
+  const [moves, setMoves] = useState(0);
+  const [winner, setWinner] = useState<0 | 1 | null>(null);
+  const [relocating, setRelocating] = useState<number | null>(null);
+  const [message, setMessage] = useState("Roll the die and race to the gate.");
+
+  const reset = useCallback(() => {
+    setPositions([0, 0]);
+    setBarricades(BARRICADE_STARTS);
+    setTurn(0);
+    setLastRoll(0);
+    setMoves(0);
+    setWinner(null);
+    setRelocating(null);
+    setMessage("Roll the die and race to the gate.");
+  }, []);
+
+  const finishTurn = useCallback((nextTurn: 0 | 1) => {
+    setTurn(nextTurn);
+    setRelocating(null);
+  }, []);
+
+  const movePawn = useCallback((player: 0 | 1, roll: number) => {
+    const destination = barricadeDestination(positions[player], roll, barricades);
+    setLastRoll(roll);
+    if (player === 0) setMoves((value) => value + 1);
+    if (destination == null) {
+      setMessage("Blocked. The full roll cannot be used.");
+      finishTurn(player === 0 ? 1 : 0);
+      return;
+    }
+    const nextPositions: [number, number] = [...positions];
+    nextPositions[player] = destination;
+    if (destination === positions[player === 0 ? 1 : 0]) nextPositions[player === 0 ? 1 : 0] = 0;
+    setPositions(nextPositions);
+    if (destination === BARRICADE_FINISH) {
+      setWinner(player);
+      setMessage(player === 0 ? "You reached the garden gate!" : "CPU reached the garden gate.");
+      if (player === 0) onScore(moves + 1);
+      return;
+    }
+    const captured = barricades.indexOf(destination);
+    if (captured >= 0) {
+      setBarricades((current) => current.filter((_, index) => index !== captured));
+      setRelocating(destination);
+      setMessage(player === 0 ? "Barricade captured. Tap an open space to relocate it." : "CPU is relocating the barricade.");
+      return;
+    }
+    setMessage(player === 0 ? "CPU turn." : "Your turn.");
+    finishTurn(player === 0 ? 1 : 0);
+  }, [barricades, finishTurn, moves, onScore, positions]);
+
+  const validRelocation = useCallback((space: number) => space > 1 && space < BARRICADE_FINISH && !barricades.includes(space) && !positions.includes(space), [barricades, positions]);
+  const relocate = useCallback((space: number, player: 0 | 1) => {
+    if (!validRelocation(space)) return;
+    setBarricades((current) => [...current, space].sort((left, right) => left - right));
+    setMessage(player === 0 ? "Barricade placed. CPU turn." : "CPU placed a barricade. Your turn.");
+    finishTurn(player === 0 ? 1 : 0);
+  }, [finishTurn, validRelocation]);
+
+  useEffect(() => {
+    if (mode !== "solo" || turn !== 1 || winner != null) return;
+    const timer = window.setTimeout(() => {
+      if (relocating != null) {
+        const available = Array.from({ length: BARRICADE_FINISH - 2 }, (_, index) => index + 2).filter(validRelocation);
+        const playerPosition = positions[0];
+        const candidates = available.filter((space) => space > playerPosition && space <= playerPosition + (difficulty === "hard" ? 4 : 7));
+        const pool = difficulty === "easy" || !candidates.length ? available : candidates;
+        relocate(pool[Math.floor(Math.random() * pool.length)], 1);
+        return;
+      }
+      movePawn(1, Math.floor(Math.random() * 6) + 1);
+    }, relocating != null ? 520 : 650);
+    return () => window.clearTimeout(timer);
+  }, [difficulty, mode, movePawn, positions, relocate, relocating, turn, validRelocation, winner]);
+
+  return (
+    <main className="game-shell simple-game-shell barricade-game-shell">
+      <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><HeaderLogo compact /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Barricade">↻</button></div></header>
+      <section className="barricade-game">
+        <div className="barricade-heading"><div><p className="eyebrow">STRATEGY · {mode === "solo" ? `VS CPU · ${difficulty.toUpperCase()}` : "2 PLAYERS"}</p><h1>Barricade</h1><p>Land exactly on barriers, move them to new spaces, and reach the gate first.</p></div><span>塞</span></div>
+        {mode === "solo" && <CpuDifficultyPicker difficulty={difficulty} onChange={(next) => { setDifficulty(next); reset(); }} gameName="Barricade" />}
+        <div className="barricade-score-strip"><div className={turn === 0 && winner == null ? "active" : ""}><i className="pawn-one" /><span>YOU</span><strong>{positions[0]}</strong></div><b className={lastRoll ? "rolled" : ""}>{lastRoll || "—"}<small>DIE</small></b><div className={turn === 1 && winner == null ? "active" : ""}><strong>{positions[1]}</strong><span>{mode === "solo" ? "CPU" : "PLAYER 2"}</span><i className="pawn-two" /></div></div>
+        <div className="barricade-board" aria-label="Barricade race board">
+          {Array.from({ length: BARRICADE_FINISH + 1 }, (_, space) => {
+            const canPlace = relocating != null && turn === 0 && validRelocation(space);
+            return <button key={space} className={`${space === BARRICADE_FINISH ? "finish" : ""} ${barricades.includes(space) ? "has-barricade" : ""} ${canPlace ? "can-place" : ""}`} onClick={() => canPlace && relocate(space, 0)} disabled={!canPlace}><small>{space === 0 ? "START" : space === BARRICADE_FINISH ? "GOAL" : space}</small>{barricades.includes(space) && <span className="barricade-block">止</span>}<span className="pawn-stack">{positions[0] === space && <i className="pawn-one" />}{positions[1] === space && <i className="pawn-two" />}</span></button>;
+          })}
+        </div>
+        <div className="barricade-controls" role="status"><div><small>{winner != null ? "MATCH COMPLETE" : relocating != null ? "MOVE THE BARRICADE" : turn === 0 ? "YOUR MOVE" : "OPPONENT MOVE"}</small><strong>{message}</strong></div>{winner != null ? <button className="primary-button" onClick={reset}>Rematch</button> : relocating == null && turn === 0 ? <button className="primary-button barricade-roll" onClick={() => movePawn(0, Math.floor(Math.random() * 6) + 1)}>Roll die</button> : <span className="barricade-wait">{turn === 1 ? "CPU THINKING…" : "CHOOSE A SPACE"}</span>}</div>
+      </section>
+    </main>
+  );
+}
+
 const RPS_CHOICES = [
   { id: "rock", symbol: "✊", label: "Rock", japanese: "石" },
   { id: "paper", symbol: "✋", label: "Paper", japanese: "紙" },
@@ -1484,6 +1614,19 @@ const GAME_MENUS: Record<LibraryGameId, {
       "Be the first player to reach 20 spaces.",
     ],
   },
+  barricade: {
+    title: "Barricade",
+    japanese: "バリケード",
+    category: "Strategy",
+    glyph: "止",
+    color: "barricade",
+    players: "1–2 Players",
+    rules: [
+      "Roll and move the full number without crossing a barricade.",
+      "Land exactly on a barricade to move it onto another open space.",
+      "Reach the garden gate with an exact roll before your opponent.",
+    ],
+  },
 };
 
 function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
@@ -1656,13 +1799,14 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "connect4", number: "06", name: "Connect Four", japanese: "四目並べ", meta: "STRATEGY", scoreGame: "connect4" },
   { id: "rps", number: "07", name: "Rock Paper Scissors", japanese: "じゃんけん", meta: "QUICK", scoreGame: "rps" },
   { id: "dice", number: "08", name: "Dice Race", japanese: "サイコロ競走", meta: "LUCK", scoreGame: "dice" },
+  { id: "barricade", number: "09", name: "Barricade", japanese: "バリケード", meta: "STRATEGY", scoreGame: "barricade" },
 ];
 
-const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice"];
+const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade"];
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
-  const unit = game === "memory" || game === "tictactoe" || game === "connect4" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
+  const unit = game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
@@ -1692,15 +1836,17 @@ async function saveCloudScore(user: User, gameId: PlayableGameId, score: number,
       photoURL: "",
       avatarId,
       score: bestScore,
+      scoreSeason: SCORE_SEASON,
       updatedAt: serverTimestamp(),
     }, { merge: true });
-    transaction.set(profileRef, { highScores: { [gameId]: bestScore }, avatarId, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(profileRef, { highScores: { [gameId]: bestScore }, scoreSeason: SCORE_SEASON, avatarId, updatedAt: serverTimestamp() }, { merge: true });
     transaction.set(publicProfileRef, {
       uid: user.uid,
       name: profileName.trim() || user.displayName || "Player One",
       avatarId,
       friendCode: friendCodeFor(user.uid),
       highScores: { [gameId]: bestScore },
+      scoreSeason: SCORE_SEASON,
       updatedAt: serverTimestamp(),
     }, { merge: true });
   });
@@ -1944,6 +2090,10 @@ function AppHome({
   friendLinkCode,
   onAddFriend,
   onRemoveFriend,
+  incomingFriendRequests,
+  outgoingFriendRequests,
+  onRespondFriendRequest,
+  onCancelFriendRequest,
   incomingInvites,
   outgoingInvites,
   onSendInvite,
@@ -1980,6 +2130,10 @@ function AppHome({
   friendLinkCode: string;
   onAddFriend: (code: string) => Promise<string>;
   onRemoveFriend: (uid: string) => void;
+  incomingFriendRequests: FriendRequest[];
+  outgoingFriendRequests: FriendRequest[];
+  onRespondFriendRequest: (request: FriendRequest, response: "accepted" | "declined") => Promise<void>;
+  onCancelFriendRequest: (request: FriendRequest) => Promise<void>;
   incomingInvites: GameInvite[];
   outgoingInvites: GameInvite[];
   onSendInvite: (friend: FriendEntry, gameId: PlayableGameId) => Promise<string>;
@@ -2005,6 +2159,7 @@ function AppHome({
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteMessage, setInviteMessage] = useState("");
   const [friendSearch, setFriendSearch] = useState("");
+  const [selectedFriend, setSelectedFriend] = useState<FriendEntry | null>(null);
   const [premiumCode, setPremiumCode] = useState("");
   const [premiumMessage, setPremiumMessage] = useState("");
   const [premiumBusy, setPremiumBusy] = useState(false);
@@ -2013,6 +2168,7 @@ function AppHome({
   const [resetBusy, setResetBusy] = useState(false);
   const activeRanks = leaderboards[rankGame] ?? [];
   const liveIncoming = incomingInvites.filter(inviteIsLive);
+  const socialNoticeCount = liveIncoming.length + incomingFriendRequests.length;
   const liveOutgoing = outgoingInvites.filter(inviteIsLive);
   const readyInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.status === "accepted" && all.findIndex((item) => item.id === invite.id) === index);
   const currentHeader = HEADER_META[activeTab];
@@ -2039,7 +2195,7 @@ function AppHome({
     try {
       const message = await onAddFriend(friendInput);
       setFriendMessage(message);
-      if (message.endsWith(" was added.")) {
+      if (message.includes("request sent")) {
         setFriendInput("");
         const url = new URL(window.location.href);
         url.searchParams.delete("friend");
@@ -2118,7 +2274,7 @@ function AppHome({
         <div className="header-context" aria-label={`${currentHeader.label} section`}><span>{currentHeader.glyph}</span><div><small>{currentHeader.japanese}</small><strong>{currentHeader.label}</strong></div></div>
         <div className="header-actions">
           {firebaseUser && <span className="header-online"><i />{firebaseUser.isAnonymous ? "GUEST" : "ONLINE"}</span>}
-          {liveIncoming.length > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${liveIncoming.length} pending game invites`}><b>招</b><span>{liveIncoming.length}</span></button>}
+          {socialNoticeCount > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${socialNoticeCount} pending social alerts`}><b>招</b><span>{socialNoticeCount}</span></button>}
           <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           <HeaderChatButton />
           <button className="header-profile" onClick={() => onTabChange("profile")} aria-label="Open profile">
@@ -2197,14 +2353,6 @@ function AppHome({
                 <small>画像を変更</small>
               </button>
               <p>PLAYER PROFILE <span>プロフィール</span></p>
-              <div className={`premium-access-card ${premiumUnlocked ? "unlocked" : "locked"}`}>
-                <div className="premium-access-heading"><span>{premiumUnlocked ? "認" : "鍵"}</span><div><small>PREMIUM ACCESS</small><strong>{premiumUnlocked ? "Legendary collection unlocked" : "Enter your access code"}</strong></div><b>{premiumUnlocked ? "ACTIVE" : "LOCKED"}</b></div>
-                {premiumUnlocked ? <p>This account can use every legendary profile picture.</p> : firebaseUser && !firebaseUser.isAnonymous ? <>
-                  <p>Premium access is tied to this account and follows you across devices.</p>
-                  <div className="premium-code-form"><input value={premiumCode} maxLength={12} onChange={(event) => setPremiumCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && premiumCode) void submitPremiumCode(); }} placeholder="ACCESS CODE" aria-label="Premium access code" autoComplete="off" /><button onClick={() => void submitPremiumCode()} disabled={!premiumCode || premiumBusy}>{premiumBusy ? "Checking…" : "Unlock"}</button></div>
-                </> : <p>Sign in or create an account before entering a premium access code.</p>}
-                {premiumMessage && <p className="premium-access-message" role="status">{premiumMessage}</p>}
-              </div>
               {avatarPickerOpen && (
                 <div className="avatar-picker-backdrop" onMouseDown={() => setAvatarPickerOpen(false)}>
                   <section className="avatar-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setAvatarPickerOpen(false); }}>
@@ -2225,7 +2373,7 @@ function AppHome({
                         </button>
                       ))}
                     </div>
-                    {!premiumUnlocked && <p className="avatar-picker-lock-note">Enter your premium code on the profile page to unlock the legendary collection.</p>}
+                    {!premiumUnlocked && <p className="avatar-picker-lock-note">Enter your access code in the Store to unlock the legendary collection.</p>}
                   </section>
                 </div>
               )}
@@ -2266,6 +2414,28 @@ function AppHome({
           </section>
         )}
 
+        {activeTab === "store" && (
+          <section className="app-panel store-panel">
+            <div className="app-title"><div><p>DISCOVER</p><h1>Store <span>売店</span></h1></div><strong>店<small>SHOP</small></strong></div>
+            <div className="store-hero">
+              <div><small>GAME GARDEN COLLECTION</small><h2>Codes, drops &amp; rewards.</h2><p>Redeem account codes here. New avatar sets, events, and featured releases can appear in this space.</p></div>
+              <span>庭</span>
+            </div>
+            <div className="store-grid">
+              <div className={`store-code-card ${premiumUnlocked ? "unlocked" : ""}`}>
+                <div className="store-card-heading"><span>鍵</span><div><small>REDEEM A CODE</small><strong>{premiumUnlocked ? "Legendary collection active" : "Unlock account rewards"}</strong></div><b>{premiumUnlocked ? "OWNED" : "CODE"}</b></div>
+                {firebaseUser && !firebaseUser.isAnonymous ? <div className="store-code-form"><input value={premiumCode} maxLength={12} onChange={(event) => setPremiumCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && premiumCode) void submitPremiumCode(); }} placeholder="ENTER CODE" aria-label="Store access code" autoComplete="off" /><button onClick={() => void submitPremiumCode()} disabled={!premiumCode || premiumBusy}>{premiumBusy ? "Checking…" : "Redeem"}</button></div> : <button className="primary-button store-signin" onClick={() => onTabChange("profile")}>Sign in to redeem</button>}
+                {premiumMessage && <p className="store-code-message" role="status">{premiumMessage}</p>}
+              </div>
+              <div className="store-feature-card">
+                <div className="store-avatar-stack">{AVATARS.filter((item) => item.premium).slice(-3).map((item) => <AvatarGlyph key={item.id} avatarId={item.id} className="store-avatar" />)}</div>
+                <small>FEATURED COLLECTION</small><strong>Legendary Icons</strong><p>Premium profile pictures stay attached to the account that redeems access.</p>
+              </div>
+              <div className="store-promo-card"><span>COMING NEXT</span><strong>Seasonal drops</strong><p>Reserved for future Game Garden events and announcements.</p><b>予告</b></div>
+            </div>
+          </section>
+        )}
+
         {activeTab === "friends" && (
           <section className="app-panel friends-panel">
             <div className="app-title"><div><p>SOCIAL</p><h1>Friends <span>友達</span></h1></div><strong>{friends.length}<small>FRIENDS</small></strong></div>
@@ -2280,6 +2450,11 @@ function AppHome({
                 <div className="social-hero-copy"><span>YOUR SOCIAL GARDEN</span><h2>Play together.<br />Stay connected.</h2><p>See who is around, jump into a match, or message a friend without leaving the hub.</p></div>
                 <div className="social-live-count"><span><i /> LIVE NOW</span><strong>{onlineFriends.length}</strong><small>of {friends.length} friends online</small></div>
               </div>
+              {(incomingFriendRequests.length > 0 || outgoingFriendRequests.length > 0) && <div className="friend-request-center">
+                <div className="friend-request-heading"><span>Friend requests</span><b>{incomingFriendRequests.length} TO REVIEW</b></div>
+                {incomingFriendRequests.map((request) => <div className="friend-request-row" key={request.id}><AvatarGlyph avatarId={request.fromAvatar} className="friend-request-avatar" /><div><small>WANTS TO CONNECT</small><strong>{request.fromName}</strong></div><span><button className="primary-button" onClick={() => void onRespondFriendRequest(request, "accepted")}>Accept</button><button className="secondary-button" onClick={() => void onRespondFriendRequest(request, "declined")}>Decline</button></span></div>)}
+                {outgoingFriendRequests.map((request) => <div className="friend-request-row outgoing" key={request.id}><AvatarGlyph avatarId={request.toAvatar} className="friend-request-avatar" /><div><small>REQUEST SENT</small><strong>{request.toName}</strong></div><span><em>WAITING</em><button className="secondary-button" onClick={() => void onCancelFriendRequest(request)}>Cancel</button></span></div>)}
+              </div>}
               <div className="invite-center">
                 <div className="invite-center-heading"><span>Game invites</span><span>対戦招待</span></div>
                 {liveIncoming.map((invite) => (
@@ -2322,8 +2497,8 @@ function AppHome({
                 <div className="friend-add-card">
                   <span className="friend-add-glyph">友</span>
                   <label htmlFor="friend-code">ADD A FRIEND <span>友達を追加</span></label>
-                  <p>Enter their eight-character code to add them to your garden.</p>
-                  <div><input id="friend-code" value={friendInput} maxLength={8} onChange={(event) => setFriendInput(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="FRIEND CODE" /><button className="primary-button" onClick={submitFriend} disabled={friendBusy || friendInput.length !== 8}>{friendBusy ? "Adding…" : "Add"}</button></div>
+                  <p>Enter their eight-character code. They must accept before either profile becomes a friend.</p>
+                  <div><input id="friend-code" value={friendInput} maxLength={8} onChange={(event) => setFriendInput(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="FRIEND CODE" /><button className="primary-button" onClick={submitFriend} disabled={friendBusy || friendInput.length !== 8}>{friendBusy ? "Sending…" : "Request"}</button></div>
                   {friendMessage && <p className="friend-add-message" role="status">{friendMessage}</p>}
                 </div>
               </div>
@@ -2334,7 +2509,7 @@ function AppHome({
                 {displayedFriends.length ? displayedFriends.map((friend) => (
                   <div className={`friend-row ${friend.isOnline ? "is-online" : ""}`} key={friend.uid}>
                     <div className="friend-row-head">
-                      <span className="friend-avatar-wrap"><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" /><i className={friend.isOnline ? "online" : ""} /></span>
+                      <button className="friend-avatar-button" onClick={() => setSelectedFriend(friend)} aria-label={`Open ${friend.name}'s profile`}><span className="friend-avatar-wrap"><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" /><i className={friend.isOnline ? "online" : ""} /></span></button>
                       <span className="friend-identity"><strong>{friend.name}</strong><small className={friend.isOnline ? "online" : ""}>{friendPresenceLabel(friend)}</small></span>
                       <div className="friend-row-actions"><button className="friend-chat-button" onClick={() => onOpenChat(friend)}><span>話</span> CHAT</button><button className="friend-invite-button" onClick={() => { setInviteTarget((current) => current === friend.uid ? null : friend.uid); setInviteMessage(""); }}>PLAY</button><button className="friend-remove-button" onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button></div>
                     </div>
@@ -2345,17 +2520,10 @@ function AppHome({
                         <button className="primary-button" disabled={inviteBusy} onClick={() => void submitInvite(friend)}>{inviteBusy ? "Sending…" : `Invite ${friend.name}`}</button>
                       </div>
                     )}
-                    <div className="friend-score-grid" aria-label={`${friend.name} high scores`}>
-                      {scoredGames.map((game) => (
-                        <div key={game.id}>
-                          <span>{game.name}</span>
-                          <b>{formatScore(game.scoreGame, friend.highScores?.[game.scoreGame])}</b>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )) : <p className="empty-friends">{friends.length ? "No friends match that search." : "No friends added yet."}</p>}
               </div>
+              {selectedFriend && <div className="friend-profile-backdrop" onMouseDown={() => setSelectedFriend(null)}><section className="friend-profile-dialog" role="dialog" aria-modal="true" aria-label={`${selectedFriend.name}'s profile`} onMouseDown={(event) => event.stopPropagation()}><button className="friend-profile-close" onClick={() => setSelectedFriend(null)} aria-label="Close friend profile">×</button><AvatarGlyph avatarId={selectedFriend.avatarId} className="friend-profile-avatar" /><small>FRIEND PROFILE</small><h2>{selectedFriend.name}</h2><p className={selectedFriend.isOnline ? "online" : ""}>{friendPresenceLabel(selectedFriend)}</p><div className="friend-profile-actions"><button className="primary-button" onClick={() => { onOpenChat(selectedFriend); setSelectedFriend(null); }}>Message</button><button className="secondary-button" onClick={() => { setInviteTarget(selectedFriend.uid); setSelectedFriend(null); }}>Invite to play</button></div><div className="friend-profile-scores">{scoredGames.map((game) => <div key={game.id}><span>{game.name}</span><b>{formatScore(game.scoreGame, selectedFriend.highScores?.[game.scoreGame])}</b></div>)}</div></section></div>}
             </>}
           </section>
         )}
@@ -2364,7 +2532,8 @@ function AppHome({
       <nav className="bottom-nav" aria-label="App navigation">
         <button className={activeTab === "games" ? "active" : ""} onClick={() => onTabChange("games")}><b>遊</b><span>Games</span></button>
         <button className={activeTab === "leaderboard" ? "active" : ""} onClick={() => onTabChange("leaderboard")}><b>冠</b><span>Ranks</span></button>
-        <button className={activeTab === "friends" ? "active" : ""} onClick={() => onTabChange("friends")}><b>友{liveIncoming.length > 0 && <i className="nav-invite-badge">{liveIncoming.length}</i>}</b><span>Friends</span></button>
+        <button className={activeTab === "friends" ? "active" : ""} onClick={() => onTabChange("friends")}><b>友{socialNoticeCount > 0 && <i className="nav-invite-badge">{socialNoticeCount}</i>}</b><span>Friends</span></button>
+        <button className={activeTab === "store" ? "active" : ""} onClick={() => onTabChange("store")}><b>店</b><span>Store</span></button>
         <button className={activeTab === "profile" ? "active" : ""} onClick={() => onTabChange("profile")}><b>人</b><span>Profile</span></button>
       </nav>
     </main>
@@ -2387,6 +2556,8 @@ export default function Home() {
   const [leaderboards, setLeaderboards] = useState<Leaderboards>({});
   const [friends, setFriends] = useState<FriendEntry[]>([]);
   const [friendProfiles, setFriendProfiles] = useState<Record<string, FriendEntry>>({});
+  const [incomingFriendRequests, setIncomingFriendRequests] = useState<FriendRequest[]>([]);
+  const [outgoingFriendRequests, setOutgoingFriendRequests] = useState<FriendRequest[]>([]);
   const [incomingInvites, setIncomingInvites] = useState<GameInvite[]>([]);
   const [outgoingInvites, setOutgoingInvites] = useState<GameInvite[]>([]);
   const [presenceNow, setPresenceNow] = useState<number | null>(null);
@@ -2444,6 +2615,8 @@ export default function Home() {
       setPremiumUnlocked(false);
       setFriends([]);
       setFriendProfiles({});
+      setIncomingFriendRequests([]);
+      setOutgoingFriendRequests([]);
       setIncomingInvites([]);
       setOutgoingInvites([]);
       setActiveRoom(null);
@@ -2479,35 +2652,27 @@ export default function Home() {
         const savedAvatar = window.localStorage.getItem(playerStorageKey(user, "avatar"));
         const avatarCandidate: AvatarId = isAvatarId(data?.avatarId) ? data.avatarId : isAvatarId(savedAvatar) ? savedAvatar : "play";
         const cloudAvatar: AvatarId = isPremiumAvatar(avatarCandidate) && !hasPremiumAccess ? "play" : avatarCandidate;
-        const cloudScores = data?.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {};
-        const localScores = storedScores(user);
-        const mergedScores = { ...cloudScores };
-        for (const gameId of SCORE_GAME_IDS) {
-          const local = localScores[gameId];
-          const cloud = cloudScores[gameId];
-          if (local != null && (cloud == null || local < cloud)) {
-            mergedScores[gameId] = local;
-            await saveCloudScore(user, gameId, local, cloudName, cloudAvatar);
-          }
-        }
+        const cloudScores = data?.scoreSeason === SCORE_SEASON && data?.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {};
         if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         setProfileName(cloudName);
         setAvatarId(cloudAvatar);
         setPremiumUnlocked(hasPremiumAccess);
-        setHighScores(mergedScores);
+        setHighScores(cloudScores);
         window.localStorage.setItem(playerStorageKey(user, "name"), cloudName);
-        window.localStorage.setItem(playerStorageKey(user, "scores"), JSON.stringify(mergedScores));
+        window.localStorage.removeItem(playerStorageKey(user, "scores"));
         window.localStorage.setItem(playerStorageKey(user, "avatar"), cloudAvatar);
         await setDoc(profileRef, {
           uid: user.uid,
           displayName: cloudName,
           photoURL: user.photoURL || "",
           avatarId: cloudAvatar,
+          highScores: cloudScores,
+          scoreSeason: SCORE_SEASON,
           premiumUnlocked: hasPremiumAccess,
           updatedAt: serverTimestamp(),
           ...(profile.exists() ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
-        await syncPublicProfile(user, cloudName, cloudAvatar, mergedScores);
+        await syncPublicProfile(user, cloudName, cloudAvatar, cloudScores);
       } catch (error) {
         if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         setAuthError(error instanceof Error ? error.message : "Could not load the cloud profile.");
@@ -2546,6 +2711,21 @@ export default function Home() {
     return onSnapshot(collection(db, "users", firebaseUser.uid, "friends"), (snapshot) => {
       setFriends(snapshot.docs.map((friend) => friend.data() as FriendEntry).sort((a, b) => a.name.localeCompare(b.name)));
     }, () => setAuthError("Could not load the friend list."));
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!firebaseUser || firebaseUser.isAnonymous) return;
+    const newestFirst = (left: FriendRequest, right: FriendRequest) => (right.updatedAt?.toMillis() ?? 0) - (left.updatedAt?.toMillis() ?? 0);
+    const incoming = onSnapshot(query(collection(db, "friendRequests"), where("toUid", "==", firebaseUser.uid)), (snapshot) => {
+      setIncomingFriendRequests(snapshot.docs.map((item) => ({ ...item.data(), id: item.id } as FriendRequest)).filter((item) => item.status === "pending").sort(newestFirst));
+    }, () => setAuthError("Could not load friend requests."));
+    const outgoing = onSnapshot(query(collection(db, "friendRequests"), where("fromUid", "==", firebaseUser.uid)), (snapshot) => {
+      setOutgoingFriendRequests(snapshot.docs.map((item) => ({ ...item.data(), id: item.id } as FriendRequest)).filter((item) => item.status === "pending").sort(newestFirst));
+    }, () => setAuthError("Could not load sent friend requests."));
+    return () => {
+      incoming();
+      outgoing();
+    };
   }, [firebaseUser]);
 
   useEffect(() => {
@@ -2593,7 +2773,7 @@ export default function Home() {
           uid: friend.uid,
           name: typeof data.name === "string" ? data.name : friend.name,
           avatarId: isAvatarId(data.avatarId) ? data.avatarId : friend.avatarId,
-          highScores: data.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {},
+          highScores: data.scoreSeason === SCORE_SEASON && data.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {},
           online: data.online === true,
           lastActiveAt: data.lastActiveAt instanceof Timestamp ? data.lastActiveAt : undefined,
         },
@@ -2605,7 +2785,7 @@ export default function Home() {
   useEffect(() => {
     const unsubscribers = SCORE_GAME_IDS.map((gameId) => onSnapshot(
       query(collection(db, "leaderboards", gameId, "entries"), orderBy("score", "asc"), limit(10)),
-      (snapshot) => setLeaderboards((previous) => ({ ...previous, [gameId]: snapshot.docs.map((entry) => entry.data() as LeaderboardEntry) })),
+      (snapshot) => setLeaderboards((previous) => ({ ...previous, [gameId]: snapshot.docs.map((entry) => entry.data()).filter((entry) => entry.scoreSeason === SCORE_SEASON) as LeaderboardEntry[] })),
       () => undefined,
     ));
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -2621,7 +2801,9 @@ export default function Home() {
     setHighScores((previous) => {
       if (previous[gameId] != null && previous[gameId]! <= score) return previous;
       const next = { ...previous, [gameId]: score };
-      try { window.localStorage.setItem(playerStorageKey(firebaseUser, "scores"), JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
+      if (!firebaseUser || firebaseUser.isAnonymous) {
+        try { window.localStorage.setItem(playerStorageKey(null, "scores"), JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
+      }
       return next;
     });
     if (firebaseUser && !firebaseUser.isAnonymous) void saveCloudScore(firebaseUser, gameId, score, profileName, avatarId).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
@@ -2681,6 +2863,8 @@ export default function Home() {
         photoURL: firebaseUser.photoURL || "",
         avatarId: savedAvatar,
         premiumUnlocked,
+        highScores,
+        scoreSeason: SCORE_SEASON,
         updatedAt: serverTimestamp(),
       }, { merge: true });
       await syncPublicProfile(firebaseUser, displayName, savedAvatar, highScores);
@@ -2693,6 +2877,7 @@ export default function Home() {
           photoURL: "",
           avatarId: savedAvatar,
           score,
+          scoreSeason: SCORE_SEASON,
           updatedAt: serverTimestamp(),
         }, { merge: true });
       }
@@ -2712,8 +2897,8 @@ export default function Home() {
       if (user && !user.isAnonymous) {
         const batch = writeBatch(db);
         for (const gameId of SCORE_GAME_IDS) batch.delete(doc(db, "leaderboards", gameId, "entries", user.uid));
-        batch.set(doc(db, "users", user.uid), { highScores: {}, updatedAt: serverTimestamp() }, { merge: true });
-        batch.set(doc(db, "publicProfiles", user.uid), { highScores: {}, updatedAt: serverTimestamp() }, { merge: true });
+        batch.set(doc(db, "users", user.uid), { highScores: {}, scoreSeason: SCORE_SEASON, updatedAt: serverTimestamp() }, { merge: true });
+        batch.set(doc(db, "publicProfiles", user.uid), { highScores: {}, scoreSeason: SCORE_SEASON, updatedAt: serverTimestamp() }, { merge: true });
         await batch.commit();
       }
       window.localStorage.removeItem(playerStorageKey(user, "scores"));
@@ -2764,6 +2949,8 @@ export default function Home() {
         displayName,
         photoURL: "",
         avatarId,
+        highScores: {},
+        scoreSeason: SCORE_SEASON,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
@@ -2799,22 +2986,73 @@ export default function Home() {
       const friendUid = String(profile.uid || matches.docs[0].id);
       const friendName = typeof profile.name === "string" ? profile.name : "Player";
       const friendAvatar: AvatarId = isAvatarId(profile.avatarId) ? profile.avatarId : "play";
-      await setDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid), {
-        uid: friendUid,
-        name: friendName,
-        avatarId: friendAvatar,
-        addedAt: serverTimestamp(),
+      if ((await getDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid))).exists()) return `${friendName} is already your friend.`;
+      const reverse = await getDoc(doc(db, "friendRequests", friendRequestId(friendUid, firebaseUser.uid)));
+      if (reverse.exists() && reverse.data().status === "pending") return `${friendName} already sent you a request. Accept it above.`;
+      const requestId = friendRequestId(firebaseUser.uid, friendUid);
+      await setDoc(doc(db, "friendRequests", requestId), {
+        fromUid: firebaseUser.uid,
+        fromName: (profileName.trim() || firebaseUser.displayName || "Player One").slice(0, 18),
+        fromAvatar: avatarId,
+        toUid: friendUid,
+        toName: friendName,
+        toAvatar: friendAvatar,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
-      return `${friendName} was added.`;
+      return `Friend request sent to ${friendName}.`;
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Could not add that friend.");
       return "Could not add that friend.";
     }
-  }, [firebaseUser]);
+  }, [avatarId, firebaseUser, profileName]);
 
   const removeFriend = useCallback((friendUid: string) => {
     if (!firebaseUser || firebaseUser.isAnonymous) return;
-    void deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid)).catch(() => setAuthError("Could not remove that friend."));
+    void (async () => {
+      try {
+        const [forward, reverse] = await Promise.all([
+          getDoc(doc(db, "friendRequests", friendRequestId(firebaseUser.uid, friendUid))),
+          getDoc(doc(db, "friendRequests", friendRequestId(friendUid, firebaseUser.uid))),
+        ]);
+        const accepted = (forward.exists() && forward.data().status === "accepted") || (reverse.exists() && reverse.data().status === "accepted");
+        if (!accepted) {
+          await deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid));
+          return;
+        }
+        const batch = writeBatch(db);
+        batch.delete(doc(db, "users", firebaseUser.uid, "friends", friendUid));
+        batch.delete(doc(db, "users", friendUid, "friends", firebaseUser.uid));
+        await batch.commit();
+      } catch {
+        setAuthError("Could not remove that friend.");
+      }
+    })();
+  }, [firebaseUser]);
+
+  const respondFriendRequest = useCallback(async (request: FriendRequest, response: "accepted" | "declined") => {
+    if (!firebaseUser || firebaseUser.isAnonymous || request.toUid !== firebaseUser.uid) return;
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "friendRequests", request.id), { status: response, updatedAt: serverTimestamp(), respondedAt: serverTimestamp() });
+      if (response === "accepted") {
+        batch.set(doc(db, "users", firebaseUser.uid, "friends", request.fromUid), { uid: request.fromUid, name: request.fromName, avatarId: request.fromAvatar, addedAt: serverTimestamp() });
+        batch.set(doc(db, "users", request.fromUid, "friends", firebaseUser.uid), { uid: firebaseUser.uid, name: profileName.trim() || firebaseUser.displayName || "Player One", avatarId, addedAt: serverTimestamp() });
+      }
+      await batch.commit();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not update that friend request.");
+    }
+  }, [avatarId, firebaseUser, profileName]);
+
+  const cancelFriendRequest = useCallback(async (request: FriendRequest) => {
+    if (!firebaseUser || firebaseUser.isAnonymous || request.fromUid !== firebaseUser.uid) return;
+    try {
+      await updateDoc(doc(db, "friendRequests", request.id), { status: "cancelled", updatedAt: serverTimestamp(), respondedAt: serverTimestamp() });
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not cancel that friend request.");
+    }
   }, [firebaseUser]);
 
   const roomIdentity = useCallback(async (requestedName: string) => {
@@ -3050,6 +3288,7 @@ export default function Home() {
     if (game === "connect4-menu") return <GameMenu game="connect4" onPlay={(mode) => playFromMenu("connect4", mode)} onBack={() => selectGame("games")} />;
     if (game === "rps-menu") return <GameMenu game="rps" onPlay={(mode) => playFromMenu("rps", mode)} onBack={() => selectGame("games")} />;
     if (game === "dice-menu") return <GameMenu game="dice" onPlay={(mode) => playFromMenu("dice", mode)} onBack={() => selectGame("games")} />;
+    if (game === "barricade-menu") return <GameMenu game="barricade" onPlay={(mode) => playFromMenu("barricade", mode)} onBack={() => selectGame("games")} />;
     if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && SCORE_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
     if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
@@ -3059,9 +3298,10 @@ export default function Home() {
     if (game === "connect4") return <ConnectFour mode="solo" onBack={() => selectGame("connect4-menu")} onScore={(score) => recordScore("connect4", score)} />;
     if (game === "rps") return <RockPaperScissors mode="solo" onBack={() => selectGame("rps-menu")} onScore={(score) => recordScore("rps", score)} />;
     if (game === "dice") return <DiceRace mode="solo" onBack={() => selectGame("dice-menu")} onScore={(score) => recordScore("dice", score)} />;
-    const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
+    if (game === "barricade") return <Barricade mode="solo" onBack={() => selectGame("barricade-menu")} onScore={(score) => recordScore("barricade", score)} />;
+    const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" ? game : "games";
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
 
   return <ChatChromeProvider enabled={Boolean(firebaseUser && !firebaseUser.isAnonymous)} open={chatOpen} unreadCount={chatUnreadCount} onToggle={() => setChatOpen((current) => !current)}>{view}<FriendsChat key={firebaseUser?.uid ?? "signed-out"} user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} onUnreadCountChange={setChatUnreadCount} /></ChatChromeProvider>;
 }

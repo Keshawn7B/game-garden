@@ -6,7 +6,7 @@ import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } f
 import { db } from "./firebase";
 import { HeaderChatButton } from "./chat-chrome";
 
-export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice";
+export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade";
 
 type Room = {
   code: string;
@@ -25,7 +25,7 @@ type OnlineState = {
   players: [string, string];
   names: [string, string];
   turnUid: string;
-  phase: "playing" | "revealing" | "complete";
+  phase: "playing" | "revealing" | "relocating" | "complete";
   round: number;
   moves: number;
   scores: [number, number];
@@ -42,6 +42,7 @@ type OnlineState = {
   choices: string[];
   positions: [number, number];
   faces: [number, number];
+  barricades: number[];
 };
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
@@ -119,6 +120,7 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     choices: gameId === "rps" ? ["", ""] : [],
     positions: [0, 0],
     faces: [0, 0],
+    barricades: gameId === "barricade" ? [6, 12, 18, 23] : [],
   };
 }
 
@@ -376,6 +378,27 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return { positions, faces, moves: current.moves + 1, winnerUid: won ? user.uid : "", phase: won ? "complete" : "playing", turnUid: current.players[otherIndex] };
   });
 
+  const rollBarricade = () => void mutate((current) => {
+    if (current.gameId !== "barricade" || current.turnUid !== user.uid || current.phase !== "playing") return null;
+    const face = Math.floor(Math.random() * 6) + 1;
+    const positions: [number, number] = [...current.positions];
+    const faces: [number, number] = [...current.faces];
+    faces[playerIndex] = face;
+    const destination = positions[playerIndex] + face;
+    const blocked = destination > 28 || current.barricades.some((space) => space > positions[playerIndex] && space < destination);
+    if (blocked) return { faces, moves: current.moves + 1, turnUid: current.players[otherIndex] };
+    positions[playerIndex] = destination;
+    if (destination === positions[otherIndex]) positions[otherIndex] = 0;
+    if (destination === 28) return { positions, faces, moves: current.moves + 1, phase: "complete", winnerUid: user.uid };
+    if (current.barricades.includes(destination)) return { positions, faces, moves: current.moves + 1, barricades: current.barricades.filter((space) => space !== destination), phase: "relocating" };
+    return { positions, faces, moves: current.moves + 1, turnUid: current.players[otherIndex] };
+  });
+
+  const placeBarricade = (space: number) => void mutate((current) => {
+    if (current.gameId !== "barricade" || current.turnUid !== user.uid || current.phase !== "relocating" || space <= 1 || space >= 28 || current.barricades.includes(space) || current.positions.includes(space)) return null;
+    return { barricades: [...current.barricades, space].sort((left, right) => left - right), phase: "playing", turnUid: current.players[otherIndex] };
+  });
+
   let gameView = null;
   if (state.gameId === "codebreaker") gameView = <section className="online-game codebreaker-online"><p className="eyebrow">LOGIC · LIVE ONLINE</p><h1>Crack the shared code.</h1><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="secret-row"><span>SECRET CODE</span><div className="peg-row">{state.secret.map((color, index) => <Peg key={index} color={color} hidden={state.phase !== "complete"} />)}</div></div><div className="online-code-history">{state.guesses.map((guess, index) => <div key={index}><b>{guess.uid === user.uid ? "YOU" : state.names[otherIndex]}</b><span>{guess.colors.map((color, peg) => <Peg key={peg} color={color} />)}</span><em>● {guess.exact} exact · ○ {guess.close} close</em></div>)}</div>{state.phase === "complete" ? finish : <div className="picker-panel"><p>{myTurn ? "Choose four colors" : "Opponent is choosing"}<span>{colors.length}/4</span></p><div className="color-picker">{COLORS.map((color) => <button key={color.id} className="color-choice" style={{ backgroundColor: color.hex }} disabled={!myTurn || colors.length >= 4} onClick={() => setColors((current) => [...current, color.id])} aria-label={`Add ${color.label}`} />)}</div><div className="picker-actions"><button className="text-button" disabled={!myTurn || !colors.length} onClick={() => setColors((current) => current.slice(0, -1))}>Undo</button><button className="primary-button" disabled={!myTurn || colors.length !== 4} onClick={submitCode}>Send guess</button></div></div>}</section>;
 
@@ -401,6 +424,11 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   }
 
   if (state.gameId === "dice") gameView = <section className="online-game simple-game dice-game"><p className="eyebrow">LUCK · LIVE ONLINE</p><h1>Dice Race</h1><p>Roll on your turn. Both racers update live.</p><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="dice-racers">{state.positions.map((position, index) => <div key={index}><span>{state.names[index]}</span><b>{state.faces[index] || "□"}</b><strong>{Math.min(position, 20)}<small>/20</small></strong><i><em style={{ width: `${Math.min(position / 20 * 100, 100)}%` }} /></i></div>)}</div>{state.phase === "complete" ? finish : <button className="primary-button dice-roll" disabled={!myTurn} onClick={() => void roll()}>{myTurn ? "Roll the dice" : "Opponent rolling…"}</button>}</section>;
+
+  if (state.gameId === "barricade") {
+    const relocating = state.phase === "relocating" && state.turnUid === user.uid;
+    gameView = <section className="online-game barricade-game"><div className="barricade-heading"><div><p className="eyebrow">STRATEGY · LIVE ONLINE</p><h1>Barricade</h1><p>Land exactly on a barrier, relocate it, and reach the gate first.</p></div><span>塞</span></div><PlayerStrip state={state} user={user} /><div className="online-turn-status">{relocating ? "Tap an open space to relocate the barricade" : status}</div><div className="barricade-score-strip"><div className={state.turnUid === state.players[0] && state.phase !== "complete" ? "active" : ""}><i className="pawn-one" /><span>{state.names[0]}</span><strong>{state.positions[0]}</strong></div><b className={state.faces[playerIndex] ? "rolled" : ""}>{state.faces[playerIndex] || "—"}<small>YOUR DIE</small></b><div className={state.turnUid === state.players[1] && state.phase !== "complete" ? "active" : ""}><strong>{state.positions[1]}</strong><span>{state.names[1]}</span><i className="pawn-two" /></div></div><div className="barricade-board">{Array.from({ length: 29 }, (_, space) => { const canPlace = relocating && space > 1 && space < 28 && !state.barricades.includes(space) && !state.positions.includes(space); return <button key={space} className={`${space === 28 ? "finish" : ""} ${state.barricades.includes(space) ? "has-barricade" : ""} ${canPlace ? "can-place" : ""}`} onClick={() => canPlace && placeBarricade(space)} disabled={!canPlace}><small>{space === 0 ? "START" : space === 28 ? "GOAL" : space}</small>{state.barricades.includes(space) && <span className="barricade-block">止</span>}<span className="pawn-stack">{state.positions[0] === space && <i className="pawn-one" />}{state.positions[1] === space && <i className="pawn-two" />}</span></button>; })}</div>{state.phase === "complete" ? finish : <div className="barricade-controls"><div><small>{relocating ? "MOVE THE BARRICADE" : myTurn ? "YOUR MOVE" : "OPPONENT MOVE"}</small><strong>{relocating ? "Choose where the barrier goes next." : myTurn ? "Roll the die." : `Waiting for ${state.names[otherIndex]}`}</strong></div>{state.phase === "playing" && <button className="primary-button barricade-roll" disabled={!myTurn} onClick={() => void rollBarricade()}>Roll die</button>}</div>}</section>;
+  }
 
   return <main className={`game-shell online-versus-shell online-${state.gameId}`}><header className="game-topbar"><button className="back-button" onClick={() => void onLeave()}>← Leave room</button><HeaderLogo /><div className="game-header-actions"><HeaderChatButton inGame /><span className="online-room-pill">● {room.code}</span></div></header>{gameView}{error && <p className="online-game-error" role="alert">{error}</p>}</main>;
 }

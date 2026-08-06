@@ -13,14 +13,39 @@ service cloud.firestore {
     match /users/{userId}/friends/{friendId} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow create, update: if request.auth != null
-        && request.auth.uid == userId
+        && request.auth.uid in [userId, friendId]
         && friendId != userId
+        && acceptedFriendship(userId, friendId)
         && request.resource.data.uid == friendId
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 18
         && validAccountAvatar(friendId, request.resource.data.avatarId);
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null
+        && (request.auth.uid == userId
+          || (request.auth.uid == friendId && acceptedFriendship(userId, friendId)));
+    }
+
+    match /friendRequests/{requestId} {
+      allow read: if request.auth != null
+        && request.auth.uid in [resource.data.fromUid, resource.data.toUid];
+      allow create: if validNewFriendRequest(requestId, request.resource.data);
+      allow update: if request.auth != null
+        && (
+          (validFriendRequestShape(requestId, request.resource.data)
+            && resource.data.status == 'pending'
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.respondedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'respondedAt'])
+            && ((request.auth.uid == resource.data.toUid && request.resource.data.status in ['accepted', 'declined'])
+              || (request.auth.uid == resource.data.fromUid && request.resource.data.status == 'cancelled')))
+          ||
+          (resource.data.status in ['declined', 'cancelled']
+            && validNewFriendRequest(requestId, request.resource.data))
+        );
+      allow delete: if request.auth != null
+        && request.auth.uid in [resource.data.fromUid, resource.data.toUid]
+        && resource.data.status != 'pending';
     }
 
     match /publicProfiles/{userId} {
@@ -34,6 +59,7 @@ service cloud.firestore {
         && request.resource.data.friendCode is string
         && request.resource.data.friendCode.size() == 8
         && request.resource.data.highScores is map
+        && request.resource.data.scoreSeason is int
         && (!request.resource.data.keys().hasAny(['online']) || request.resource.data.online is bool)
         && (!request.resource.data.keys().hasAny(['lastActiveAt']) || request.resource.data.lastActiveAt is timestamp)
         && validAccountAvatar(userId, request.resource.data.avatarId);
@@ -194,19 +220,58 @@ service cloud.firestore {
     function validScore(gameId, userId) {
       return request.auth != null
         && request.auth.uid == userId
-        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice']
+        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade']
         && request.resource.data.uid == userId
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 18
         && validAccountAvatar(userId, request.resource.data.avatarId)
         && request.resource.data.score is int
+        && request.resource.data.scoreSeason == 2
         && request.resource.data.score >= 1
         && request.resource.data.score <= 10000;
     }
 
     function otherChatUser(chat) {
       return chat.userA == request.auth.uid ? chat.userB : chat.userA;
+    }
+
+    function acceptedFriendship(userId, friendId) {
+      return (existsAfter(/databases/$(database)/documents/friendRequests/$(userId + '--' + friendId))
+          && getAfter(/databases/$(database)/documents/friendRequests/$(userId + '--' + friendId)).data.status == 'accepted')
+        || (existsAfter(/databases/$(database)/documents/friendRequests/$(friendId + '--' + userId))
+          && getAfter(/databases/$(database)/documents/friendRequests/$(friendId + '--' + userId)).data.status == 'accepted');
+    }
+
+    function validNewFriendRequest(requestId, friendship) {
+      return request.auth != null
+        && request.auth.uid == friendship.fromUid
+        && friendship.status == 'pending'
+        && friendship.createdAt == request.time
+        && friendship.updatedAt == request.time
+        && !friendship.keys().hasAny(['respondedAt'])
+        && exists(/databases/$(database)/documents/publicProfiles/$(friendship.toUid))
+        && validFriendRequestShape(requestId, friendship);
+    }
+
+    function validFriendRequestShape(requestId, friendship) {
+      return requestId == friendship.fromUid + '--' + friendship.toUid
+        && friendship.fromUid is string
+        && friendship.toUid is string
+        && friendship.fromUid != friendship.toUid
+        && friendship.fromName is string
+        && friendship.fromName.size() >= 1
+        && friendship.fromName.size() <= 18
+        && friendship.toName is string
+        && friendship.toName.size() >= 1
+        && friendship.toName.size() <= 18
+        && validAccountAvatar(friendship.fromUid, friendship.fromAvatar)
+        && validAccountAvatar(friendship.toUid, friendship.toAvatar)
+        && friendship.status in ['pending', 'accepted', 'declined', 'cancelled']
+        && friendship.createdAt is timestamp
+        && friendship.updatedAt is timestamp
+        && (!friendship.keys().hasAny(['respondedAt']) || friendship.respondedAt is timestamp)
+        && friendship.keys().hasOnly(['fromUid', 'fromName', 'fromAvatar', 'toUid', 'toName', 'toAvatar', 'status', 'createdAt', 'updatedAt', 'respondedAt']);
     }
 
     function validNewDirectChat(chatId, chat) {
@@ -332,7 +397,7 @@ service cloud.firestore {
     }
 
     function validOnlineGameState(roomCode, state) {
-      return state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice']
+      return state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade']
         && state.roomCode == roomCode
         && state.gameId == get(/databases/$(database)/documents/rooms/$(roomCode)).data.gameId
         && state.players is list
@@ -342,7 +407,7 @@ service cloud.firestore {
         && state.names is list
         && state.names.size() == 2
         && state.turnUid in state.players
-        && state.phase in ['playing', 'revealing', 'complete']
+        && state.phase in ['playing', 'revealing', 'relocating', 'complete']
         && state.round is int
         && state.round >= 1
         && state.moves is int
@@ -363,6 +428,7 @@ service cloud.firestore {
         && state.positions.size() == 2
         && state.faces is list
         && state.faces.size() == 2
+        && state.barricades is list
         && state.winnerUid in ['', 'draw', state.players[0], state.players[1]]
         && state.createdAt is timestamp
         && state.updatedAt is timestamp;
@@ -376,7 +442,8 @@ service cloud.firestore {
         || (gameId == 'tictactoe' && gameName == 'Tic Tac Toe')
         || (gameId == 'connect4' && gameName == 'Connect Four')
         || (gameId == 'rps' && gameName == 'Rock Paper Scissors')
-        || (gameId == 'dice' && gameName == 'Dice Race');
+        || (gameId == 'dice' && gameName == 'Dice Race')
+        || (gameId == 'barricade' && gameName == 'Barricade');
     }
 
     function validAvatar(avatarId) {
