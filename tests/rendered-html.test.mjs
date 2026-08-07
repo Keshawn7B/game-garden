@@ -15,6 +15,7 @@ test("server-renders the Game Garden hub", async () => {
   assert.equal(response.headers.get("x-frame-options"), "DENY");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin-allow-popups");
+  assert.equal(response.headers.get("strict-transport-security"), "max-age=31536000; includeSubDomains");
   const contentSecurityPolicy = response.headers.get("content-security-policy") ?? "";
   assert.match(contentSecurityPolicy, /default-src 'self'/);
   assert.match(contentSecurityPolicy, /frame-ancestors 'none'/);

@@ -63,6 +63,7 @@ async function hardenResponse(response: Response) {
   headers.set("Origin-Agent-Cluster", "?1");
   headers.set("Permissions-Policy", "accelerometer=(), autoplay=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), browsing-topics=()");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-DNS-Prefetch-Control", "off");
   headers.set("X-Frame-Options", "DENY");
