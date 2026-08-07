@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "game-garden-658de"
-  }
+  },
+  "targets": {
+    "game-garden-658de": {
+      "hosting": {
+        "primary": [
+          "game-garden-658de"
+        ],
+        "short": [
+          "gamegardenplay"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
