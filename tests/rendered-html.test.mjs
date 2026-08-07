@@ -267,6 +267,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /className="friend-connect-code"/);
   assert.match(source, /className="friend-connect-add"/);
   assert.match(source, /className="friends-account-banner"/);
+  assert.match(source, /className="friends-account-avatar"><PlayerAvatar avatarId=\{avatarId\}/);
   assert.match(source, /className=\{`friend-banner/);
   assert.match(source, /Search friends by name/);
   assert.match(source, /profile details/);

@@ -2923,7 +2923,7 @@ function AppHome({
               </div>
             ) : <>
               <div className="friends-account-banner">
-                <AvatarGlyph avatarId={avatarId} className="friends-account-avatar" />
+                <span className="friends-account-avatar"><PlayerAvatar avatarId={avatarId} /></span>
                 <div><small>YOUR NAME · あなた</small><strong>{profileName || "Player One"}</strong><span><i /> ONLINE</span></div>
                 <b>{onlineFriends.length}<small>FRIENDS ONLINE</small></b>
               </div>
