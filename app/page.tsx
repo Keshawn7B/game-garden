@@ -16,7 +16,7 @@ import { AirHockey } from "./air-hockey-game";
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey";
 type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile";
-type ThemeMode = "classic" | "sakura";
+type ThemeMode = "classic" | "sakura" | "gold";
 type GameMode = "solo" | "multi";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu` | `${PlayableGameId}-lobby`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
@@ -117,6 +117,7 @@ type NumberOnlineState = {
 const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
 const PREMIUM_ACCESS_CODE = "SOKEY";
+const GOLD_MODE_ACCESS_CODE = "GOLD";
 const SCORE_SEASON = 2;
 const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: string }> = {
   games: { label: "ARCADE", japanese: "ゲーム", glyph: "遊" },
@@ -2597,6 +2598,7 @@ function AppHome({
   onJoinLobby,
   onOpenChat,
   premiumUnlocked,
+  goldModeUnlocked,
   onUnlockPremium,
 }: {
   activeTab: AppTab;
@@ -2637,6 +2639,7 @@ function AppHome({
   onJoinLobby: (gameId: PlayableGameId, roomCode?: string) => void;
   onOpenChat: (friend: FriendEntry) => void;
   premiumUnlocked: boolean;
+  goldModeUnlocked: boolean;
   onUnlockPremium: (code: string) => Promise<string>;
 }) {
   const completedGames = Object.keys(highScores).length;
@@ -2760,7 +2763,7 @@ function AppHome({
     try {
       const message = await onUnlockPremium(premiumCode);
       setPremiumMessage(message);
-      if (message.startsWith("Premium unlocked")) setPremiumCode("");
+      if (message.toLowerCase().includes("unlocked")) setPremiumCode("");
     } finally {
       setPremiumBusy(false);
     }
@@ -2852,7 +2855,7 @@ function AppHome({
         <div className="header-actions">
           {signedIn && <span className="header-online"><i />ONLINE</span>}
           {socialNoticeCount > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${socialNoticeCount} pending social alerts`}><b>招</b><span>{socialNoticeCount}</span></button>}
-          <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
+          <button className="theme-toggle" data-mode={theme} onClick={onThemeToggle} aria-label={`Change color mode. Current mode: ${theme === "classic" ? "red" : theme === "sakura" ? "pink" : "gold"}`}><span>MODE</span></button>
           <HeaderChatButton />
           {signedIn ? <div className="profile-menu-wrap" ref={profileMenuRef}>
             <button className="header-profile" onClick={() => setProfileMenuOpen((open) => !open)} aria-label="Open account menu" aria-haspopup="menu" aria-expanded={profileMenuOpen}>
@@ -3019,11 +3022,14 @@ function AppHome({
         {activeTab === "store" && (
           <section className="app-panel store-panel">
             <div className="app-title"><div><p>DISCOVER</p><h1>Store <span>売店</span></h1></div><strong>店<small>SHOP</small></strong></div>
-            <div className="store-coming-card">
-              <span aria-hidden="true">未</span>
-              <small>GAME GARDEN STORE · 売店</small>
-              <h2>Items coming soon.</h2>
-              <p>Check back later.</p>
+            <div className={`store-product-card gold-mode-product ${goldModeUnlocked ? "owned" : ""}`}>
+              <div className="gold-mode-art" aria-hidden="true"><span className="gold-mode-logo" /><b>金</b><i>01</i></div>
+              <div className="store-product-copy">
+                <small>FIRST STORE DROP · 限定モード</small>
+                <h2>Gold Mode</h2>
+                <p>A premium gold-and-black colorway for the entire Game Garden app, including every game and screen.</p>
+                <div className="store-product-status"><span><small>{goldModeUnlocked ? "ACCOUNT ITEM" : "PRICE"}</small><strong>{goldModeUnlocked ? "UNLOCKED" : "TBD"}</strong></span><button disabled>{goldModeUnlocked ? "OWNED" : "COMING SOON"}</button></div>
+              </div>
             </div>
             <section className={`store-code-card store-code-minimal store-redeem-card ${premiumUnlocked ? "unlocked" : ""}`} aria-label="Redeem a code">
               <div className="store-code-label"><small>REDEEM CODE</small><span>コード入力</span></div>
@@ -3165,6 +3171,7 @@ export default function Home() {
   const [chatTargetUid, setChatTargetUid] = useState<string | null>(null);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [premiumUnlocked, setPremiumUnlocked] = useState(false);
+  const [goldModeUnlocked, setGoldModeUnlocked] = useState(false);
   const authLoadId = useRef(0);
 
   useEffect(() => {
@@ -3213,6 +3220,11 @@ export default function Home() {
       setProfileName("Player One");
       setAvatarId("play");
       setPremiumUnlocked(false);
+      setGoldModeUnlocked(false);
+      if (document.documentElement.dataset.theme === "gold") {
+        setTheme("classic");
+        delete document.documentElement.dataset.theme;
+      }
       setFriends([]);
       setFriendProfiles({});
       setIncomingFriendRequests([]);
@@ -3224,6 +3236,7 @@ export default function Home() {
       setChatTargetUid(null);
       setChatUnreadCount(0);
       if (!user) {
+        if (window.localStorage.getItem("game-garden-theme") === "gold") window.localStorage.setItem("game-garden-theme", "classic");
         const guestName = window.localStorage.getItem(playerStorageKey(null, "name")) || "Player One";
         const guestAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
         setProfileName(guestName);
@@ -3233,6 +3246,7 @@ export default function Home() {
       }
 
       if (user.isAnonymous) {
+        if (window.localStorage.getItem("game-garden-theme") === "gold") window.localStorage.setItem("game-garden-theme", "classic");
         const savedGuestName = window.localStorage.getItem("game-garden-guest-name") || window.localStorage.getItem(playerStorageKey(null, "name")) || `Guest ${user.uid.slice(0, 4).toUpperCase()}`;
         const savedAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
         setProfileName(savedGuestName);
@@ -3247,6 +3261,7 @@ export default function Home() {
         if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         const data = profile.data();
         const hasPremiumAccess = data?.premiumUnlocked === true;
+        const hasGoldMode = data?.goldModeUnlocked === true;
         const accountName = window.localStorage.getItem(playerStorageKey(user, "name"));
         const cloudName = typeof data?.displayName === "string" ? data.displayName : user.displayName || accountName || "Player One";
         const savedAvatar = window.localStorage.getItem(playerStorageKey(user, "avatar"));
@@ -3257,7 +3272,14 @@ export default function Home() {
         setProfileName(cloudName);
         setAvatarId(cloudAvatar);
         setPremiumUnlocked(hasPremiumAccess);
+        setGoldModeUnlocked(hasGoldMode);
         setHighScores(cloudScores);
+        if (hasGoldMode && window.localStorage.getItem("game-garden-theme") === "gold") {
+          setTheme("gold");
+          document.documentElement.dataset.theme = "gold";
+        } else if (!hasGoldMode && window.localStorage.getItem("game-garden-theme") === "gold") {
+          window.localStorage.setItem("game-garden-theme", "classic");
+        }
         window.localStorage.setItem(playerStorageKey(user, "name"), cloudName);
         window.localStorage.removeItem(playerStorageKey(user, "scores"));
         window.localStorage.setItem(playerStorageKey(user, "avatar"), cloudAvatar);
@@ -3269,6 +3291,7 @@ export default function Home() {
           highScores: cloudScores,
           scoreSeason: SCORE_SEASON,
           premiumUnlocked: hasPremiumAccess,
+          goldModeUnlocked: hasGoldMode,
           updatedAt: serverTimestamp(),
           ...(profile.exists() ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
@@ -3424,8 +3447,26 @@ export default function Home() {
   }, [firebaseUser, premiumUnlocked]);
 
   const unlockPremium = useCallback(async (rawCode: string) => {
-    if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before unlocking premium access.";
-    if (rawCode.trim().toUpperCase() !== PREMIUM_ACCESS_CODE) return "That premium code is not valid.";
+    if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before redeeming store codes.";
+    const normalizedCode = rawCode.trim().toUpperCase();
+    if (normalizedCode === GOLD_MODE_ACCESS_CODE) {
+      try {
+        await setDoc(doc(db, "users", firebaseUser.uid), {
+          goldModeUnlocked: true,
+          goldModeUnlockedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        setGoldModeUnlocked(true);
+        setTheme("gold");
+        document.documentElement.dataset.theme = "gold";
+        window.localStorage.setItem("game-garden-theme", "gold");
+        setAuthError("");
+        return "Gold Mode unlocked for this account.";
+      } catch {
+        return "Could not unlock Gold Mode. Try again.";
+      }
+    }
+    if (normalizedCode !== PREMIUM_ACCESS_CODE) return "That store code is not valid.";
     try {
       await setDoc(doc(db, "users", firebaseUser.uid), {
         premiumUnlocked: true,
@@ -3442,13 +3483,13 @@ export default function Home() {
 
   const toggleTheme = useCallback(() => {
     setTheme((current) => {
-      const next: ThemeMode = current === "sakura" ? "classic" : "sakura";
-      if (next === "sakura") document.documentElement.dataset.theme = "sakura";
+      const next: ThemeMode = current === "classic" ? "sakura" : current === "sakura" && goldModeUnlocked ? "gold" : "classic";
+      if (next !== "classic") document.documentElement.dataset.theme = next;
       else delete document.documentElement.dataset.theme;
       try { window.localStorage.setItem("game-garden-theme", next); } catch { /* Device storage may be unavailable. */ }
       return next;
     });
-  }, []);
+  }, [goldModeUnlocked]);
 
   const saveProfile = useCallback(async () => {
     if (!firebaseUser || firebaseUser.isAnonymous) return false;
@@ -3463,6 +3504,7 @@ export default function Home() {
         photoURL: firebaseUser.photoURL || "",
         avatarId: savedAvatar,
         premiumUnlocked,
+        goldModeUnlocked,
         highScores,
         scoreSeason: SCORE_SEASON,
         updatedAt: serverTimestamp(),
@@ -3490,7 +3532,7 @@ export default function Home() {
       setAuthError(error instanceof Error ? error.message : "Could not save the profile.");
       return false;
     }
-  }, [firebaseUser, highScores, profileName, avatarId, premiumUnlocked]);
+  }, [firebaseUser, highScores, profileName, avatarId, premiumUnlocked, goldModeUnlocked]);
 
   const resetScores = useCallback(async () => {
     const user = firebaseUser;
@@ -3938,8 +3980,8 @@ export default function Home() {
     if (game === "dotsboxes") return <DotsAndBoxes onBack={() => selectGame("dotsboxes-menu")} onScore={(score) => recordScore("dotsboxes", score)} />;
     if (game === "airhockey") return <AirHockey onBack={() => selectGame("airhockey-menu")} onScore={(score) => recordScore("airhockey", score)} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} onUnlockPremium={unlockPremium} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, unlockPremium]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} goldModeUnlocked={goldModeUnlocked} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, goldModeUnlocked, unlockPremium]);
 
   return <ChatChromeProvider enabled={Boolean(firebaseUser && !firebaseUser.isAnonymous)} open={chatOpen} unreadCount={chatUnreadCount} onToggle={() => setChatOpen((current) => !current)}>{view}<FriendsChat key={firebaseUser?.uid ?? "signed-out"} user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} onUnreadCountChange={setChatUnreadCount} /></ChatChromeProvider>;
 }

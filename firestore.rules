@@ -7,7 +7,9 @@ service cloud.firestore {
       allow create, update: if request.auth != null
         && request.auth.uid == userId
         && (!request.resource.data.keys().hasAny(['premiumUnlocked']) || request.resource.data.premiumUnlocked is bool)
-        && (!request.resource.data.keys().hasAny(['premiumUnlockedAt']) || request.resource.data.premiumUnlockedAt is timestamp);
+        && (!request.resource.data.keys().hasAny(['premiumUnlockedAt']) || request.resource.data.premiumUnlockedAt is timestamp)
+        && (!request.resource.data.keys().hasAny(['goldModeUnlocked']) || request.resource.data.goldModeUnlocked is bool)
+        && (!request.resource.data.keys().hasAny(['goldModeUnlockedAt']) || request.resource.data.goldModeUnlockedAt is timestamp);
     }
 
     match /users/{userId}/friends/{friendId} {
