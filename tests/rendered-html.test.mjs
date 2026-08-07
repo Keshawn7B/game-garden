@@ -65,6 +65,10 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /Open Lobby/);
   assert.match(source, /type GameMode = "solo" \| "multi"/);
   assert.match(source, /className="mode-picker"/);
+  assert.match(source, /className="game-search-bar"/);
+  assert.match(source, /Search games by name or type/);
+  assert.match(source, /displayedGames\.map/);
+  assert.match(styles, /\.game-search-icon::before/);
   assert.match(source, /VERSUS<small>2 PLAYERS/);
   assert.match(source, /function TurnBanner/);
   assert.match(source, /function GameLobby/);

@@ -2597,6 +2597,7 @@ function AppHome({
   const completedGames = Object.keys(highScores).length;
   const scoredGames = GAMES.filter((game) => game.scoreGame) as Array<(typeof GAMES)[number] & { scoreGame: PlayableGameId }>;
   const [rankGame, setRankGame] = useState<PlayableGameId>("codebreaker");
+  const [gameSearch, setGameSearch] = useState("");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [friendInput, setFriendInput] = useState(friendLinkCode);
@@ -2630,6 +2631,10 @@ function AppHome({
   const displayedFriends = [...friends]
     .filter((friend) => friend.name.toLowerCase().includes(friendSearch.trim().toLowerCase()))
     .sort((left, right) => Number(Boolean(right.isOnline)) - Number(Boolean(left.isOnline)) || left.name.localeCompare(right.name));
+  const normalizedGameSearch = gameSearch.trim().toLocaleLowerCase();
+  const displayedGames = normalizedGameSearch
+    ? GAMES.filter((game) => `${game.name} ${game.japanese} ${game.meta}`.toLocaleLowerCase().includes(normalizedGameSearch))
+    : GAMES;
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -2802,8 +2807,14 @@ function AppHome({
         {activeTab === "games" && (
           <section className="app-panel games-panel">
             <div className="app-title"><div><p>PLAY</p><h1>Games <span>ゲーム</span></h1></div><strong>{GAMES.length}<small>GAMES</small></strong></div>
+            <div className="game-search-bar">
+              <span className="game-search-icon" aria-hidden="true" />
+              <input type="search" value={gameSearch} onChange={(event) => setGameSearch(event.target.value)} placeholder="Search games" aria-label="Search games by name or type" />
+              {gameSearch && <button onClick={() => setGameSearch("")} aria-label="Clear game search">×</button>}
+              <b>{displayedGames.length}<small>FOUND</small></b>
+            </div>
             <div className="game-app-grid">
-              {GAMES.map((game) => (
+              {displayedGames.map((game) => (
                 <button className="game-app-card" key={game.id} onClick={() => onSelect(game.id)}>
                   <span className={`game-cover art-${game.id}`}><i>{game.number}</i></span>
                   <span className="game-card-copy">
@@ -2814,6 +2825,7 @@ function AppHome({
                 </button>
               ))}
             </div>
+            {!displayedGames.length && <div className="game-search-empty"><strong>No games found</strong><span>Try another name or game type.</span><button onClick={() => setGameSearch("")}>Clear search</button></div>}
           </section>
         )}
 
