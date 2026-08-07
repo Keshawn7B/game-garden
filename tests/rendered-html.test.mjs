@@ -346,6 +346,10 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /avatarPickerOpen &&/);
   assert.match(source, /role="dialog" aria-modal="true"/);
   assert.match(styles, /\.avatar-picker-backdrop/);
+  assert.match(styles, /touch-action:pan-y/);
+  assert.match(styles, /\.avatar-picker-heading \{ position:sticky/);
+  assert.doesNotMatch(source, /CLOUD PROFILE/);
+  assert.doesNotMatch(source, /PLAYER PROFILE <span>プロフィール<\/span>/);
   assert.match(source, /const PREMIUM_ACCESS_CODE = "SOKEY"/);
   assert.match(source, /premiumUnlocked/);
   assert.match(source, /onUnlockPremium/);

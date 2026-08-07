@@ -2645,6 +2645,13 @@ function AppHome({
     };
   }, [profileMenuOpen]);
 
+  useEffect(() => {
+    if (!avatarPickerOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [avatarPickerOpen]);
+
   const chooseProfileMenu = (tab: AppTab, showInvites = false) => {
     setProfileMenuOpen(false);
     onTabChange(tab);
@@ -2797,7 +2804,7 @@ function AppHome({
             <div className="app-title"><div><p>GLOBAL</p><h1>Leaderboard <span>ランキング</span></h1></div></div>
             {signedIn ? <div className="player-rank-card">
               <span className="rank-number">YOU</span><PlayerAvatar avatarId={avatarId} />
-              <div><strong>{profileName || "Player One"}</strong><small>CLOUD PROFILE</small></div>
+              <div><strong>{profileName || "Player One"}</strong></div>
               <b>{completedGames}<small>BESTS</small></b>
             </div> : <button className="rank-signin-card" onClick={() => onTabChange("profile")}><b>人</b><span><small>YOUR RANK IS PRIVATE</small><strong>Sign in to view your scores</strong></span><em>→</em></button>}
             <div className="rank-game-tabs" aria-label="Choose leaderboard game">
@@ -2835,7 +2842,6 @@ function AppHome({
                 <span className="profile-avatar-label">CHANGE PICTURE</span>
                 <small>画像を変更</small>
               </button>
-              <p>PLAYER PROFILE <span>プロフィール</span></p>
               {avatarPickerOpen && (
                 <div className="avatar-picker-backdrop" onMouseDown={() => setAvatarPickerOpen(false)}>
                   <section className="avatar-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setAvatarPickerOpen(false); }}>
@@ -2868,7 +2874,6 @@ function AppHome({
                 placeholder="Player One"
               />
               {firebaseUser?.email && <small className="profile-email">{firebaseUser.email}</small>}
-              <span className="local-badge">{firebaseUser && !firebaseUser.isAnonymous ? "CLOUD PROFILE" : "GUEST PROFILE"}</span>
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <div className="profile-actions">
                 <button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button>
