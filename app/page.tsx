@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile, type User } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, limit, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, limit, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch, type DocumentSnapshot } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
 import { ChatChromeProvider, HeaderChatButton } from "./chat-chrome";
 import { makeOnlineGameState, OnlineVersusGame, type OnlineGameId } from "./online-games";
@@ -225,7 +225,9 @@ function roomCodeFromUrl() {
 
 function makeRoomCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  const random = new Uint32Array(6);
+  crypto.getRandomValues(random);
+  return Array.from(random, (value) => alphabet[value % alphabet.length]).join("");
 }
 
 function inviteIdFor(fromUid: string, toUid: string, gameId: PlayableGameId, roomCode?: string) {
@@ -243,17 +245,25 @@ function inviteTimeLeft(invite: GameInvite) {
 }
 
 async function syncPublicProfile(user: User, name: string, avatarId: AvatarId, highScores: HighScores) {
-  await setDoc(doc(db, "publicProfiles", user.uid), {
+  const friendCode = friendCodeFor(user.uid);
+  const batch = writeBatch(db);
+  batch.set(doc(db, "publicProfiles", user.uid), {
     uid: user.uid,
     name: name.trim() || user.displayName || "Player One",
     avatarId,
-    friendCode: friendCodeFor(user.uid),
+    friendCode,
     highScores,
     scoreSeason: SCORE_SEASON,
     online: true,
     lastActiveAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }, { merge: true });
+  batch.set(doc(db, "friendCodes", friendCode), {
+    code: friendCode,
+    uid: user.uid,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+  await batch.commit();
 }
 
 const COLORS: { id: ColorId; label: string; hex: string }[] = [
@@ -2267,11 +2277,18 @@ function friendlyAuthError(error: unknown) {
   if (code === "auth/email-already-in-use") return "That email already has an account. Sign in instead.";
   if (code === "auth/invalid-credential") return "The email or password is incorrect.";
   if (code === "auth/invalid-email") return "Enter a valid email address.";
-  if (code === "auth/weak-password") return "Use a password with at least 6 characters.";
+  if (code === "auth/weak-password") return "Use a password with at least 12 characters.";
   if (code === "auth/too-many-requests") return "Too many attempts. Wait a moment and try again.";
   if (code === "auth/unauthorized-domain") return "This Game Garden address must be added to Firebase authorized domains.";
   if (code === "auth/operation-not-allowed") return "This sign-in method still needs to be enabled in Firebase.";
-  return error instanceof Error ? error.message : "Could not sign in.";
+  return "Could not sign in. Please try again.";
+}
+
+function activeEntitlement(snapshot: DocumentSnapshot) {
+  if (!snapshot.exists()) return false;
+  const data = snapshot.data();
+  const expiresAt = data.expiresAt instanceof Timestamp ? data.expiresAt.toMillis() : null;
+  return data.status === "active" && (expiresAt == null || expiresAt > Date.now());
 }
 
 async function saveCloudScore(user: User, gameId: PlayableGameId, score: number, profileName: string, avatarId: AvatarId) {
@@ -3006,11 +3023,12 @@ function AppHome({
               <div className="profile-signin-form">
                 <div className="email-auth-fields">
                   <input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="Email address" aria-label="Email address" autoComplete="email" />
-                  <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="Password" aria-label="Password" autoComplete="current-password" minLength={6} />
+                  <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="Password" aria-label="Password" autoComplete="current-password" minLength={6} maxLength={128} />
                 </div>
                 <div className="email-auth-actions">
                   <button className="primary-button" onClick={() => onEmailSignIn(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 6}>Sign in</button>
-                  <button className="secondary-button" onClick={() => onEmailCreate(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 6}>Create account</button>
+                  <button className="secondary-button" onClick={() => onEmailCreate(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 12}>Create account</button>
+                  <small className="auth-password-note">New passwords require at least 12 characters.</small>
                 </div>
                 <span className="auth-divider">OR</span>
                 <button className="primary-button google-button" onClick={onSignIn} disabled={authLoading}>{authLoading ? "Connecting…" : "Continue with Google"}</button>
@@ -3257,11 +3275,17 @@ export default function Home() {
 
       try {
         const profileRef = doc(db, "users", user.uid);
-        const profile = await getDoc(profileRef);
+        const [profile, premiumEntitlement, goldEntitlement] = await Promise.all([
+          getDoc(profileRef),
+          getDoc(doc(db, "users", user.uid, "entitlements", "premium-avatars")),
+          getDoc(doc(db, "users", user.uid, "entitlements", "gold-mode")),
+        ]);
         if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         const data = profile.data();
-        const hasPremiumAccess = data?.premiumUnlocked === true;
-        const hasGoldMode = data?.goldModeUnlocked === true;
+        const legacyPremiumAccess = data?.premiumUnlocked === true;
+        const legacyGoldMode = data?.goldModeUnlocked === true;
+        const hasPremiumAccess = legacyPremiumAccess || activeEntitlement(premiumEntitlement);
+        const hasGoldMode = legacyGoldMode || activeEntitlement(goldEntitlement);
         const accountName = window.localStorage.getItem(playerStorageKey(user, "name"));
         const cloudName = typeof data?.displayName === "string" ? data.displayName : user.displayName || accountName || "Player One";
         const savedAvatar = window.localStorage.getItem(playerStorageKey(user, "avatar"));
@@ -3290,10 +3314,12 @@ export default function Home() {
           avatarId: cloudAvatar,
           highScores: cloudScores,
           scoreSeason: SCORE_SEASON,
-          premiumUnlocked: hasPremiumAccess,
-          goldModeUnlocked: hasGoldMode,
+          // Paid entitlements stay server-owned. These two fields only preserve
+          // the existing test-code grants and are never derived from a purchase.
+          premiumUnlocked: legacyPremiumAccess,
+          goldModeUnlocked: legacyGoldMode,
           updatedAt: serverTimestamp(),
-          ...(profile.exists() ? {} : { createdAt: serverTimestamp() }),
+          ...(data?.createdAt instanceof Timestamp ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
         await syncPublicProfile(user, cloudName, cloudAvatar, cloudScores);
       } catch (error) {
@@ -3450,12 +3476,24 @@ export default function Home() {
     if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before redeeming store codes.";
     const normalizedCode = rawCode.trim().toUpperCase();
     if (normalizedCode === GOLD_MODE_ACCESS_CODE) {
+      if (goldModeUnlocked) return "Gold Mode is already unlocked for this account.";
       try {
-        await setDoc(doc(db, "users", firebaseUser.uid), {
+        const redemptionRef = doc(db, "users", firebaseUser.uid, "redemptions", "gold-mode-test");
+        const batch = writeBatch(db);
+        if (!(await getDoc(redemptionRef)).exists()) batch.set(redemptionRef, {
+          uid: firebaseUser.uid,
+          redemptionId: "gold-mode-test",
+          productId: "gold-mode",
+          source: "test-code",
+          redeemedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        batch.set(doc(db, "users", firebaseUser.uid), {
           goldModeUnlocked: true,
           goldModeUnlockedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         }, { merge: true });
+        await batch.commit();
         setGoldModeUnlocked(true);
         setTheme("gold");
         document.documentElement.dataset.theme = "gold";
@@ -3467,19 +3505,31 @@ export default function Home() {
       }
     }
     if (normalizedCode !== PREMIUM_ACCESS_CODE) return "That store code is not valid.";
+    if (premiumUnlocked) return "Premium is already unlocked for this account.";
     try {
-      await setDoc(doc(db, "users", firebaseUser.uid), {
+      const redemptionRef = doc(db, "users", firebaseUser.uid, "redemptions", "legacy-premium-test");
+      const batch = writeBatch(db);
+      if (!(await getDoc(redemptionRef)).exists()) batch.set(redemptionRef, {
+        uid: firebaseUser.uid,
+        redemptionId: "legacy-premium-test",
+        productId: "premium-avatars",
+        source: "test-code",
+        redeemedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.set(doc(db, "users", firebaseUser.uid), {
         premiumUnlocked: true,
         premiumUnlockedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
+      await batch.commit();
       setPremiumUnlocked(true);
       setAuthError("");
       return "Premium unlocked for this account.";
     } catch {
       return "Could not unlock premium access. Try again.";
     }
-  }, [firebaseUser]);
+  }, [firebaseUser, goldModeUnlocked, premiumUnlocked]);
 
   const toggleTheme = useCallback(() => {
     setTheme((current) => {
@@ -3503,8 +3553,6 @@ export default function Home() {
         displayName,
         photoURL: firebaseUser.photoURL || "",
         avatarId: savedAvatar,
-        premiumUnlocked,
-        goldModeUnlocked,
         highScores,
         scoreSeason: SCORE_SEASON,
         updatedAt: serverTimestamp(),
@@ -3532,7 +3580,7 @@ export default function Home() {
       setAuthError(error instanceof Error ? error.message : "Could not save the profile.");
       return false;
     }
-  }, [firebaseUser, highScores, profileName, avatarId, premiumUnlocked, goldModeUnlocked]);
+  }, [firebaseUser, highScores, profileName, avatarId, premiumUnlocked]);
 
   const resetScores = useCallback(async () => {
     const user = firebaseUser;
@@ -3585,6 +3633,10 @@ export default function Home() {
     setAuthLoading(true);
     setAuthError("");
     try {
+      if (password.length < 12) {
+        setAuthError("Use a password with at least 12 characters.");
+        return;
+      }
       const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const displayName = profileName.trim() || email.split("@")[0] || "Player One";
       await updateProfile(credential.user, { displayName });
@@ -3595,6 +3647,8 @@ export default function Home() {
         avatarId,
         highScores: {},
         scoreSeason: SCORE_SEASON,
+        premiumUnlocked: false,
+        goldModeUnlocked: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
@@ -3625,10 +3679,13 @@ export default function Home() {
     if (!/^[A-Z0-9]{8}$/.test(code)) return "Enter a valid eight-character friend code.";
     if (code === friendCodeFor(firebaseUser.uid)) return "That is your own friend code.";
     try {
-      const matches = await getDocs(query(collection(db, "publicProfiles"), where("friendCode", "==", code), limit(1)));
-      if (matches.empty) return "No player was found with that code.";
-      const profile = matches.docs[0].data();
-      const friendUid = String(profile.uid || matches.docs[0].id);
+      const codeSnapshot = await getDoc(doc(db, "friendCodes", code));
+      if (!codeSnapshot.exists()) return "No player was found with that code.";
+      const friendUid = String(codeSnapshot.data().uid || "");
+      if (!friendUid || friendUid === firebaseUser.uid) return friendUid === firebaseUser.uid ? "That is your own friend code." : "No player was found with that code.";
+      const profileSnapshot = await getDoc(doc(db, "publicProfiles", friendUid));
+      if (!profileSnapshot.exists()) return "No player was found with that code.";
+      const profile = profileSnapshot.data();
       const friendName = typeof profile.name === "string" ? profile.name : "Player";
       const friendAvatar: AvatarId = isAvatarId(profile.avatarId) ? profile.avatarId : "play";
       const forwardRef = doc(db, "friendRequests", friendRequestId(firebaseUser.uid, friendUid));
@@ -3840,7 +3897,7 @@ export default function Home() {
         const snapshot = await getDoc(roomRef);
         if (snapshot.exists()) {
           const data = snapshot.data() as GameRoom;
-          if (data.hostUid === user.uid || data.guestUid === user.uid) {
+          if (data.hostUid === user.uid) {
             {
               const batch = writeBatch(db);
               batch.delete(doc(db, "rooms", code, "numberHunt", "state"));
@@ -3850,6 +3907,14 @@ export default function Home() {
               batch.delete(roomRef);
               await batch.commit();
             }
+          } else if (data.guestUid === user.uid) {
+            await updateDoc(roomRef, {
+              guestUid: deleteField(),
+              guestName: deleteField(),
+              guestAvatar: deleteField(),
+              status: "open",
+              updatedAt: serverTimestamp(),
+            });
           }
         }
         const relatedInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.roomCode === code && all.findIndex((item) => item.id === invite.id) === index);

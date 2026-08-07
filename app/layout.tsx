@@ -6,11 +6,34 @@ import "./online-games.css";
 
 const japanese = Noto_Sans_JP({ variable: "--font-japanese", subsets: ["latin"], weight: ["400", "500", "700", "900"] });
 
+const defaultMetadataBase = new URL("https://gamegardenplay.web.app");
+const knownPublicHosts = new Set([
+  "gamegardenplay.web.app",
+  "game-garden-658de.web.app",
+  "pocket-play-arcade.kfuture.chatgpt.site",
+]);
+
+function safeMetadataBase(rawHost: string | null) {
+  const candidate = rawHost?.split(",", 1)[0]?.trim().toLowerCase();
+  if (!candidate || candidate.length > 253 || !/^[a-z0-9.-]+(?::\d{1,5})?$/.test(candidate)) return defaultMetadataBase;
+
+  try {
+    const parsed = new URL(`https://${candidate}`);
+    const isLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]";
+    const configuredHost = process.env.NEXT_PUBLIC_SITE_HOST?.trim().toLowerCase();
+    const isConfigured = configuredHost ? parsed.hostname === configuredHost : false;
+    const isKnown = knownPublicHosts.has(parsed.hostname);
+    if (!isLocal && !isConfigured && !isKnown) return defaultMetadataBase;
+    if (!isLocal && parsed.port && parsed.port !== "443") return defaultMetadataBase;
+    return new URL(`${isLocal ? "http" : "https"}://${parsed.host}`);
+  } catch {
+    return defaultMetadataBase;
+  }
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const incoming = await headers();
-  const host = incoming.get("x-forwarded-host") ?? incoming.get("host") ?? "pocket-play-arcade.kfuture.chatgpt.site";
-  const protocol = incoming.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const baseUrl = new URL(`${protocol}://${host}`);
+  const baseUrl = safeMetadataBase(incoming.get("x-forwarded-host") ?? incoming.get("host"));
   const title = "Game Garden | ゲームガーデン";
   const description = "Pocket-sized logic, memory, strategy, and multiplayer games in one app.";
 

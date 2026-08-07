@@ -3,27 +3,48 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
-      allow read, delete: if request.auth != null && request.auth.uid == userId;
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId
-        && (!request.resource.data.keys().hasAny(['premiumUnlocked']) || request.resource.data.premiumUnlocked is bool)
-        && (!request.resource.data.keys().hasAny(['premiumUnlockedAt']) || request.resource.data.premiumUnlockedAt is timestamp)
-        && (!request.resource.data.keys().hasAny(['goldModeUnlocked']) || request.resource.data.goldModeUnlocked is bool)
-        && (!request.resource.data.keys().hasAny(['goldModeUnlockedAt']) || request.resource.data.goldModeUnlockedAt is timestamp);
+      allow read, delete: if isOwner(userId) && permanentAccount();
+      allow create: if isOwner(userId)
+        && permanentAccount()
+        && validUserProfile(userId, request.resource.data)
+        && request.resource.data.premiumUnlocked == false
+        && request.resource.data.goldModeUnlocked == false;
+      allow update: if isOwner(userId)
+        && permanentAccount()
+        && validUserProfile(userId, request.resource.data)
+        && validCreatedAtUpdate()
+        && validEntitlementUpdate(userId);
+
+      match /redemptions/{redemptionId} {
+        allow get: if isOwner(userId);
+        allow list: if false;
+        allow create: if isOwner(userId)
+          && permanentAccount()
+          && validTestRedemption(userId, redemptionId, request.resource.data);
+        allow update, delete: if false;
+      }
+
+      // Future paid items are written only by a trusted payment webhook or
+      // other Admin SDK service. Browser clients can never mint entitlements.
+      match /entitlements/{productId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
     }
 
     match /users/{userId}/friends/{friendId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create, update: if request.auth != null
+      allow read: if isOwner(userId);
+      allow create: if signedIn()
         && request.auth.uid in [userId, friendId]
         && friendId != userId
         && acceptedFriendship(userId, friendId)
         && request.resource.data.uid == friendId
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 18
-        && validAccountAvatar(friendId, request.resource.data.avatarId);
-      allow delete: if request.auth != null
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'avatarId', 'addedAt'])
+        && request.resource.data.name == getAfter(/databases/$(database)/documents/publicProfiles/$(friendId)).data.name
+        && request.resource.data.avatarId == getAfter(/databases/$(database)/documents/publicProfiles/$(friendId)).data.avatarId
+        && request.resource.data.addedAt == request.time;
+      allow update: if false;
+      allow delete: if signedIn()
         && (request.auth.uid == userId
           || (request.auth.uid == friendId && acceptedFriendship(userId, friendId)));
     }
@@ -52,25 +73,54 @@ service cloud.firestore {
     }
 
     match /publicProfiles/{userId} {
+      allow get: if permanentAccount();
+      allow list: if false;
+      allow create: if isOwner(userId) && permanentAccount() && validPublicProfile(userId, request.resource.data);
+      allow update: if isOwner(userId)
+        && permanentAccount()
+        && validPublicProfile(userId, request.resource.data)
+        && request.resource.data.friendCode == resource.data.friendCode;
+      allow delete: if isOwner(userId);
+    }
+
+    // Friend codes are direct lookups instead of a queryable profile directory.
+    // This prevents authenticated users from scraping every player profile.
+    match /friendCodes/{friendCode} {
+      allow get: if permanentAccount() && validFriendCode(friendCode);
+      allow list: if false;
+      allow create: if permanentAccount()
+        && request.auth.uid == request.resource.data.uid
+        && validFriendCode(friendCode)
+        && request.resource.data.keys().hasOnly(['code', 'uid', 'updatedAt'])
+        && request.resource.data.code == friendCode
+        && request.resource.data.updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.friendCode == friendCode;
+      allow update: if permanentAccount()
+        && request.auth.uid == resource.data.uid
+        && request.resource.data.keys().hasOnly(['code', 'uid', 'updatedAt'])
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.friendCode == friendCode;
+      allow delete: if false;
+    }
+
+    match /storeProducts/{productId} {
       allow read: if true;
-      allow create, update: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.data.uid == userId
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 18
-        && request.resource.data.friendCode is string
-        && request.resource.data.friendCode.size() == 8
-        && request.resource.data.highScores is map
-        && request.resource.data.scoreSeason is int
-        && (!request.resource.data.keys().hasAny(['online']) || request.resource.data.online is bool)
-        && (!request.resource.data.keys().hasAny(['lastActiveAt']) || request.resource.data.lastActiveAt is timestamp)
-        && validAccountAvatar(userId, request.resource.data.avatarId);
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    match /checkoutSessions/{sessionId} {
+      allow read: if signedIn() && request.auth.uid == resource.data.uid;
+      allow write: if false;
+    }
+
+    match /purchaseEvents/{eventId} {
+      allow read, write: if false;
     }
 
     match /directChats/{chatId} {
-      allow read: if request.auth != null
+      allow read: if signedIn()
         && request.auth.uid in resource.data.participants;
       allow create: if validNewDirectChat(chatId, request.resource.data);
       allow update: if request.auth != null
@@ -94,15 +144,13 @@ service cloud.firestore {
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read: if request.auth != null
+        allow read: if signedIn()
           && request.auth.uid in get(/databases/$(database)/documents/directChats/$(chatId)).data.participants;
-        allow create: if request.auth != null
+        allow create: if signedIn()
           && request.auth.uid in getAfter(/databases/$(database)/documents/directChats/$(chatId)).data.participants
           && request.resource.data.senderUid == request.auth.uid
-          && request.resource.data.senderName is string
-          && request.resource.data.senderName.size() >= 1
-          && request.resource.data.senderName.size() <= 18
-          && validAvatar(request.resource.data.senderAvatar)
+          && request.resource.data.senderName == get(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.name
+          && request.resource.data.senderAvatar == get(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.avatarId
           && request.resource.data.text is string
           && request.resource.data.text.size() >= 1
           && request.resource.data.text.size() <= 500
@@ -144,10 +192,10 @@ service cloud.firestore {
     }
 
     match /rooms/{roomCode} {
-      allow read: if request.auth != null
-        && validRoomCode(roomCode);
+      allow get: if signedIn() && validRoomCode(roomCode);
+      allow list: if false;
       allow create: if validNewRoom(roomCode, request.resource.data);
-      allow update: if request.auth != null
+      allow update: if signedIn()
         && (
           (resource.data.status == 'open'
             && resource.data.expiresAt > request.time
@@ -157,7 +205,7 @@ service cloud.firestore {
             && request.resource.data.guestName is string
             && request.resource.data.guestName.size() >= 2
             && request.resource.data.guestName.size() <= 18
-            && validAvatar(request.resource.data.guestAvatar)
+            && validRoomAvatar(request.auth.uid, request.resource.data.guestAvatar)
             && request.resource.data.status == 'ready'
             && request.resource.data.updatedAt == request.time
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'status', 'updatedAt']))
@@ -168,9 +216,15 @@ service cloud.firestore {
             && request.resource.data.status == 'playing'
             && request.resource.data.updatedAt == request.time
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+          ||
+          (resource.data.keys().hasAll(['guestUid', 'guestName', 'guestAvatar'])
+            && request.auth.uid == resource.data.guestUid
+            && request.resource.data.status == 'open'
+            && !request.resource.data.keys().hasAny(['guestUid', 'guestName', 'guestAvatar'])
+            && request.resource.data.updatedAt == request.time
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'status', 'updatedAt']))
         );
-      allow delete: if request.auth != null
-        && (request.auth.uid == resource.data.hostUid || request.auth.uid == resource.data.guestUid);
+      allow delete: if signedIn() && request.auth.uid == resource.data.hostUid;
     }
 
     match /rooms/{roomCode}/numberHunt/{documentId} {
@@ -180,27 +234,26 @@ service cloud.firestore {
         && (
           (documentId == 'state'
             && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid
-            && validNumberState(roomCode, request.resource.data))
+            && validNumberState(roomCode, request.resource.data)
+            && request.resource.data.createdAt == request.time)
           ||
           (documentId.matches('^secret-[12]$')
             && request.resource.data.keeperUid == request.auth.uid
+            && request.resource.data.keys().hasOnly(['keeperUid', 'round', 'value', 'createdAt', 'updatedAt'])
             && request.resource.data.value is int
             && request.resource.data.value >= 1
             && request.resource.data.value <= 100
-            && request.resource.data.round in [1, 2])
+            && request.resource.data.round in [1, 2]
+            && ((request.resource.data.round == 1 && documentId == 'secret-1')
+              || (request.resource.data.round == 2 && documentId == 'secret-2'))
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.updatedAt == request.time)
         );
       allow update: if roomParticipant(roomCode)
-        && (
-          (documentId == 'state' && validNumberState(roomCode, request.resource.data))
-          ||
-          (documentId.matches('^secret-[12]$')
-            && resource.data.keeperUid == request.auth.uid
-            && request.resource.data.keeperUid == request.auth.uid
-            && request.resource.data.value is int
-            && request.resource.data.value >= 1
-            && request.resource.data.value <= 100)
-        );
-      allow delete: if roomParticipant(roomCode);
+        && documentId == 'state'
+        && validNumberState(roomCode, request.resource.data)
+        && validNumberTransition(roomCode);
+      allow delete: if roomHost(roomCode);
     }
 
     match /rooms/{roomCode}/game/{documentId} {
@@ -208,15 +261,13 @@ service cloud.firestore {
       allow create: if documentId == 'state'
         && roomParticipant(roomCode)
         && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid
-        && validOnlineGameState(roomCode, request.resource.data);
+        && validOnlineGameState(roomCode, request.resource.data)
+        && request.resource.data.createdAt == request.time;
       allow update: if documentId == 'state'
         && roomParticipant(roomCode)
         && validOnlineGameState(roomCode, request.resource.data)
-        && request.resource.data.gameId == resource.data.gameId
-        && request.resource.data.players == resource.data.players
-        && request.resource.data.names == resource.data.names
-        && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if documentId == 'state' && roomParticipant(roomCode);
+        && validOnlineGameTransition(roomCode);
+      allow delete: if documentId == 'state' && roomHost(roomCode);
     }
 
     match /rooms/{roomCode}/airhockey/{documentId} {
@@ -231,7 +282,7 @@ service cloud.firestore {
           (documentId == request.auth.uid
             && validLiveAirHockeyMallet(roomCode, request.resource.data))
         );
-      allow delete: if roomParticipant(roomCode);
+      allow delete: if roomHost(roomCode);
     }
 
     match /leaderboards/{gameId}/entries/{userId} {
@@ -239,22 +290,161 @@ service cloud.firestore {
       allow create: if validScore(gameId, userId);
       allow update: if validScore(gameId, userId)
         && request.resource.data.score <= resource.data.score;
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow delete: if isOwner(userId);
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function permanentAccount() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function validDisplayName(name) {
+      return name is string
+        && name.size() >= 1
+        && name.size() <= 18
+        && name.matches('^[^\\n\\r\\t]+$');
+    }
+
+    function validFriendCode(friendCode) {
+      return friendCode is string && friendCode.matches('^[A-Z0-9]{8}$');
+    }
+
+    function validStoredScore(score) {
+      return score is int && score >= 1 && score <= 10000;
+    }
+
+    function validHighScores(scores) {
+      return scores is map
+        && scores.keys().hasOnly(['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey'])
+        && (!scores.keys().hasAny(['codebreaker']) || validStoredScore(scores.codebreaker))
+        && (!scores.keys().hasAny(['order']) || validStoredScore(scores.order))
+        && (!scores.keys().hasAny(['number']) || validStoredScore(scores.number))
+        && (!scores.keys().hasAny(['memory']) || validStoredScore(scores.memory))
+        && (!scores.keys().hasAny(['tictactoe']) || validStoredScore(scores.tictactoe))
+        && (!scores.keys().hasAny(['connect4']) || validStoredScore(scores.connect4))
+        && (!scores.keys().hasAny(['rps']) || validStoredScore(scores.rps))
+        && (!scores.keys().hasAny(['dice']) || validStoredScore(scores.dice))
+        && (!scores.keys().hasAny(['barricade']) || validStoredScore(scores.barricade))
+        && (!scores.keys().hasAny(['checkers']) || validStoredScore(scores.checkers))
+        && (!scores.keys().hasAny(['battleship']) || validStoredScore(scores.battleship))
+        && (!scores.keys().hasAny(['dotsboxes']) || validStoredScore(scores.dotsboxes))
+        && (!scores.keys().hasAny(['airhockey']) || validStoredScore(scores.airhockey));
+    }
+
+    function validUserProfile(userId, profile) {
+      return profile.keys().hasOnly(['uid', 'displayName', 'photoURL', 'avatarId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'premiumUnlockedAt', 'goldModeUnlocked', 'goldModeUnlockedAt', 'createdAt', 'updatedAt'])
+        && profile.keys().hasAll(['uid', 'displayName', 'photoURL', 'avatarId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'goldModeUnlocked', 'createdAt', 'updatedAt'])
+        && profile.uid == userId
+        && validDisplayName(profile.displayName)
+        && profile.photoURL is string
+        && profile.photoURL.size() <= 2048
+        && validAccountAvatar(userId, profile.avatarId)
+        && validHighScores(profile.highScores)
+        && profile.scoreSeason == 2
+        && profile.premiumUnlocked is bool
+        && profile.goldModeUnlocked is bool
+        && (!profile.keys().hasAny(['premiumUnlockedAt']) || profile.premiumUnlockedAt is timestamp)
+        && (!profile.keys().hasAny(['goldModeUnlockedAt']) || profile.goldModeUnlockedAt is timestamp)
+        && profile.createdAt is timestamp
+        && profile.updatedAt == request.time;
+    }
+
+    function validCreatedAtUpdate() {
+      return (resource.data.keys().hasAny(['createdAt'])
+          && request.resource.data.createdAt == resource.data.createdAt)
+        || (!resource.data.keys().hasAny(['createdAt'])
+          && request.resource.data.createdAt == request.time);
+    }
+
+    function validPublicProfile(userId, profile) {
+      return profile.keys().hasOnly(['uid', 'name', 'avatarId', 'friendCode', 'highScores', 'scoreSeason', 'online', 'lastActiveAt', 'updatedAt'])
+        && profile.keys().hasAll(['uid', 'name', 'avatarId', 'friendCode', 'highScores', 'scoreSeason', 'online', 'lastActiveAt', 'updatedAt'])
+        && profile.uid == userId
+        && validDisplayName(profile.name)
+        && validFriendCode(profile.friendCode)
+        && validAccountAvatar(userId, profile.avatarId)
+        && validHighScores(profile.highScores)
+        && profile.highScores == getAfter(/databases/$(database)/documents/users/$(userId)).data.highScores
+        && profile.scoreSeason == 2
+        && profile.online is bool
+        && profile.lastActiveAt is timestamp
+        && profile.updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/friendCodes/$(profile.friendCode))
+        && getAfter(/databases/$(database)/documents/friendCodes/$(profile.friendCode)).data.uid == userId;
+    }
+
+    function premiumPreserved() {
+      let prior = resource.data.keys().hasAny(['premiumUnlocked']) && resource.data.premiumUnlocked == true;
+      return request.resource.data.premiumUnlocked == prior
+        && ((!resource.data.keys().hasAny(['premiumUnlockedAt']) && !request.resource.data.keys().hasAny(['premiumUnlockedAt']))
+          || (resource.data.keys().hasAny(['premiumUnlockedAt'])
+            && request.resource.data.keys().hasAny(['premiumUnlockedAt'])
+            && request.resource.data.premiumUnlockedAt == resource.data.premiumUnlockedAt));
+    }
+
+    function goldPreserved() {
+      let prior = resource.data.keys().hasAny(['goldModeUnlocked']) && resource.data.goldModeUnlocked == true;
+      return request.resource.data.goldModeUnlocked == prior
+        && ((!resource.data.keys().hasAny(['goldModeUnlockedAt']) && !request.resource.data.keys().hasAny(['goldModeUnlockedAt']))
+          || (resource.data.keys().hasAny(['goldModeUnlockedAt'])
+            && request.resource.data.keys().hasAny(['goldModeUnlockedAt'])
+            && request.resource.data.goldModeUnlockedAt == resource.data.goldModeUnlockedAt));
+    }
+
+    function validEntitlementUpdate(userId) {
+      let premiumRedemption = /databases/$(database)/documents/users/$(userId)/redemptions/legacy-premium-test;
+      let goldRedemption = /databases/$(database)/documents/users/$(userId)/redemptions/gold-mode-test;
+      return (premiumPreserved() && goldPreserved())
+        || (goldPreserved()
+          && (!resource.data.keys().hasAny(['premiumUnlocked']) || resource.data.premiumUnlocked != true)
+          && request.resource.data.premiumUnlocked == true
+          && request.resource.data.premiumUnlockedAt == request.time
+          && existsAfter(premiumRedemption)
+          && getAfter(premiumRedemption).data.productId == 'premium-avatars')
+        || (premiumPreserved()
+          && (!resource.data.keys().hasAny(['goldModeUnlocked']) || resource.data.goldModeUnlocked != true)
+          && request.resource.data.goldModeUnlocked == true
+          && request.resource.data.goldModeUnlockedAt == request.time
+          && existsAfter(goldRedemption)
+          && getAfter(goldRedemption).data.productId == 'gold-mode');
+    }
+
+    function validTestRedemption(userId, redemptionId, redemption) {
+      return redemption.keys().hasOnly(['uid', 'redemptionId', 'productId', 'source', 'redeemedAt', 'updatedAt'])
+        && redemption.uid == userId
+        && redemption.redemptionId == redemptionId
+        && redemption.source == 'test-code'
+        && redemption.redeemedAt == request.time
+        && redemption.updatedAt == request.time
+        && ((redemptionId == 'gold-mode-test' && redemption.productId == 'gold-mode')
+          || (redemptionId == 'legacy-premium-test' && redemption.productId == 'premium-avatars'));
     }
 
     function validScore(gameId, userId) {
-      return request.auth != null
-        && request.auth.uid == userId
+      return isOwner(userId)
         && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey']
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'photoURL', 'avatarId', 'score', 'scoreSeason', 'updatedAt'])
         && request.resource.data.uid == userId
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 18
+        && validDisplayName(request.resource.data.name)
+        && request.resource.data.name == getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.name
+        && request.resource.data.photoURL == ''
         && validAccountAvatar(userId, request.resource.data.avatarId)
+        && request.resource.data.avatarId == getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.avatarId
         && request.resource.data.score is int
         && request.resource.data.scoreSeason == 2
         && request.resource.data.score >= 1
-        && request.resource.data.score <= 10000;
+        && request.resource.data.score <= 10000
+        && getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.highScores.keys().hasAny([gameId])
+        && getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.highScores[gameId] == request.resource.data.score
+        && request.resource.data.updatedAt == request.time;
     }
 
     function otherChatUser(chat) {
@@ -269,13 +459,17 @@ service cloud.firestore {
     }
 
     function validNewFriendRequest(requestId, friendship) {
-      return request.auth != null
+      return signedIn()
         && request.auth.uid == friendship.fromUid
         && friendship.status == 'pending'
         && friendship.createdAt == request.time
         && friendship.updatedAt == request.time
         && !friendship.keys().hasAny(['respondedAt'])
         && exists(/databases/$(database)/documents/publicProfiles/$(friendship.toUid))
+        && friendship.fromName == get(/databases/$(database)/documents/publicProfiles/$(friendship.fromUid)).data.name
+        && friendship.fromAvatar == get(/databases/$(database)/documents/publicProfiles/$(friendship.fromUid)).data.avatarId
+        && friendship.toName == get(/databases/$(database)/documents/publicProfiles/$(friendship.toUid)).data.name
+        && friendship.toAvatar == get(/databases/$(database)/documents/publicProfiles/$(friendship.toUid)).data.avatarId
         && validFriendRequestShape(requestId, friendship);
     }
 
@@ -284,12 +478,8 @@ service cloud.firestore {
         && friendship.fromUid is string
         && friendship.toUid is string
         && friendship.fromUid != friendship.toUid
-        && friendship.fromName is string
-        && friendship.fromName.size() >= 1
-        && friendship.fromName.size() <= 18
-        && friendship.toName is string
-        && friendship.toName.size() >= 1
-        && friendship.toName.size() <= 18
+        && validDisplayName(friendship.fromName)
+        && validDisplayName(friendship.toName)
         && validAccountAvatar(friendship.fromUid, friendship.fromAvatar)
         && validAccountAvatar(friendship.toUid, friendship.toAvatar)
         && friendship.status in ['pending', 'accepted', 'declined', 'cancelled']
@@ -300,14 +490,13 @@ service cloud.firestore {
     }
 
     function validNewDirectChat(chatId, chat) {
-      return request.auth != null
+      return signedIn()
         && request.auth.uid in chat.participants
         && validDirectChatShape(chatId, chat)
         && chat.lastSenderUid == request.auth.uid
         && chat.lastMessageAt == request.time
         && chat.updatedAt == request.time
-        && (exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(otherChatUser(chat)))
-          || exists(/databases/$(database)/documents/users/$(otherChatUser(chat))/friends/$(request.auth.uid)));
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(otherChatUser(chat)));
     }
 
     function validDirectChatShape(chatId, chat) {
@@ -317,33 +506,31 @@ service cloud.firestore {
         && chat.userA != chat.userB
         && chatId == chat.userA + '--' + chat.userB
         && chat.participants == [chat.userA, chat.userB]
-        && chat.userAName is string
-        && chat.userAName.size() >= 1
-        && chat.userAName.size() <= 18
-        && chat.userBName is string
-        && chat.userBName.size() >= 1
-        && chat.userBName.size() <= 18
-        && validAvatar(chat.userAAvatar)
-        && validAvatar(chat.userBAvatar)
+        && chat.userAName == get(/databases/$(database)/documents/publicProfiles/$(chat.userA)).data.name
+        && chat.userBName == get(/databases/$(database)/documents/publicProfiles/$(chat.userB)).data.name
+        && chat.userAAvatar == get(/databases/$(database)/documents/publicProfiles/$(chat.userA)).data.avatarId
+        && chat.userBAvatar == get(/databases/$(database)/documents/publicProfiles/$(chat.userB)).data.avatarId
         && chat.lastMessage is string
         && chat.lastMessage.size() >= 1
         && chat.lastMessage.size() <= 500
         && chat.lastSenderUid in chat.participants
         && chat.lastMessageAt is timestamp
         && chat.unreadBy is map
+        && chat.unreadBy.keys().hasOnly([chat.userA, chat.userB])
         && (!chat.keys().hasAny(['userAClearedAt']) || chat.userAClearedAt is timestamp)
         && (!chat.keys().hasAny(['userBClearedAt']) || chat.userBClearedAt is timestamp)
         && chat.updatedAt is timestamp;
     }
 
     function validNewInvite(inviteId, invite) {
-      return request.auth != null
+      return signedIn()
         && request.auth.uid == invite.fromUid
         && invite.status == 'pending'
         && invite.createdAt == request.time
         && invite.updatedAt == request.time
         && invite.expiresAt is timestamp
         && invite.expiresAt > request.time
+        && invite.expiresAt <= request.time + duration.value(24, 'h')
         && invite.keys().hasOnly(['fromUid', 'fromName', 'fromAvatar', 'toUid', 'toName', 'toAvatar', 'gameId', 'gameName', 'status', 'createdAt', 'updatedAt', 'expiresAt', 'roomCode'])
         && exists(/databases/$(database)/documents/users/$(request.auth.uid)/friends/$(invite.toUid))
         && (!invite.keys().hasAny(['roomCode'])
@@ -360,14 +547,10 @@ service cloud.firestore {
         && invite.fromUid is string
         && invite.toUid is string
         && invite.fromUid != invite.toUid
-        && invite.fromName is string
-        && invite.fromName.size() >= 1
-        && invite.fromName.size() <= 18
-        && invite.toName is string
-        && invite.toName.size() >= 1
-        && invite.toName.size() <= 18
-        && validAvatar(invite.fromAvatar)
-        && validAvatar(invite.toAvatar)
+        && invite.fromName == get(/databases/$(database)/documents/publicProfiles/$(invite.fromUid)).data.name
+        && invite.toName == get(/databases/$(database)/documents/publicProfiles/$(invite.toUid)).data.name
+        && invite.fromAvatar == get(/databases/$(database)/documents/publicProfiles/$(invite.fromUid)).data.avatarId
+        && invite.toAvatar == get(/databases/$(database)/documents/publicProfiles/$(invite.toUid)).data.avatarId
         && validInviteGame(invite.gameId, invite.gameName)
         && invite.status in ['pending', 'accepted', 'declined', 'cancelled']
         && invite.createdAt is timestamp
@@ -376,20 +559,20 @@ service cloud.firestore {
     }
 
     function validNewRoom(roomCode, room) {
-      return request.auth != null
+      return signedIn()
         && validRoomCode(roomCode)
         && room.code == roomCode
         && request.auth.uid == room.hostUid
-        && room.hostName is string
+        && validDisplayName(room.hostName)
         && room.hostName.size() >= 2
-        && room.hostName.size() <= 18
-        && validAvatar(room.hostAvatar)
+        && validRoomAvatar(room.hostUid, room.hostAvatar)
         && validInviteGame(room.gameId, room.gameName)
         && room.status == 'open'
         && room.createdAt == request.time
         && room.updatedAt == request.time
         && room.expiresAt is timestamp
         && room.expiresAt > request.time
+        && room.expiresAt <= request.time + duration.value(24, 'h')
         && room.keys().hasOnly(['code', 'gameId', 'gameName', 'hostUid', 'hostName', 'hostAvatar', 'status', 'createdAt', 'updatedAt', 'expiresAt']);
     }
 
@@ -398,112 +581,215 @@ service cloud.firestore {
     }
 
     function roomParticipant(roomCode) {
-      return request.auth != null
+      return signedIn()
         && exists(/databases/$(database)/documents/rooms/$(roomCode))
         && (get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid == request.auth.uid
           || get(/databases/$(database)/documents/rooms/$(roomCode)).data.guestUid == request.auth.uid);
     }
 
+    function roomHost(roomCode) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/rooms/$(roomCode))
+        && get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid == request.auth.uid;
+    }
+
     function validNumberState(roomCode, state) {
-      return state.gameId == 'number'
+      let room = get(/databases/$(database)/documents/rooms/$(roomCode)).data;
+      return state.keys().hasOnly(['gameId', 'roomCode', 'round', 'phase', 'keeperUid', 'keeperName', 'guesserUid', 'guesserName', 'guesses', 'pendingGuess', 'lastGuess', 'lastClue', 'scores', 'revealedSecrets', 'createdAt', 'updatedAt'])
+        && state.gameId == 'number'
         && state.roomCode == roomCode
         && state.round in [1, 2]
         && state.phase in ['setting', 'guessing', 'pending', 'round-result', 'match-result']
-        && state.keeperUid is string
-        && state.guesserUid is string
-        && state.keeperUid != state.guesserUid
-        && state.keeperName is string
-        && state.guesserName is string
+        && ((state.round == 1
+            && state.keeperUid == room.hostUid
+            && state.keeperName == room.hostName
+            && state.guesserUid == room.guestUid
+            && state.guesserName == room.guestName)
+          || (state.round == 2
+            && state.keeperUid == room.guestUid
+            && state.keeperName == room.guestName
+            && state.guesserUid == room.hostUid
+            && state.guesserName == room.hostName))
         && state.guesses is list
         && state.guesses.size() <= 7
+        && (state.pendingGuess == null || (state.pendingGuess is int && state.pendingGuess >= 1 && state.pendingGuess <= 100))
+        && (state.lastGuess == null || (state.lastGuess is int && state.lastGuess >= 1 && state.lastGuess <= 100))
         && state.scores is list
         && state.scores.size() == 2
+        && validRoundScore(state.scores[0])
+        && validRoundScore(state.scores[1])
         && state.revealedSecrets is list
         && state.revealedSecrets.size() == 2
-        && state.lastClue in ['none', 'higher', 'lower', 'correct'];
+        && validRevealedSecret(state.revealedSecrets[0])
+        && validRevealedSecret(state.revealedSecrets[1])
+        && state.lastClue in ['none', 'higher', 'lower', 'correct']
+        && state.createdAt is timestamp
+        && state.updatedAt == request.time;
+    }
+
+    function validNumberTransition(roomCode) {
+      let room = get(/databases/$(database)/documents/rooms/$(roomCode)).data;
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return (resource.data.phase == 'setting'
+          && request.auth.uid == resource.data.keeperUid
+          && request.resource.data.phase == 'guessing'
+          && request.resource.data.pendingGuess == null
+          && request.resource.data.lastGuess == null
+          && request.resource.data.lastClue == 'none'
+          && request.resource.data.guesses.size() == 0
+          && changed.hasOnly(['phase', 'pendingGuess', 'lastGuess', 'lastClue', 'guesses', 'updatedAt']))
+        || (resource.data.phase == 'guessing'
+          && request.auth.uid == resource.data.guesserUid
+          && request.resource.data.phase == 'pending'
+          && request.resource.data.pendingGuess is int
+          && changed.hasOnly(['phase', 'pendingGuess', 'updatedAt']))
+        || (resource.data.phase == 'pending'
+          && request.auth.uid == resource.data.keeperUid
+          && request.resource.data.phase in ['guessing', 'round-result', 'match-result']
+          && request.resource.data.pendingGuess == null
+          && changed.hasOnly(['phase', 'guesses', 'pendingGuess', 'lastGuess', 'lastClue', 'scores', 'revealedSecrets', 'updatedAt']))
+        || (resource.data.phase == 'round-result'
+          && resource.data.round == 1
+          && request.auth.uid == room.guestUid
+          && request.resource.data.round == 2
+          && request.resource.data.phase == 'setting'
+          && changed.hasOnly(['round', 'phase', 'keeperUid', 'keeperName', 'guesserUid', 'guesserName', 'guesses', 'pendingGuess', 'lastGuess', 'lastClue', 'updatedAt']))
+        || (resource.data.phase == 'match-result'
+          && request.auth.uid == room.hostUid
+          && request.resource.data.round == 1
+          && request.resource.data.phase == 'setting'
+          && request.resource.data.guesses.size() == 0
+          && request.resource.data.scores == [null, null]
+          && request.resource.data.revealedSecrets == [null, null]
+          && request.resource.data.createdAt == request.time);
     }
 
     function validOnlineGameState(roomCode, state) {
-      return state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey']
+      let room = get(/databases/$(database)/documents/rooms/$(roomCode)).data;
+      return state.keys().hasOnly(['gameId', 'roomCode', 'players', 'names', 'turnUid', 'phase', 'round', 'moves', 'scores', 'winnerUid', 'board', 'secret', 'guesses', 'target', 'objects', 'checks', 'deck', 'open', 'matched', 'choices', 'positions', 'faces', 'barricades', 'wallsLeft', 'fleets', 'shots', 'ready', 'lastShots', 'airEndsAt', 'createdAt', 'updatedAt'])
+        && state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey']
         && state.roomCode == roomCode
-        && state.gameId == get(/databases/$(database)/documents/rooms/$(roomCode)).data.gameId
-        && state.players is list
-        && state.players.size() == 2
-        && state.players[0] == get(/databases/$(database)/documents/rooms/$(roomCode)).data.hostUid
-        && state.players[1] == get(/databases/$(database)/documents/rooms/$(roomCode)).data.guestUid
-        && state.names is list
-        && state.names.size() == 2
+        && state.gameId == room.gameId
+        && state.players == [room.hostUid, room.guestUid]
+        && state.names == [room.hostName, room.guestName]
         && state.turnUid in state.players
         && state.phase in ['placing', 'playing', 'revealing', 'relocating', 'complete']
         && state.round is int
         && state.round >= 1
+        && state.round <= 100
         && state.moves is int
         && state.moves >= 0
+        && state.moves <= 10000
         && state.scores is list
         && state.scores.size() == 2
+        && state.scores[0] is int
+        && state.scores[1] is int
+        && state.scores[0] >= 0
+        && state.scores[1] >= 0
+        && state.scores[0] <= 100
+        && state.scores[1] <= 100
         && state.board is list
+        && state.board.size() <= 100
         && state.secret is list
+        && state.secret.size() <= 4
         && state.guesses is list
+        && state.guesses.size() <= 8
         && state.target is list
+        && state.target.size() <= 4
         && state.objects is list
+        && state.objects.size() <= 4
         && state.checks is list
+        && state.checks.size() <= 8
         && state.deck is list
+        && state.deck.size() <= 16
         && state.open is list
+        && state.open.size() <= 184
         && state.matched is list
-        && (state.gameId != 'dotsboxes' || (
-          state.board.size() == 40
-          && state.matched.size() == 16
-          && state.moves <= 40
-          && state.scores[0] is int
-          && state.scores[1] is int
-          && state.scores[0] >= 0
-          && state.scores[1] >= 0
-          && state.scores[0] + state.scores[1] <= 16
-        ))
-        && (state.gameId != 'airhockey' || (
-          state.board.size() == 2
-          && state.open.size() <= 184
-          && (!state.keys().hasAny(['airEndsAt']) || (state.airEndsAt is int && state.airEndsAt >= 0))
-          && state.scores[0] is int
-          && state.scores[1] is int
-          && state.scores[0] >= 0
-          && state.scores[1] >= 0
-          && state.scores[0] <= 5
-          && state.scores[1] <= 5
-        ))
+        && state.matched.size() <= 16
         && state.choices is list
+        && state.choices.size() <= 2
         && state.positions is list
         && state.positions.size() == 2
         && state.faces is list
         && state.faces.size() == 2
         && state.barricades is list
+        && state.barricades.size() <= 20
         && state.wallsLeft is list
         && state.wallsLeft.size() == 2
-        && (state.gameId != 'battleship' || (
-          state.fleets is list
-          && state.fleets.size() == 2
-          && state.fleets[0] is list
-          && state.fleets[1] is list
-          && state.fleets[0].size() <= 5
-          && state.fleets[1].size() <= 5
-          && state.shots is list
-          && state.shots.size() == 2
-          && state.shots[0] is list
-          && state.shots[1] is list
-          && state.shots[0].size() <= 100
-          && state.shots[1].size() <= 100
-          && state.ready is list
-          && state.ready.size() == 2
-          && state.ready[0] is bool
-          && state.ready[1] is bool
-          && state.lastShots is list
-          && state.lastShots.size() == 2
-          && state.lastShots[0] is int
-          && state.lastShots[1] is int
-        ))
+        && state.wallsLeft[0] is int
+        && state.wallsLeft[1] is int
+        && state.wallsLeft[0] >= 0
+        && state.wallsLeft[0] <= 10
+        && state.wallsLeft[1] >= 0
+        && state.wallsLeft[1] <= 10
+        && state.fleets is map
+        && state.fleets.keys().hasOnly(['p0', 'p1'])
+        && state.fleets.keys().hasAll(['p0', 'p1'])
+        && state.fleets.p0 is list
+        && state.fleets.p1 is list
+        && state.fleets.p0.size() <= 5
+        && state.fleets.p1.size() <= 5
+        && state.shots is map
+        && state.shots.keys().hasOnly(['p0', 'p1'])
+        && state.shots.keys().hasAll(['p0', 'p1'])
+        && state.shots.p0 is list
+        && state.shots.p1 is list
+        && state.shots.p0.size() <= 100
+        && state.shots.p1.size() <= 100
+        && state.ready is list
+        && state.ready.size() == 2
+        && state.ready[0] is bool
+        && state.ready[1] is bool
+        && state.lastShots is list
+        && state.lastShots.size() == 2
+        && state.lastShots[0] is int
+        && state.lastShots[1] is int
+        && state.airEndsAt is int
+        && state.airEndsAt >= 0
+        && validGameBoardShape(state)
         && state.winnerUid in ['', 'draw', state.players[0], state.players[1]]
         && state.createdAt is timestamp
-        && state.updatedAt is timestamp;
+        && state.updatedAt == request.time;
+    }
+
+    function validGameBoardShape(state) {
+      return (state.gameId != 'tictactoe' || state.board.size() == 9)
+        && (state.gameId != 'connect4' || state.board.size() == 42)
+        && (state.gameId != 'memory' || (state.deck.size() == 16 && state.open.size() <= 2 && state.matched.size() <= 16))
+        && (state.gameId != 'checkers' || (state.board.size() == 64 && state.open.size() <= 1))
+        && (state.gameId != 'dotsboxes' || (state.board.size() == 40 && state.matched.size() == 16 && state.open.size() <= 1 && state.moves <= 40 && state.scores[0] + state.scores[1] <= 16))
+        && (state.gameId != 'airhockey' || (state.board.size() == 2 && state.scores[0] <= 3 && state.scores[1] <= 3));
+    }
+
+    function validOnlineGameTransition(roomCode) {
+      let room = get(/databases/$(database)/documents/rooms/$(roomCode)).data;
+      let immutable = request.resource.data.gameId == resource.data.gameId
+        && request.resource.data.players == resource.data.players
+        && request.resource.data.names == resource.data.names;
+      let authorizedMove = resource.data.phase != 'complete' && (
+        (resource.data.gameId == 'rps' && ((resource.data.phase == 'playing' && request.auth.uid in resource.data.players) || (resource.data.phase == 'revealing' && request.auth.uid == room.hostUid)))
+        || (resource.data.gameId == 'battleship' && resource.data.phase == 'placing' && request.auth.uid in resource.data.players)
+        || (resource.data.gameId == 'airhockey' && request.auth.uid in resource.data.players)
+        || (resource.data.gameId == 'memory' && resource.data.phase == 'revealing' && request.auth.uid == room.hostUid)
+        || request.auth.uid == resource.data.turnUid);
+      let hostReset = resource.data.phase == 'complete'
+        && request.auth.uid == room.hostUid
+        && request.resource.data.round == 1
+        && request.resource.data.moves == 0
+        && request.resource.data.scores == [0, 0]
+        && request.resource.data.winnerUid == ''
+        && request.resource.data.turnUid == room.hostUid
+        && request.resource.data.createdAt == request.time;
+      return (immutable && request.resource.data.createdAt == resource.data.createdAt && authorizedMove)
+        || hostReset;
+    }
+
+    function validRoundScore(score) {
+      return score == null || (score is int && score >= 1 && score <= 8);
+    }
+
+    function validRevealedSecret(secret) {
+      return secret == null || (secret is int && secret >= 1 && secret <= 100);
     }
 
     function validLiveAirHockeyPuck(puck) {
@@ -567,8 +853,22 @@ service cloud.firestore {
     function validAccountAvatar(userId, avatarId) {
       return validAvatar(avatarId)
         && (!isPremiumAvatar(avatarId)
-          || (exists(/databases/$(database)/documents/users/$(userId))
-            && get(/databases/$(database)/documents/users/$(userId)).data.premiumUnlocked == true));
+          || (existsAfter(/databases/$(database)/documents/users/$(userId))
+            && getAfter(/databases/$(database)/documents/users/$(userId)).data.premiumUnlocked == true)
+          || activeServerEntitlement(userId, 'premium-avatars'));
+    }
+
+    function activeServerEntitlement(userId, productId) {
+      let entitlementPath = /databases/$(database)/documents/users/$(userId)/entitlements/$(productId);
+      return exists(entitlementPath)
+        && get(entitlementPath).data.status == 'active'
+        && (!get(entitlementPath).data.keys().hasAny(['expiresAt'])
+          || get(entitlementPath).data.expiresAt > request.time);
+    }
+
+    function validRoomAvatar(userId, avatarId) {
+      return validAvatar(avatarId)
+        && (!isPremiumAvatar(avatarId) || validAccountAvatar(userId, avatarId));
     }
   }
 }
