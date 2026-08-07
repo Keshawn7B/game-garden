@@ -3466,6 +3466,7 @@ export default function Home() {
   const addFriend = useCallback(async (rawCode: string) => {
     if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before adding friends.";
     const code = rawCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{8}$/.test(code)) return "Enter a valid eight-character friend code.";
     if (code === friendCodeFor(firebaseUser.uid)) return "That is your own friend code.";
     try {
       const matches = await getDocs(query(collection(db, "publicProfiles"), where("friendCode", "==", code), limit(1)));
@@ -3474,11 +3475,27 @@ export default function Home() {
       const friendUid = String(profile.uid || matches.docs[0].id);
       const friendName = typeof profile.name === "string" ? profile.name : "Player";
       const friendAvatar: AvatarId = isAvatarId(profile.avatarId) ? profile.avatarId : "play";
-      if ((await getDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid))).exists()) return `${friendName} is already your friend.`;
-      const reverse = await getDoc(doc(db, "friendRequests", friendRequestId(friendUid, firebaseUser.uid)));
+      const forwardRef = doc(db, "friendRequests", friendRequestId(firebaseUser.uid, friendUid));
+      const reverseRef = doc(db, "friendRequests", friendRequestId(friendUid, firebaseUser.uid));
+      const [currentFriend, forward, reverse] = await Promise.all([
+        getDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid)),
+        getDoc(forwardRef),
+        getDoc(reverseRef),
+      ]);
+      if (currentFriend.exists()) return `${friendName} is already your friend.`;
+      if (forward.exists() && forward.data().status === "pending") return `Your request to ${friendName} is already waiting for approval.`;
       if (reverse.exists() && reverse.data().status === "pending") return `${friendName} already sent you a request. Accept it above.`;
-      const requestId = friendRequestId(firebaseUser.uid, friendUid);
-      await setDoc(doc(db, "friendRequests", requestId), {
+
+      const acceptedRequests = [forward, reverse].filter((request) => request.exists() && request.data().status === "accepted");
+      if (acceptedRequests.length) {
+        const cleanup = writeBatch(db);
+        cleanup.delete(doc(db, "users", firebaseUser.uid, "friends", friendUid));
+        cleanup.delete(doc(db, "users", friendUid, "friends", firebaseUser.uid));
+        await cleanup.commit();
+        await Promise.all(acceptedRequests.map((request) => deleteDoc(request.ref)));
+      }
+
+      await setDoc(forwardRef, {
         fromUid: firebaseUser.uid,
         fromName: (profileName.trim() || firebaseUser.displayName || "Player One").slice(0, 18),
         fromAvatar: avatarId,
@@ -3489,10 +3506,16 @@ export default function Home() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      return `Friend request sent to ${friendName}.`;
+      return `Friend request sent to ${friendName}. They need to accept it.`;
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Could not add that friend.");
-      return "Could not add that friend.";
+      const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+      const message = code === "permission-denied"
+        ? "The friend request was blocked by account permissions. Refresh and try once more."
+        : code === "unavailable"
+          ? "Game Garden could not reach the friend service. Check your connection and try again."
+          : "Could not send that friend request. Try again.";
+      setAuthError(message);
+      return message;
     }
   }, [avatarId, firebaseUser, profileName]);
 
@@ -3504,7 +3527,8 @@ export default function Home() {
           getDoc(doc(db, "friendRequests", friendRequestId(firebaseUser.uid, friendUid))),
           getDoc(doc(db, "friendRequests", friendRequestId(friendUid, firebaseUser.uid))),
         ]);
-        const accepted = (forward.exists() && forward.data().status === "accepted") || (reverse.exists() && reverse.data().status === "accepted");
+        const acceptedRequests = [forward, reverse].filter((request) => request.exists() && request.data().status === "accepted");
+        const accepted = acceptedRequests.length > 0;
         if (!accepted) {
           await deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid));
           return;
@@ -3513,6 +3537,7 @@ export default function Home() {
         batch.delete(doc(db, "users", firebaseUser.uid, "friends", friendUid));
         batch.delete(doc(db, "users", friendUid, "friends", firebaseUser.uid));
         await batch.commit();
+        await Promise.all(acceptedRequests.map((request) => deleteDoc(request.ref)));
       } catch {
         setAuthError("Could not remove that friend.");
       }
