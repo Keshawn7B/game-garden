@@ -432,6 +432,9 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(firestoreRules, /allow read: if request\.auth != null\s*&& request\.auth\.uid in \[resource\.data\.fromUid, resource\.data\.toUid\]/);
   assert.match(source, /friendProfiles/);
   assert.match(source, /selectedFriend\.highScores/);
+  assert.match(styles, /\.friend-profile-dialog\{[^}]*touch-action:pan-y/);
+  assert.match(styles, /\.friend-profile-close\{position:sticky/);
+  assert.match(source, /!avatarPickerOpen && !selectedFriend/);
   assert.match(source, /friendRequests/);
   assert.match(source, /onRespondFriendRequest/);
   assert.match(source, /type InviteStatus = "pending" \| "accepted" \| "declined" \| "cancelled"/);

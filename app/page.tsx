@@ -2648,11 +2648,11 @@ function AppHome({
   }, [profileMenuOpen]);
 
   useEffect(() => {
-    if (!avatarPickerOpen) return;
+    if (!avatarPickerOpen && !selectedFriend) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
-  }, [avatarPickerOpen]);
+  }, [avatarPickerOpen, selectedFriend]);
 
   useEffect(() => {
     if (!profileSaved) return;
