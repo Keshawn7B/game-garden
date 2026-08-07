@@ -436,6 +436,11 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(firestoreRules, /allow read: if request\.auth != null\s*&& request\.auth\.uid in \[resource\.data\.fromUid, resource\.data\.toUid\]/);
   assert.match(source, /friendProfiles/);
   assert.match(source, /selectedFriend\.highScores/);
+  assert.doesNotMatch(source, /className="friend-remove-button"/);
+  assert.match(source, /className="friend-profile-remove"/);
+  assert.match(source, /className="friend-remove-confirm-backdrop"/);
+  assert.match(source, /role="alertdialog"/);
+  assert.match(source, /await onRemoveFriend\(selectedFriend\.uid\)/);
   assert.match(styles, /\.friend-profile-dialog\{[^}]*touch-action:pan-y/);
   assert.match(styles, /\.friend-profile-close\{position:sticky/);
   assert.match(source, /!avatarPickerOpen && !selectedFriend/);

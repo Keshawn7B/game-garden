@@ -2578,7 +2578,7 @@ function AppHome({
   friendCode: string;
   friendLinkCode: string;
   onAddFriend: (code: string) => Promise<string>;
-  onRemoveFriend: (uid: string) => void;
+  onRemoveFriend: (uid: string) => Promise<boolean>;
   incomingFriendRequests: FriendRequest[];
   outgoingFriendRequests: FriendRequest[];
   onRespondFriendRequest: (request: FriendRequest, response: "accepted" | "declined") => Promise<void>;
@@ -2610,6 +2610,8 @@ function AppHome({
   const [inviteMessage, setInviteMessage] = useState("");
   const [friendSearch, setFriendSearch] = useState("");
   const [selectedFriend, setSelectedFriend] = useState<FriendEntry | null>(null);
+  const [friendRemoveConfirmOpen, setFriendRemoveConfirmOpen] = useState(false);
+  const [friendRemoveBusy, setFriendRemoveBusy] = useState(false);
   const [premiumCode, setPremiumCode] = useState("");
   const [premiumMessage, setPremiumMessage] = useState("");
   const [premiumBusy, setPremiumBusy] = useState(false);
@@ -2672,6 +2674,19 @@ function AppHome({
       if (await onProfileSave()) setProfileSaved(true);
     } finally {
       setProfileSaveBusy(false);
+    }
+  };
+
+  const confirmFriendRemoval = async () => {
+    if (!selectedFriend) return;
+    setFriendRemoveBusy(true);
+    try {
+      if (await onRemoveFriend(selectedFriend.uid)) {
+        setFriendRemoveConfirmOpen(false);
+        setSelectedFriend(null);
+      }
+    } finally {
+      setFriendRemoveBusy(false);
     }
   };
 
@@ -2979,12 +2994,12 @@ function AppHome({
                 {inviteMessage && <p className="invite-message" role="status">{inviteMessage}</p>}
                 {displayedFriends.length ? displayedFriends.map((friend) => (
                   <article className={`friend-banner ${friend.isOnline ? "is-online" : ""}`} key={friend.uid}>
-                    <button className="friend-banner-profile" onClick={() => setSelectedFriend(friend)} aria-label={`Open ${friend.name}'s profile details`}>
+                    <button className="friend-banner-profile" onClick={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(friend); }} aria-label={`Open ${friend.name}'s profile details`}>
                       <span className="friend-avatar-wrap"><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" /><i className={friend.isOnline ? "online" : ""} /></span>
                       <span className="friend-identity"><strong>{friend.name}</strong><small className={friend.isOnline ? "online" : ""}>{friendPresenceLabel(friend)}</small></span>
                       <span className="friend-banner-view"><small>VIEW PROFILE</small><b>›</b></span>
                     </button>
-                    <div className="friend-banner-actions"><button className="friend-chat-button" onClick={() => onOpenChat(friend)}><span>話</span> MESSAGE</button><button className="friend-invite-button" onClick={() => { setInviteTarget((current) => current === friend.uid ? null : friend.uid); setInviteMessage(""); }}>PLAY</button><button className="friend-remove-button" onClick={() => onRemoveFriend(friend.uid)} aria-label={`Remove ${friend.name}`}>×</button></div>
+                    <div className="friend-banner-actions"><button className="friend-chat-button" onClick={() => onOpenChat(friend)}><span>話</span> MESSAGE</button><button className="friend-invite-button" onClick={() => { setInviteTarget((current) => current === friend.uid ? null : friend.uid); setInviteMessage(""); }}>PLAY</button></div>
                     {inviteTarget === friend.uid && (
                       <div className="friend-invite-picker">
                         <span>CHOOSE A GAME</span>
@@ -3047,7 +3062,8 @@ function AppHome({
                   {friendMessage && <p className="friend-add-message" role="status">{friendMessage}</p>}
                 </div>
               </div>
-              {selectedFriend && <div className="friend-profile-backdrop" onMouseDown={() => setSelectedFriend(null)}><section className="friend-profile-dialog" role="dialog" aria-modal="true" aria-label={`${selectedFriend.name}'s profile`} onMouseDown={(event) => event.stopPropagation()}><button className="friend-profile-close" onClick={() => setSelectedFriend(null)} aria-label="Close friend profile">×</button><AvatarGlyph avatarId={selectedFriend.avatarId} className="friend-profile-avatar" /><small>FRIEND PROFILE</small><h2>{selectedFriend.name}</h2><p className={selectedFriend.isOnline ? "online" : ""}>{friendPresenceLabel(selectedFriend)}</p><div className="friend-profile-actions"><button className="primary-button" onClick={() => { onOpenChat(selectedFriend); setSelectedFriend(null); }}>Message</button><button className="secondary-button" onClick={() => { setInviteTarget(selectedFriend.uid); setSelectedFriend(null); }}>Invite to play</button></div><div className="friend-profile-scores">{scoredGames.map((game) => <div key={game.id}><span>{game.name}</span><b>{formatScore(game.scoreGame, selectedFriend.highScores?.[game.scoreGame])}</b></div>)}</div></section></div>}
+              {selectedFriend && <div className="friend-profile-backdrop" onMouseDown={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(null); }}><section className="friend-profile-dialog" role="dialog" aria-modal="true" aria-label={`${selectedFriend.name}'s profile`} onMouseDown={(event) => event.stopPropagation()}><button className="friend-profile-close" onClick={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(null); }} aria-label="Close friend profile">×</button><AvatarGlyph avatarId={selectedFriend.avatarId} className="friend-profile-avatar" /><small>FRIEND PROFILE</small><h2>{selectedFriend.name}</h2><p className={selectedFriend.isOnline ? "online" : ""}>{friendPresenceLabel(selectedFriend)}</p><div className="friend-profile-actions"><button className="primary-button" onClick={() => { onOpenChat(selectedFriend); setSelectedFriend(null); }}>Message</button><button className="secondary-button" onClick={() => { setInviteTarget(selectedFriend.uid); setSelectedFriend(null); }}>Invite to play</button><button className="friend-profile-remove" onClick={() => setFriendRemoveConfirmOpen(true)}>Remove friend</button></div><div className="friend-profile-scores">{scoredGames.map((game) => <div key={game.id}><span>{game.name}</span><b>{formatScore(game.scoreGame, selectedFriend.highScores?.[game.scoreGame])}</b></div>)}</div></section></div>}
+              {selectedFriend && friendRemoveConfirmOpen && <div className="friend-remove-confirm-backdrop" onMouseDown={() => setFriendRemoveConfirmOpen(false)}><section className="friend-remove-confirm" role="alertdialog" aria-modal="true" aria-labelledby="remove-friend-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">友</span><small>FRIENDSHIP</small><h2 id="remove-friend-title">Remove {selectedFriend.name}?</h2><p>They will disappear from your friends list. You can send a new request later.</p><div><button onClick={() => setFriendRemoveConfirmOpen(false)} disabled={friendRemoveBusy}>Cancel</button><button className="confirm-remove-friend" onClick={() => void confirmFriendRemoval()} disabled={friendRemoveBusy}>{friendRemoveBusy ? "Removing…" : "Remove friend"}</button></div></section></div>}
             </>}
           </section>
         )}
@@ -3558,10 +3574,9 @@ export default function Home() {
     }
   }, [avatarId, firebaseUser, profileName]);
 
-  const removeFriend = useCallback((friendUid: string) => {
-    if (!firebaseUser || firebaseUser.isAnonymous) return;
-    void (async () => {
-      try {
+  const removeFriend = useCallback(async (friendUid: string) => {
+    if (!firebaseUser || firebaseUser.isAnonymous) return false;
+    try {
         const [sentRequests, receivedRequests] = await Promise.all([
           getDocs(query(collection(db, "friendRequests"), where("fromUid", "==", firebaseUser.uid))),
           getDocs(query(collection(db, "friendRequests"), where("toUid", "==", firebaseUser.uid))),
@@ -3572,17 +3587,18 @@ export default function Home() {
         const accepted = acceptedRequests.length > 0;
         if (!accepted) {
           await deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid));
-          return;
+          return true;
         }
         const batch = writeBatch(db);
         batch.delete(doc(db, "users", firebaseUser.uid, "friends", friendUid));
         batch.delete(doc(db, "users", friendUid, "friends", firebaseUser.uid));
         await batch.commit();
         await Promise.all(acceptedRequests.map((request) => deleteDoc(request!.ref)));
-      } catch {
-        setAuthError("Could not remove that friend.");
-      }
-    })();
+        return true;
+    } catch {
+      setAuthError("Could not remove that friend.");
+      return false;
+    }
   }, [firebaseUser]);
 
   const respondFriendRequest = useCallback(async (request: FriendRequest, response: "accepted" | "declined") => {
