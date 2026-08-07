@@ -2618,6 +2618,7 @@ function AppHome({
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [profileSaveBusy, setProfileSaveBusy] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
@@ -2655,11 +2656,11 @@ function AppHome({
   }, [profileMenuOpen]);
 
   useEffect(() => {
-    if (!avatarPickerOpen && !selectedFriend) return;
+    if (!avatarPickerOpen && !selectedFriend && !signOutConfirmOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
-  }, [avatarPickerOpen, selectedFriend]);
+  }, [avatarPickerOpen, selectedFriend, signOutConfirmOpen]);
 
   useEffect(() => {
     if (!profileSaved) return;
@@ -2921,10 +2922,11 @@ function AppHome({
               {firebaseUser?.email && <small className="profile-email">{firebaseUser.email}</small>}
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <div className="profile-actions">
-                <button className="primary-button" onClick={() => void saveProfileAndConfirm()} disabled={profileSaveBusy}>{profileSaveBusy ? "Saving…" : "Save profile"}</button><button className="text-button" onClick={onSignOut}>Sign out</button>
+                <button className="primary-button" onClick={() => void saveProfileAndConfirm()} disabled={profileSaveBusy}>{profileSaveBusy ? "Saving…" : "Save profile"}</button><button className="text-button" onClick={() => setSignOutConfirmOpen(true)}>Sign out</button>
               </div>
             </div>
             {profileSaved && <div className="profile-saved-backdrop" onMouseDown={() => setProfileSaved(false)}><section className="profile-saved-popup" role="dialog" aria-modal="true" aria-labelledby="profile-saved-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">✓</span><small>PROFILE UPDATED</small><h2 id="profile-saved-title">Saved</h2><button autoFocus onClick={() => setProfileSaved(false)}>Done</button></section></div>}
+            {signOutConfirmOpen && <div className="signout-confirm-backdrop" onMouseDown={() => setSignOutConfirmOpen(false)}><section className="signout-confirm" role="alertdialog" aria-modal="true" aria-labelledby="signout-confirm-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">出</span><small>GAME GARDEN ACCOUNT</small><h2 id="signout-confirm-title">Sign out?</h2><p>You will need to sign in again to see this account’s friends, scores, and profile.</p><div><button autoFocus onClick={() => setSignOutConfirmOpen(false)}>Cancel</button><button className="confirm-signout" onClick={() => { setSignOutConfirmOpen(false); onSignOut(); }}>Sign out</button></div></section></div>}
             <details className="profile-stats-menu">
               <summary><span><small>PLAYER DATA · プレイヤーデータ</small><strong>Stats &amp; high scores</strong></span><span className="stats-summary-counts"><b>{completedGames}</b> BESTS <b>{GAMES.length}</b> GAMES</span><i>⌄</i></summary>
               <div className="profile-stats-dropdown">

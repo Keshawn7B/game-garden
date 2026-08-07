@@ -439,6 +439,10 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(source, /className="friend-remove-button"/);
   assert.match(source, /className="friend-profile-remove"/);
   assert.match(source, /className="friend-remove-confirm-backdrop"/);
+  assert.match(source, /className="signout-confirm-backdrop"/);
+  assert.match(source, /id="signout-confirm-title"/);
+  assert.match(source, /setSignOutConfirmOpen\(true\)/);
+  assert.match(styles, /\.signout-confirm button\.confirm-signout/);
   assert.match(source, /role="alertdialog"/);
   assert.match(source, /await onRemoveFriend\(selectedFriend\.uid\)/);
   assert.match(styles, /\.friend-profile-dialog\{[^}]*touch-action:pan-y/);
