@@ -2917,7 +2917,7 @@ function AppHome({
             <div className="app-title"><div><p>SOCIAL</p><h1>Friends <span>友達</span></h1></div><strong>{friends.length}<small>FRIENDS</small></strong></div>
             {!firebaseUser || firebaseUser.isAnonymous ? (
               <div className="friends-signin-card">
-                <AvatarGlyph avatarId="pink-blossom" className="friend-hero-avatar" />
+                <span className="friends-signin-emblem" aria-hidden="true"><i>友</i><b>+</b><small>CONNECT</small></span>
                 <h2>Sign in to add friends.</h2>
                 <button className="primary-button" onClick={() => onTabChange("profile")}>Open profile</button>
               </div>

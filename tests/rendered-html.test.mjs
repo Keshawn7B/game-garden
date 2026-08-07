@@ -267,6 +267,8 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /className="friend-connect-code"/);
   assert.match(source, /className="friend-connect-add"/);
   assert.match(source, /className="friends-account-banner"/);
+  assert.match(source, /className="friends-signin-emblem"/);
+  assert.doesNotMatch(source, /avatarId="pink-blossom" className="friend-hero-avatar"/);
   assert.match(source, /className="friends-account-avatar"><PlayerAvatar avatarId=\{avatarId\}/);
   assert.match(source, /className=\{`friend-banner/);
   assert.match(source, /Search friends by name/);
@@ -364,6 +366,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.app-shell[^}]*min-height:100svh/);
   assert.match(styles, /\.friend-list/);
   assert.match(styles, /\.friends-account-banner/);
+  assert.match(styles, /:root\[data-theme="sakura"\] \.friends-signin-card h2\{color:#e4316b!important\}/);
+  assert.match(styles, /\.friends-signin-emblem/);
   assert.match(styles, /\.friends-account-banner,\.friend-list\.friend-list-primary\{box-shadow:none\}/);
   assert.match(styles, /\.friend-banner-profile/);
   assert.match(styles, /\.friend-score-grid/);
