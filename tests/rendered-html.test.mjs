@@ -321,6 +321,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /event\.key === "Escape"/);
   assert.match(source, /id="game-invites"/);
   assert.match(styles, /\.profile-dropdown\s*\{[^}]*position:absolute;[^}]*z-index:60;/);
+  assert.match(styles, /\.profile-dropdown\s*\{[^}]*box-shadow:none;/);
   assert.match(styles, /\.header-signin-button/);
   assert.match(styles, /\.profile-signin-only/);
   assert.match(styles, /\.rank-signin-card/);
