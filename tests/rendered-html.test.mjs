@@ -69,6 +69,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /Search games by name or type/);
   assert.match(source, /displayedGames\.map/);
   assert.match(styles, /\.game-search-icon::before/);
+  assert.match(styles, /\.game-search-icon::after[^}]*left:13px;top:13px/);
   assert.match(source, /VERSUS<small>2 PLAYERS/);
   assert.match(source, /function TurnBanner/);
   assert.match(source, /function GameLobby/);
