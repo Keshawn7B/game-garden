@@ -2623,6 +2623,7 @@ function AppHome({
   const liveOutgoing = outgoingInvites.filter(inviteIsLive);
   const readyInvites = [...incomingInvites, ...outgoingInvites].filter((invite, index, all) => invite.status === "accepted" && all.findIndex((item) => item.id === invite.id) === index);
   const currentHeader = HEADER_META[activeTab];
+  const signedIn = Boolean(firebaseUser && !firebaseUser.isAnonymous);
   const onlineFriends = friends.filter((friend) => friend.isOnline);
   const displayedFriends = [...friends]
     .filter((friend) => friend.name.toLowerCase().includes(friendSearch.trim().toLowerCase()))
@@ -2746,11 +2747,11 @@ function AppHome({
         </button>
         <div className="header-context" aria-label={`${currentHeader.label} section`}><span>{currentHeader.glyph}</span><div><small>{currentHeader.japanese}</small><strong>{currentHeader.label}</strong></div></div>
         <div className="header-actions">
-          {firebaseUser && <span className="header-online"><i />{firebaseUser.isAnonymous ? "GUEST" : "ONLINE"}</span>}
+          {signedIn && <span className="header-online"><i />ONLINE</span>}
           {socialNoticeCount > 0 && <button className="header-invites" onClick={() => onTabChange("friends")} aria-label={`${socialNoticeCount} pending social alerts`}><b>招</b><span>{socialNoticeCount}</span></button>}
           <button className="theme-toggle" onClick={onThemeToggle} aria-label="Change color mode" aria-pressed={theme === "sakura"}><span>MODE</span></button>
           <HeaderChatButton />
-          <div className="profile-menu-wrap" ref={profileMenuRef}>
+          {signedIn ? <div className="profile-menu-wrap" ref={profileMenuRef}>
             <button className="header-profile" onClick={() => setProfileMenuOpen((open) => !open)} aria-label="Open account menu" aria-haspopup="menu" aria-expanded={profileMenuOpen}>
               <PlayerAvatar small avatarId={avatarId} />
             </button>
@@ -2760,7 +2761,7 @@ function AppHome({
               <button role="menuitem" onClick={() => chooseProfileMenu("friends")}><b>友</b><span>Friends</span></button>
               <button role="menuitem" onClick={() => chooseProfileMenu("friends", true)}><b>招</b><span>Invites</span>{socialNoticeCount > 0 && <em>{socialNoticeCount}</em>}</button>
             </div>}
-          </div>
+          </div> : <button className="header-signin-button" onClick={() => onTabChange("profile")}><b>人</b><span>SIGN IN</span></button>}
         </div>
       </header>
 
@@ -2794,11 +2795,11 @@ function AppHome({
         {activeTab === "leaderboard" && (
           <section className="app-panel rank-panel">
             <div className="app-title"><div><p>GLOBAL</p><h1>Leaderboard <span>ランキング</span></h1></div></div>
-            <div className="player-rank-card">
+            {signedIn ? <div className="player-rank-card">
               <span className="rank-number">YOU</span><PlayerAvatar avatarId={avatarId} />
-              <div><strong>{profileName || "Player One"}</strong><small>{firebaseUser ? "CLOUD PROFILE" : "GUEST PLAYER"}</small></div>
+              <div><strong>{profileName || "Player One"}</strong><small>CLOUD PROFILE</small></div>
               <b>{completedGames}<small>BESTS</small></b>
-            </div>
+            </div> : <button className="rank-signin-card" onClick={() => onTabChange("profile")}><b>人</b><span><small>YOUR RANK IS PRIVATE</small><strong>Sign in to view your scores</strong></span><em>→</em></button>}
             <div className="rank-game-tabs" aria-label="Choose leaderboard game">
               {scoredGames.map((game) => <button key={game.id} className={rankGame === game.scoreGame ? "active" : ""} onClick={() => setRankGame(game.scoreGame)}>{game.name}</button>)}
             </div>
@@ -2812,7 +2813,7 @@ function AppHome({
                 </div>
               )) : <p className="empty-ranks">No scores yet. Set the first one.</p>}
             </div>
-            <div className="score-list">
+            {signedIn && <div className="score-list">
               <div className="score-list-heading"><span>Your high scores</span><span>ハイスコア</span></div>
               {scoredGames.map((game) => (
                 <div className="score-row" key={game.id}>
@@ -2821,12 +2822,13 @@ function AppHome({
                   <b className={highScores[game.scoreGame] == null ? "no-score" : ""}>{formatScore(game.scoreGame, highScores[game.scoreGame])}</b>
                 </div>
               ))}
-            </div>
+            </div>}
           </section>
         )}
 
         {activeTab === "profile" && (
           <section className="app-panel profile-panel">
+            {signedIn ? <>
             <div className="profile-card">
               <button className="profile-avatar-button" onClick={() => setAvatarPickerOpen(true)} aria-label="Change profile picture">
                 <PlayerAvatar avatarId={avatarId} />
@@ -2869,18 +2871,7 @@ function AppHome({
               <span className="local-badge">{firebaseUser && !firebaseUser.isAnonymous ? "CLOUD PROFILE" : "GUEST PROFILE"}</span>
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <div className="profile-actions">
-                {firebaseUser && !firebaseUser.isAnonymous ? <><button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button></> : <>
-                  <div className="email-auth-fields">
-                    <input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="Email address" aria-label="Email address" autoComplete="email" />
-                    <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="Password" aria-label="Password" autoComplete="current-password" minLength={6} />
-                  </div>
-                  <div className="email-auth-actions">
-                    <button className="primary-button" onClick={() => onEmailSignIn(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 6}>Sign in</button>
-                    <button className="secondary-button" onClick={() => onEmailCreate(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 6}>Create account</button>
-                  </div>
-                  <span className="auth-divider">OR</span>
-                  <button className="primary-button google-button" onClick={onSignIn} disabled={authLoading}>{authLoading ? "Connecting…" : "Continue with Google"}</button>
-                </>}
+                <button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button>
               </div>
             </div>
             <details className="profile-stats-menu">
@@ -2892,6 +2883,25 @@ function AppHome({
                 {resetMessage && <p className="reset-scores-message" role="status">{resetMessage}</p>}
               </div>
             </details>
+            </> : <div className="profile-signin-only">
+              <span className="friends-signin-emblem profile-signin-emblem" aria-hidden="true"><i>人</i><b>→</b><small>LOGIN</small></span>
+              <small>GAME GARDEN ACCOUNT · アカウント</small>
+              <h1>Sign in to your profile.</h1>
+              <p>Your avatar, name, rank, and scores stay hidden until you sign in.</p>
+              {authError && <p className="auth-error" role="alert">{authError}</p>}
+              <div className="profile-signin-form">
+                <div className="email-auth-fields">
+                  <input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="Email address" aria-label="Email address" autoComplete="email" />
+                  <input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="Password" aria-label="Password" autoComplete="current-password" minLength={6} />
+                </div>
+                <div className="email-auth-actions">
+                  <button className="primary-button" onClick={() => onEmailSignIn(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 6}>Sign in</button>
+                  <button className="secondary-button" onClick={() => onEmailCreate(authEmail, authPassword)} disabled={authLoading || !authEmail || authPassword.length < 6}>Create account</button>
+                </div>
+                <span className="auth-divider">OR</span>
+                <button className="primary-button google-button" onClick={onSignIn} disabled={authLoading}>{authLoading ? "Connecting…" : "Continue with Google"}</button>
+              </div>
+            </div>}
           </section>
         )}
 

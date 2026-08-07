@@ -295,6 +295,11 @@ test("routes every game through a start menu", async () => {
   assert.equal((avatarOptions.match(/glyph: "/g) ?? []).length, 2);
   assert.match(source, /avatar\.glyph && <b className="avatar-mark">/);
   assert.match(source, /className="header-profile"/);
+  assert.match(source, /const signedIn = Boolean\(firebaseUser && !firebaseUser\.isAnonymous\)/);
+  assert.match(source, /className="header-signin-button"/);
+  assert.match(source, /className="profile-signin-only"/);
+  assert.match(source, /signedIn && <div className="score-list">/);
+  assert.match(source, /signedIn \? <div className="player-rank-card">/);
   assert.match(source, /className="profile-dropdown" role="menu"/);
   assert.match(source, />Profile<\/span>/);
   assert.match(source, />Leaderboard<\/span>/);
@@ -304,6 +309,9 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /event\.key === "Escape"/);
   assert.match(source, /id="game-invites"/);
   assert.match(styles, /\.profile-dropdown\s*\{[^}]*position:absolute;[^}]*z-index:60;/);
+  assert.match(styles, /\.header-signin-button/);
+  assert.match(styles, /\.profile-signin-only/);
+  assert.match(styles, /\.rank-signin-card/);
   assert.match(styles, /@keyframes profileMenuIn/);
   assert.match(source, /<PlayerAvatar small avatarId=\{avatarId\} \/>/);
   assert.doesNotMatch(styles, /\.header-profile>i/);
