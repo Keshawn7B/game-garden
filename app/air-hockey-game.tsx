@@ -177,8 +177,8 @@ export function AirHockeyRink({ difficulty, round, scores, secondsLeft, disabled
   };
 
   return <div className={`air-rink-controller ${controlLocked ? "is-control-locked" : ""}`}>
-    {controlLocked ? <AirHockeyFullscreenScoreboard scores={scores} names={labels} secondsLeft={secondsLeft} onClose={() => changeLock(false)} /> : <button className="air-control-lock" onClick={() => changeLock(true)} aria-pressed={false}><i>⌖</i><span>LOCK RINK<small>MOVE WHILE THE PUCK STAYS LIVE</small></span></button>}
-    <div className={`air-hockey-rink live-rink ${disabled ? "is-disabled" : ""} ${controlLocked ? "controls-active" : ""}`} ref={rinkRef} role="application" aria-label={controlLocked ? "Live air hockey rink. Move your mallet to hit and defend." : "Live air hockey rink. Lock the rink to play."} onPointerDown={beginMove} onPointerMove={moveMallet} onPointerUp={endMove} onPointerCancel={endMove}>
+    {controlLocked && <AirHockeyFullscreenScoreboard scores={scores} names={labels} secondsLeft={secondsLeft} onClose={() => changeLock(false)} />}
+    <div className={`air-hockey-rink live-rink ${disabled ? "is-disabled" : ""} ${controlLocked ? "controls-active" : ""}`} ref={rinkRef} role="application" aria-label={controlLocked ? "Live air hockey rink. Move your mallet to hit and defend." : "Air hockey rink. Press Play to begin."} onPointerDown={beginMove} onPointerMove={moveMallet} onPointerUp={endMove} onPointerCancel={endMove}>
       <div className="air-hockey-goal goal-top"><span /></div><div className="air-hockey-goal goal-bottom"><span /></div>
       <i className="air-rink-line center-line" /><i className="air-rink-circle" />
       <div className="air-player-label label-top active"><i />{labels[1]}</div>
@@ -187,7 +187,7 @@ export function AirHockeyRink({ difficulty, round, scores, secondsLeft, disabled
       <span ref={playerMalletElementRef} className="air-mallet mallet-bottom is-controlled" style={{ left: `${MALLET_STARTS[0].x}%`, top: `${MALLET_STARTS[0].y / 1.5}%` }} />
       <span ref={puckElementRef} className="air-puck" style={{ left: `${AIR_HOCKEY_LIVE_START.x}%`, top: `${AIR_HOCKEY_LIVE_START.y / 1.5}%` }} aria-label="Air hockey puck"><i /></span>
       {controlLocked && !disabled && <div className="air-live-badge"><i /> PUCK LIVE · CPU ACTIVE</div>}
-      {!controlLocked && <div className="air-lock-overlay"><b>⌖</b><span>LOCK RINK TO PLAY LIVE</span></div>}
+      {!controlLocked && <div className="air-lock-overlay"><button className="air-rink-play" onClick={() => changeLock(true)} aria-label="Play Air Hockey"><i aria-hidden="true">▶</i><span>PLAY<small>START LIVE AIR HOCKEY</small></span></button></div>}
       {controlLocked && disabled && result && <AirHockeyMatchOverlay result={result} onPlayAgain={onPlayAgain} onExit={() => changeLock(false)} />}
     </div>
   </div>;

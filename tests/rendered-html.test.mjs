@@ -205,7 +205,9 @@ test("routes every game through a start menu", async () => {
   assert.match(airHockeySource, /moveAirHockeyCpu/);
   assert.match(airHockeySource, /requestAnimationFrame/);
   assert.doesNotMatch(airHockeySource, /setDisplayPuck|setDisplayMallets/);
-  assert.match(airHockeySource, /LOCK RINK/);
+  assert.match(airHockeySource, /air-rink-play/);
+  assert.match(airHockeySource, /START LIVE AIR HOCKEY/);
+  assert.doesNotMatch(airHockeySource, /LOCK RINK/);
   assert.match(airHockeySource, /AirHockeyFullscreenScoreboard/);
   assert.match(airHockeySource, /AirHockeyMatchOverlay/);
   assert.match(airHockeySource, /PLAY AGAIN/);
@@ -220,6 +222,9 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(onlineSource, /Each shot synchronizes/);
   assert.match(onlineAirHockeySource, /requestAnimationFrame/);
   assert.doesNotMatch(onlineAirHockeySource, /setDisplayPuck|setDisplayMallets/);
+  assert.match(onlineAirHockeySource, /air-rink-play/);
+  assert.match(onlineAirHockeySource, /START LIVE MATCH/);
+  assert.doesNotMatch(onlineAirHockeySource, /LOCK RINK/);
   assert.match(onlineAirHockeySource, /BOTH PLAYERS LIVE/);
   assert.match(onlineAirHockeySource, /AirHockeyFullscreenScoreboard/);
   assert.match(onlineAirHockeySource, /AirHockeyMatchOverlay/);
