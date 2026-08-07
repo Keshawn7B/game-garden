@@ -2879,7 +2879,7 @@ function AppHome({
         {authError && activeTab !== "profile" && <p className="app-error-banner" role="alert"><b>!</b><span>{authError}</span></p>}
         {activeTab === "games" && (
           <section className="app-panel games-panel">
-            <div className="app-title"><div><p>PLAY</p><h1>Games <span>ゲーム</span></h1></div><strong>{GAMES.length}<small>GAMES</small></strong></div>
+            <div className="app-title"><div><p>PLAY</p><h1>Games <span>ゲーム</span></h1></div></div>
             <div className="game-search-bar">
               <span className="game-search-icon" aria-hidden="true" />
               <input type="search" value={gameSearch} onChange={(event) => setGameSearch(event.target.value)} placeholder="Search games" aria-label="Search games by name or type" />
