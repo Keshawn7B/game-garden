@@ -2564,7 +2564,7 @@ function AppHome({
   avatarId: AvatarId;
   onProfileNameChange: (name: string) => void;
   onAvatarChange: (avatarId: AvatarId) => void;
-  onProfileSave: () => void;
+  onProfileSave: () => Promise<boolean>;
   onResetScores: () => Promise<string>;
   firebaseUser: User | null;
   authLoading: boolean;
@@ -2613,6 +2613,8 @@ function AppHome({
   const [premiumMessage, setPremiumMessage] = useState("");
   const [premiumBusy, setPremiumBusy] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [profileSaveBusy, setProfileSaveBusy] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
@@ -2651,6 +2653,22 @@ function AppHome({
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, [avatarPickerOpen]);
+
+  useEffect(() => {
+    if (!profileSaved) return;
+    const timer = window.setTimeout(() => setProfileSaved(false), 2200);
+    return () => window.clearTimeout(timer);
+  }, [profileSaved]);
+
+  const saveProfileAndConfirm = async () => {
+    setProfileSaveBusy(true);
+    setProfileSaved(false);
+    try {
+      if (await onProfileSave()) setProfileSaved(true);
+    } finally {
+      setProfileSaveBusy(false);
+    }
+  };
 
   const chooseProfileMenu = (tab: AppTab, showInvites = false) => {
     setProfileMenuOpen(false);
@@ -2876,9 +2894,10 @@ function AppHome({
               {firebaseUser?.email && <small className="profile-email">{firebaseUser.email}</small>}
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <div className="profile-actions">
-                <button className="primary-button" onClick={onProfileSave}>Save profile</button><button className="text-button" onClick={onSignOut}>Sign out</button>
+                <button className="primary-button" onClick={() => void saveProfileAndConfirm()} disabled={profileSaveBusy}>{profileSaveBusy ? "Saving…" : "Save profile"}</button><button className="text-button" onClick={onSignOut}>Sign out</button>
               </div>
             </div>
+            {profileSaved && <div className="profile-saved-backdrop" onMouseDown={() => setProfileSaved(false)}><section className="profile-saved-popup" role="dialog" aria-modal="true" aria-labelledby="profile-saved-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">✓</span><small>PROFILE UPDATED</small><h2 id="profile-saved-title">Saved</h2><button autoFocus onClick={() => setProfileSaved(false)}>Done</button></section></div>}
             <details className="profile-stats-menu">
               <summary><span><small>PLAYER DATA · プレイヤーデータ</small><strong>Stats &amp; high scores</strong></span><span className="stats-summary-counts"><b>{completedGames}</b> BESTS <b>{GAMES.length}</b> GAMES</span><i>⌄</i></summary>
               <div className="profile-stats-dropdown">
@@ -3344,7 +3363,7 @@ export default function Home() {
   }, []);
 
   const saveProfile = useCallback(async () => {
-    if (!firebaseUser || firebaseUser.isAnonymous) return;
+    if (!firebaseUser || firebaseUser.isAnonymous) return false;
     const displayName = profileName.trim() || firebaseUser.displayName || "Player One";
     const savedAvatar = isPremiumAvatar(avatarId) && !premiumUnlocked ? "play" : avatarId;
     setProfileName(displayName);
@@ -3378,8 +3397,10 @@ export default function Home() {
       window.localStorage.setItem(playerStorageKey(firebaseUser, "name"), displayName);
       setAvatarId(savedAvatar);
       window.localStorage.setItem(playerStorageKey(firebaseUser, "avatar"), savedAvatar);
+      return true;
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Could not save the profile.");
+      return false;
     }
   }, [firebaseUser, highScores, profileName, avatarId, premiumUnlocked]);
 
