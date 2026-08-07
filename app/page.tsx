@@ -2889,7 +2889,7 @@ function AppHome({
             <div className="game-app-grid">
               {displayedGames.map((game) => (
                 <button className="game-app-card" key={game.id} onClick={() => onSelect(game.id)}>
-                  <span className={`game-cover art-${game.id}`}><i>{game.number}</i></span>
+                  <span className={`game-cover art-${game.id}`} />
                   <span className="game-card-copy">
                     <strong>{game.name}</strong>
                     <small>{game.japanese}</small>

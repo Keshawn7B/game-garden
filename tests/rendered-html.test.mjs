@@ -333,6 +333,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /<p>GLOBAL<\/p><h1>Leaderboard/);
   assert.doesNotMatch(styles, /meducktion|deducktion/i);
   assert.match(styles, /game-covers\.png/);
+  assert.doesNotMatch(source, /<i>\{game\.number\}<\/i>/);
   assert.match(styles, /game-connect4\.png/);
   assert.match(styles, /\.bottom-nav/);
   assert.match(styles, /\.theme-toggle[^}]*box-shadow:none/);
