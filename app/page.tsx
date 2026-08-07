@@ -3025,11 +3025,11 @@ function AppHome({
               <h2>Items coming soon.</h2>
               <p>Check back later.</p>
             </div>
-            <div className={`store-code-card store-code-minimal ${premiumUnlocked ? "unlocked" : ""}`}>
-              <div className="store-code-label"><small>CODE</small><span>入力</span></div>
+            <section className={`store-code-card store-code-minimal store-redeem-card ${premiumUnlocked ? "unlocked" : ""}`} aria-label="Redeem a code">
+              <div className="store-code-label"><small>REDEEM CODE</small><span>コード入力</span></div>
               <div className="store-code-form"><input value={premiumCode} maxLength={12} onChange={(event) => setPremiumCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && premiumCode) void submitPremiumCode(); }} placeholder="ENTER CODE" aria-label="Enter a store code" autoComplete="off" /><button onClick={() => void submitPremiumCode()} disabled={!premiumCode || premiumBusy} aria-label="Submit code">{premiumBusy ? "…" : "→"}</button></div>
               {premiumMessage && <p className="store-code-message" role="status">{premiumMessage}</p>}
-            </div>
+            </section>
           </section>
         )}
 
