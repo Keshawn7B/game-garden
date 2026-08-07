@@ -324,6 +324,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /premium-blossom\.jpg/);
   assert.match(styles, /premium-dual-swords-v2\.jpg/);
   assert.match(styles, /\.avatar-premium/);
+  assert.doesNotMatch(styles, /\.avatar-premium::after|♛/);
   assert.match(styles, /\.premium-avatar-picker/);
   assert.match(source, /className="profile-avatar-button"/);
   assert.match(source, /className="profile-avatar-label"/);
