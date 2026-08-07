@@ -3476,23 +3476,24 @@ export default function Home() {
       const friendName = typeof profile.name === "string" ? profile.name : "Player";
       const friendAvatar: AvatarId = isAvatarId(profile.avatarId) ? profile.avatarId : "play";
       const forwardRef = doc(db, "friendRequests", friendRequestId(firebaseUser.uid, friendUid));
-      const reverseRef = doc(db, "friendRequests", friendRequestId(friendUid, firebaseUser.uid));
-      const [currentFriend, forward, reverse] = await Promise.all([
+      const [currentFriend, sentRequests, receivedRequests] = await Promise.all([
         getDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid)),
-        getDoc(forwardRef),
-        getDoc(reverseRef),
+        getDocs(query(collection(db, "friendRequests"), where("fromUid", "==", firebaseUser.uid))),
+        getDocs(query(collection(db, "friendRequests"), where("toUid", "==", firebaseUser.uid))),
       ]);
+      const forward = sentRequests.docs.find((request) => request.data().toUid === friendUid);
+      const reverse = receivedRequests.docs.find((request) => request.data().fromUid === friendUid);
       if (currentFriend.exists()) return `${friendName} is already your friend.`;
-      if (forward.exists() && forward.data().status === "pending") return `Your request to ${friendName} is already waiting for approval.`;
-      if (reverse.exists() && reverse.data().status === "pending") return `${friendName} already sent you a request. Accept it above.`;
+      if (forward?.data().status === "pending") return `Your request to ${friendName} is already waiting for approval.`;
+      if (reverse?.data().status === "pending") return `${friendName} already sent you a request. Accept it above.`;
 
-      const acceptedRequests = [forward, reverse].filter((request) => request.exists() && request.data().status === "accepted");
+      const acceptedRequests = [forward, reverse].filter((request) => request?.data().status === "accepted");
       if (acceptedRequests.length) {
         const cleanup = writeBatch(db);
         cleanup.delete(doc(db, "users", firebaseUser.uid, "friends", friendUid));
         cleanup.delete(doc(db, "users", friendUid, "friends", firebaseUser.uid));
         await cleanup.commit();
-        await Promise.all(acceptedRequests.map((request) => deleteDoc(request.ref)));
+        await Promise.all(acceptedRequests.map((request) => deleteDoc(request!.ref)));
       }
 
       await setDoc(forwardRef, {
@@ -3523,11 +3524,13 @@ export default function Home() {
     if (!firebaseUser || firebaseUser.isAnonymous) return;
     void (async () => {
       try {
-        const [forward, reverse] = await Promise.all([
-          getDoc(doc(db, "friendRequests", friendRequestId(firebaseUser.uid, friendUid))),
-          getDoc(doc(db, "friendRequests", friendRequestId(friendUid, firebaseUser.uid))),
+        const [sentRequests, receivedRequests] = await Promise.all([
+          getDocs(query(collection(db, "friendRequests"), where("fromUid", "==", firebaseUser.uid))),
+          getDocs(query(collection(db, "friendRequests"), where("toUid", "==", firebaseUser.uid))),
         ]);
-        const acceptedRequests = [forward, reverse].filter((request) => request.exists() && request.data().status === "accepted");
+        const forward = sentRequests.docs.find((request) => request.data().toUid === friendUid);
+        const reverse = receivedRequests.docs.find((request) => request.data().fromUid === friendUid);
+        const acceptedRequests = [forward, reverse].filter((request) => request?.data().status === "accepted");
         const accepted = acceptedRequests.length > 0;
         if (!accepted) {
           await deleteDoc(doc(db, "users", firebaseUser.uid, "friends", friendUid));
@@ -3537,7 +3540,7 @@ export default function Home() {
         batch.delete(doc(db, "users", firebaseUser.uid, "friends", friendUid));
         batch.delete(doc(db, "users", friendUid, "friends", firebaseUser.uid));
         await batch.commit();
-        await Promise.all(acceptedRequests.map((request) => deleteDoc(request.ref)));
+        await Promise.all(acceptedRequests.map((request) => deleteDoc(request!.ref)));
       } catch {
         setAuthError("Could not remove that friend.");
       }

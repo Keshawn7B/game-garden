@@ -263,7 +263,8 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /friendCodeFor/);
   assert.match(source, /friendCodeFromUrl/);
   assert.match(source, /already waiting for approval/);
-  assert.match(source, /acceptedRequests\.map\(\(request\) => deleteDoc\(request\.ref\)\)/);
+  assert.match(source, /sentRequests\.docs\.find/);
+  assert.match(source, /acceptedRequests\.map\(\(request\) => deleteDoc\(request!\.ref\)\)/);
   assert.match(source, /Share friend link/);
   assert.match(source, /className="friend-connect-card"/);
   assert.match(source, /className="friend-connect-code"/);
