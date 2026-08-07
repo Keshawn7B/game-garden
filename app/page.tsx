@@ -2622,6 +2622,7 @@ function AppHome({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const activeRanks = leaderboards[rankGame] ?? [];
   const liveIncoming = incomingInvites.filter(inviteIsLive);
@@ -2656,11 +2657,11 @@ function AppHome({
   }, [profileMenuOpen]);
 
   useEffect(() => {
-    if (!avatarPickerOpen && !selectedFriend && !signOutConfirmOpen) return;
+    if (!avatarPickerOpen && !selectedFriend && !signOutConfirmOpen && !resetConfirmOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
-  }, [avatarPickerOpen, selectedFriend, signOutConfirmOpen]);
+  }, [avatarPickerOpen, selectedFriend, signOutConfirmOpen, resetConfirmOpen]);
 
   useEffect(() => {
     if (!profileSaved) return;
@@ -2688,6 +2689,17 @@ function AppHome({
       }
     } finally {
       setFriendRemoveBusy(false);
+    }
+  };
+
+  const confirmScoreReset = async () => {
+    setResetBusy(true);
+    setResetMessage("");
+    try {
+      setResetMessage(await onResetScores());
+      setResetConfirmOpen(false);
+    } finally {
+      setResetBusy(false);
     }
   };
 
@@ -2927,12 +2939,13 @@ function AppHome({
             </div>
             {profileSaved && <div className="profile-saved-backdrop" onMouseDown={() => setProfileSaved(false)}><section className="profile-saved-popup" role="dialog" aria-modal="true" aria-labelledby="profile-saved-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">✓</span><small>PROFILE UPDATED</small><h2 id="profile-saved-title">Saved</h2><button autoFocus onClick={() => setProfileSaved(false)}>Done</button></section></div>}
             {signOutConfirmOpen && <div className="signout-confirm-backdrop" onMouseDown={() => setSignOutConfirmOpen(false)}><section className="signout-confirm" role="alertdialog" aria-modal="true" aria-labelledby="signout-confirm-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">出</span><small>GAME GARDEN ACCOUNT</small><h2 id="signout-confirm-title">Sign out?</h2><p>You will need to sign in again to see this account’s friends, scores, and profile.</p><div><button autoFocus onClick={() => setSignOutConfirmOpen(false)}>Cancel</button><button className="confirm-signout" onClick={() => { setSignOutConfirmOpen(false); onSignOut(); }}>Sign out</button></div></section></div>}
+            {resetConfirmOpen && <div className="reset-confirm-backdrop" onMouseDown={() => { if (!resetBusy) setResetConfirmOpen(false); }}><section className="reset-confirm" role="alertdialog" aria-modal="true" aria-labelledby="reset-confirm-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">零</span><small>HIGH SCORES · ハイスコア</small><h2 id="reset-confirm-title">Reset all scores?</h2><p>This permanently clears all {completedGames} of this account’s saved high scores. This cannot be undone.</p><div><button autoFocus onClick={() => setResetConfirmOpen(false)} disabled={resetBusy}>Cancel</button><button className="confirm-reset-scores" onClick={() => void confirmScoreReset()} disabled={resetBusy}>{resetBusy ? "Resetting…" : "Reset scores"}</button></div></section></div>}
             <details className="profile-stats-menu">
               <summary><span><small>PLAYER DATA · プレイヤーデータ</small><strong>Stats &amp; high scores</strong></span><span className="stats-summary-counts"><b>{completedGames}</b> BESTS <b>{GAMES.length}</b> GAMES</span><i>⌄</i></summary>
               <div className="profile-stats-dropdown">
                 <div className="profile-stats-compact"><div><strong>{completedGames}</strong><span>HIGH SCORES</span></div><div><strong>{GAMES.length}</strong><span>GAMES</span></div></div>
                 <div className="profile-score-dropdown"><h2>Your best <span>自己ベスト</span></h2>{scoredGames.map((game) => <p key={game.id}><span>{game.name}</span><strong>{formatScore(game.scoreGame, highScores[game.scoreGame])}</strong></p>)}</div>
-                <button className="reset-scores-button" disabled={resetBusy || completedGames === 0} onClick={() => { if (!window.confirm("Reset every high score for this profile? This cannot be undone.")) return; setResetBusy(true); setResetMessage(""); void onResetScores().then(setResetMessage).finally(() => setResetBusy(false)); }}>{resetBusy ? "Resetting…" : "Reset this profile's scores"}</button>
+                <button className="reset-scores-button" disabled={resetBusy || completedGames === 0} onClick={() => setResetConfirmOpen(true)}>{resetBusy ? "Resetting…" : "Reset this profile's scores"}</button>
                 {resetMessage && <p className="reset-scores-message" role="status">{resetMessage}</p>}
               </div>
             </details>
