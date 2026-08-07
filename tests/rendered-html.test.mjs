@@ -364,6 +364,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.app-shell[^}]*min-height:100svh/);
   assert.match(styles, /\.friend-list/);
   assert.match(styles, /\.friends-account-banner/);
+  assert.match(styles, /\.friends-account-banner,\.friend-list\.friend-list-primary\{box-shadow:none\}/);
   assert.match(styles, /\.friend-banner-profile/);
   assert.match(styles, /\.friend-score-grid/);
   assert.match(source, /function FriendsChat/);
