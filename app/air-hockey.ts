@@ -8,6 +8,18 @@ export const AIR_HOCKEY_MATCH_SECONDS = 120;
 export const AIR_HOCKEY_CENTER: AirHockeyPoint = { x: 50, y: 75 };
 export const AIR_HOCKEY_LIVE_START: AirHockeyBody = { ...AIR_HOCKEY_CENTER, vx: 16, vy: 28 };
 
+const AIR_HOCKEY_PUCK_SPEED_CAPS: Record<AirHockeyDifficulty, number> = {
+  easy: 60,
+  normal: 78,
+  hard: 98,
+};
+
+const AIR_HOCKEY_CPU_SETTINGS: Record<AirHockeyDifficulty, { speed: number; predictionSeconds: number; homeTracking: number }> = {
+  easy: { speed: 29, predictionSeconds: 0.4, homeTracking: 0.16 },
+  normal: { speed: 45, predictionSeconds: 0.75, homeTracking: 0.28 },
+  hard: { speed: 62, predictionSeconds: 1.1, homeTracking: 0.4 },
+};
+
 export type AirHockeyShot = {
   trajectory: AirHockeyPoint[];
   final: AirHockeyPoint;
@@ -18,12 +30,37 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
-export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint, AirHockeyPoint], malletVelocities: [AirHockeyPoint, AirHockeyPoint], elapsedMs: number) {
+export function airHockeyPuckSpeedCap(difficulty: AirHockeyDifficulty) {
+  return AIR_HOCKEY_PUCK_SPEED_CAPS[difficulty];
+}
+
+function limitAirHockeyVelocity(vx: number, vy: number, maximum: number) {
+  const speed = Math.hypot(vx, vy);
+  if (speed <= maximum || speed < 0.001) return { vx, vy };
+  return { vx: vx / speed * maximum, vy: vy / speed * maximum };
+}
+
+function reflectAirHockeyX(value: number) {
+  const span = 90;
+  const cycle = span * 2;
+  const offset = ((value - 5) % cycle + cycle) % cycle;
+  return offset <= span ? 5 + offset : 95 - (offset - span);
+}
+
+function predictAirHockeyX(puck: AirHockeyBody, targetY: number, predictionSeconds: number) {
+  const crossingSeconds = Math.abs(puck.vy) < 0.5 ? predictionSeconds * 0.35 : (targetY - puck.y) / puck.vy;
+  const travelSeconds = clamp(crossingSeconds, 0, predictionSeconds);
+  return clamp(reflectAirHockeyX(puck.x + puck.vx * travelSeconds), 12, 88);
+}
+
+export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint, AirHockeyPoint], malletVelocities: [AirHockeyPoint, AirHockeyPoint], elapsedMs: number, difficulty: AirHockeyDifficulty = "normal") {
   const elapsed = clamp(elapsedMs, 0, 34) / 1000;
-  let x = puck.x + puck.vx * elapsed;
-  let y = puck.y + puck.vy * elapsed;
-  let vx = puck.vx;
-  let vy = puck.vy;
+  const maximumPuckSpeed = airHockeyPuckSpeedCap(difficulty);
+  const boundedPuckVelocity = limitAirHockeyVelocity(puck.vx, puck.vy, maximumPuckSpeed);
+  let vx = boundedPuckVelocity.vx;
+  let vy = boundedPuckVelocity.vy;
+  let x = puck.x + vx * elapsed;
+  let y = puck.y + vy * elapsed;
   let goal: AirHockeyPlayer | null = null;
 
   if (x < 5) { x = 5 + (5 - x); vx = Math.abs(vx) * 0.94; }
@@ -52,12 +89,18 @@ export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint,
       x = mallet.x + nx * 12.6;
       y = mallet.y + ny * 12.6;
       const malletSpeed = Math.hypot(malletVelocity.x, malletVelocity.y);
-      const impact = clamp(Math.max(25, closingSpeed * 1.45 + malletSpeed * 0.5), 25, 82);
-      vx = clamp(nx * impact + malletVelocity.x * 0.32, -82, 82);
-      vy = clamp(ny * impact + malletVelocity.y * 0.32, -82, 82);
+      const incomingSpeed = Math.hypot(vx, vy);
+      const impact = clamp(22 + incomingSpeed * 0.32 + Math.max(0, closingSpeed) * 0.58 + malletSpeed * 0.22, 24, maximumPuckSpeed);
+      const hitVelocity = limitAirHockeyVelocity(
+        nx * impact + malletVelocity.x * 0.22,
+        ny * impact + malletVelocity.y * 0.22,
+        maximumPuckSpeed,
+      );
+      vx = hitVelocity.vx;
+      vy = hitVelocity.vy;
     }
 
-    const drag = Math.pow(0.992, elapsed * 60);
+    const drag = Math.pow(0.996, elapsed * 60);
     vx *= drag;
     vy *= drag;
     const speed = Math.hypot(vx, vy);
@@ -65,27 +108,48 @@ export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint,
       if (speed < 0.1) { vx = 5.2; vy = 7.4; }
       else { vx = vx / speed * 9; vy = vy / speed * 9; }
     }
-
+    const cappedVelocity = limitAirHockeyVelocity(vx, vy, maximumPuckSpeed);
+    vx = cappedVelocity.vx;
+    vy = cappedVelocity.vy;
   }
 
   return { puck: goal == null ? { x, y, vx, vy } : { ...AIR_HOCKEY_LIVE_START }, goal };
 }
 
 export function moveAirHockeyCpu(mallet: AirHockeyPoint, puck: AirHockeyBody, difficulty: AirHockeyDifficulty, elapsedMs: number) {
+  const settings = AIR_HOCKEY_CPU_SETTINGS[difficulty];
   const home = { x: 50, y: 27 };
   const puckInCorner = puck.y < 36 && (puck.x < 20 || puck.x > 80);
-  const puckApproaching = puck.vy < 8;
-  const defending = puck.y < 82 && puckApproaching && !puckInCorner;
-  const target = defending
-    ? { x: clamp(puck.x, 12, 88), y: clamp(puck.y - 11, 13, 66) }
-    : home;
-  const speed = difficulty === "easy" ? 19 : difficulty === "normal" ? 27 : 35;
+  const puckOnCpuSide = puck.y <= 74;
+  const puckApproaching = puck.vy < -2;
+  let target: AirHockeyPoint;
+  if (puckInCorner) {
+    target = { x: puck.x < 50 ? 30 : 70, y: 38 };
+  } else if (puckOnCpuSide) {
+    target = {
+      x: predictAirHockeyX(puck, clamp(puck.y - 11, 15, 61), settings.predictionSeconds * 0.45),
+      y: clamp(puck.y - 11, 14, 66),
+    };
+  } else if (puckApproaching) {
+    target = {
+      x: predictAirHockeyX(puck, 34, settings.predictionSeconds),
+      y: 31,
+    };
+  } else {
+    target = {
+      x: clamp(home.x + (puck.x - home.x) * settings.homeTracking, 37, 63),
+      y: home.y,
+    };
+  }
   const dx = target.x - mallet.x;
   const dy = target.y - mallet.y;
   const distance = Math.hypot(dx, dy);
   if (distance < 0.01) return { ...mallet };
-  const movement = Math.min(distance, speed * clamp(elapsedMs, 0, 34) / 1000);
-  return { x: mallet.x + dx / distance * movement, y: mallet.y + dy / distance * movement };
+  const movement = Math.min(distance, settings.speed * clamp(elapsedMs, 0, 50) / 1000);
+  return {
+    x: clamp(mallet.x + dx / distance * movement, 8, 92),
+    y: clamp(mallet.y + dy / distance * movement, 12, 67),
+  };
 }
 
 export function airHockeyVelocityFromMallet(previous: AirHockeyPoint, current: AirHockeyPoint, elapsedMs = 16) {

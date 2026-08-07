@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AIR_HOCKEY_CENTER, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, airHockeyVelocityFromMallet, chooseAirHockeyCpuVelocity, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, moveAirHockeyCpu, simulateAirHockeyShot, stepAirHockeyLive } from "../app/air-hockey.ts";
+import { AIR_HOCKEY_CENTER, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, airHockeyPuckSpeedCap, airHockeyVelocityFromMallet, chooseAirHockeyCpuVelocity, decodeAirHockeyTrajectory, encodeAirHockeyTrajectory, moveAirHockeyCpu, simulateAirHockeyShot, stepAirHockeyLive } from "../app/air-hockey.ts";
 
 test("air hockey uses a two-minute first-to-three match", () => {
   assert.equal(AIR_HOCKEY_MATCH_SECONDS, 120);
@@ -70,11 +70,54 @@ test("the live puck keeps moving instead of ending a turn", () => {
   assert.ok(Math.hypot(result.puck.vx, result.puck.vy) >= 8.9);
 });
 
-test("normal CPU tracks the puck at a moderate capped speed", () => {
+test("normal CPU anticipates an incoming puck before it reaches the CPU half", () => {
   const start = { x: 50, y: 27 };
-  const next = moveAirHockeyCpu(start, { x: 75, y: 40, vx: 0, vy: -20 }, "normal", 1000);
-  assert.ok(Math.hypot(next.x - start.x, next.y - start.y) <= 1);
+  const next = moveAirHockeyCpu(start, { x: 75, y: 105, vx: 0, vy: -35 }, "normal", 34);
   assert.ok(next.x > start.x);
+});
+
+test("CPU actively attacks a loose puck instead of waiting at center", () => {
+  const start = { x: 50, y: 27 };
+  const next = moveAirHockeyCpu(start, { x: 72, y: 58, vx: 4, vy: 8 }, "normal", 34);
+  assert.ok(next.x > start.x);
+  assert.ok(next.y > start.y);
+});
+
+test("harder CPU levels move more quickly", () => {
+  const start = { x: 50, y: 27 };
+  const puck = { x: 82, y: 55, vx: 0, vy: -20 };
+  const easy = moveAirHockeyCpu(start, puck, "easy", 34);
+  const normal = moveAirHockeyCpu(start, puck, "normal", 34);
+  const hard = moveAirHockeyCpu(start, puck, "hard", 34);
+  const distance = (point) => Math.hypot(point.x - start.x, point.y - start.y);
+  assert.ok(distance(easy) < distance(normal));
+  assert.ok(distance(normal) < distance(hard));
+});
+
+test("puck speed caps increase with difficulty", () => {
+  assert.ok(airHockeyPuckSpeedCap("easy") < airHockeyPuckSpeedCap("normal"));
+  assert.ok(airHockeyPuckSpeedCap("normal") < airHockeyPuckSpeedCap("hard"));
+});
+
+test("a faster mallet swing creates a faster puck", () => {
+  const puck = { x: 50, y: 76, vx: 0, vy: 0 };
+  const mallets = [{ x: 50, y: 85 }, { x: 50, y: 25 }];
+  const slow = stepAirHockeyLive(puck, mallets, [{ x: 0, y: -20 }, { x: 0, y: 0 }], 16, "hard");
+  const fast = stepAirHockeyLive(puck, mallets, [{ x: 0, y: -120 }, { x: 0, y: 0 }], 16, "hard");
+  assert.ok(Math.hypot(fast.puck.vx, fast.puck.vy) > Math.hypot(slow.puck.vx, slow.puck.vy));
+});
+
+test("every difficulty enforces its puck speed cap", () => {
+  for (const difficulty of ["easy", "normal", "hard"]) {
+    const result = stepAirHockeyLive(
+      { x: 50, y: 75, vx: 300, vy: -300 },
+      [{ x: 50, y: 125 }, { x: 50, y: 25 }],
+      [{ x: 0, y: 0 }, { x: 0, y: 0 }],
+      16,
+      difficulty,
+    );
+    assert.ok(Math.hypot(result.puck.vx, result.puck.vy) <= airHockeyPuckSpeedCap(difficulty) + 0.001);
+  }
 });
 
 test("the puck travels through the full corner until reaching a real rail", () => {

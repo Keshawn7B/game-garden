@@ -113,11 +113,11 @@ export function AirHockeyRink({ difficulty, round, scores, secondsLeft, disabled
 
       const previousCpu = malletsRef.current[1];
       const cpu = moveAirHockeyCpu(previousCpu, puckRef.current, difficulty, elapsed);
-      const seconds = Math.max(0.008, Math.min(0.034, elapsed / 1000));
+      const seconds = Math.max(0.008, Math.min(0.05, elapsed / 1000));
       velocitiesRef.current[1] = { x: (cpu.x - previousCpu.x) / seconds, y: (cpu.y - previousCpu.y) / seconds };
       malletsRef.current[1] = cpu;
 
-      const stepped = stepAirHockeyLive(puckRef.current, malletsRef.current, velocitiesRef.current, elapsed);
+      const stepped = stepAirHockeyLive(puckRef.current, malletsRef.current, velocitiesRef.current, elapsed, difficulty);
       puckRef.current = stepped.puck;
       placeAirHockeyElement(puckElementRef.current, stepped.puck);
       placeAirHockeyElement(cpuMalletElementRef.current, cpu);
