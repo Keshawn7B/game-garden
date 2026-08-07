@@ -95,8 +95,27 @@ test("harder CPU levels move more quickly", () => {
 });
 
 test("puck speed caps increase with difficulty", () => {
-  assert.ok(airHockeyPuckSpeedCap("easy") < airHockeyPuckSpeedCap("normal"));
-  assert.ok(airHockeyPuckSpeedCap("normal") < airHockeyPuckSpeedCap("hard"));
+  assert.deepEqual(
+    [airHockeyPuckSpeedCap("easy"), airHockeyPuckSpeedCap("normal"), airHockeyPuckSpeedCap("hard")],
+    [72, 96, 124],
+  );
+});
+
+test("left, center, and right mallet impacts create different shot angles", () => {
+  const strike = (puckX) => stepAirHockeyLive(
+    { x: puckX, y: 76, vx: 0, vy: 0 },
+    [{ x: 50, y: 85 }, { x: 50, y: 25 }],
+    [{ x: 0, y: -90 }, { x: 0, y: 0 }],
+    16,
+    "hard",
+  ).puck;
+  const left = strike(44);
+  const center = strike(50);
+  const right = strike(56);
+  assert.ok(left.vx < -20);
+  assert.ok(right.vx > 20);
+  assert.ok(Math.abs(center.vx) < 1);
+  assert.ok(left.vy < 0 && center.vy < 0 && right.vy < 0);
 });
 
 test("a faster mallet swing creates a faster puck", () => {
@@ -118,6 +137,22 @@ test("every difficulty enforces its puck speed cap", () => {
     );
     assert.ok(Math.hypot(result.puck.vx, result.puck.vy) <= airHockeyPuckSpeedCap(difficulty) + 0.001);
   }
+});
+
+test("the same power hit can travel faster on harder levels", () => {
+  const strike = (difficulty) => stepAirHockeyLive(
+    { x: 56, y: 76, vx: 0, vy: 0 },
+    [{ x: 50, y: 85 }, { x: 50, y: 25 }],
+    [{ x: 30, y: -140 }, { x: 0, y: 0 }],
+    16,
+    difficulty,
+  ).puck;
+  const easy = strike("easy");
+  const normal = strike("normal");
+  const hard = strike("hard");
+  const speed = (puck) => Math.hypot(puck.vx, puck.vy);
+  assert.ok(speed(easy) < speed(normal));
+  assert.ok(speed(normal) < speed(hard));
 });
 
 test("the puck travels through the full corner until reaching a real rail", () => {

@@ -9,9 +9,9 @@ export const AIR_HOCKEY_CENTER: AirHockeyPoint = { x: 50, y: 75 };
 export const AIR_HOCKEY_LIVE_START: AirHockeyBody = { ...AIR_HOCKEY_CENTER, vx: 16, vy: 28 };
 
 const AIR_HOCKEY_PUCK_SPEED_CAPS: Record<AirHockeyDifficulty, number> = {
-  easy: 60,
-  normal: 78,
-  hard: 98,
+  easy: 72,
+  normal: 96,
+  hard: 124,
 };
 
 const AIR_HOCKEY_CPU_SETTINGS: Record<AirHockeyDifficulty, { speed: number; predictionSeconds: number; homeTracking: number }> = {
@@ -38,6 +38,27 @@ function limitAirHockeyVelocity(vx: number, vy: number, maximum: number) {
   const speed = Math.hypot(vx, vy);
   if (speed <= maximum || speed < 0.001) return { vx, vy };
   return { vx: vx / speed * maximum, vy: vy / speed * maximum };
+}
+
+function airHockeyImpactDirection(normal: AirHockeyPoint, contactX: number, malletVelocity: AirHockeyPoint, player: AirHockeyPlayer) {
+  const malletSpeed = Math.hypot(malletVelocity.x, malletVelocity.y);
+  if (Math.abs(contactX) < 0.35 && Math.abs(normal.y) < 0.35 && malletSpeed > 0.5) {
+    return { x: malletVelocity.x / malletSpeed, y: malletVelocity.y / malletSpeed };
+  }
+
+  // A small horizontal offset should create an obvious bank angle, like the curved
+  // edge of a real mallet. The swing direction adds control without overriding the
+  // point of contact.
+  const side = clamp(contactX / 9, -0.94, 0.94);
+  const forwardSign = Math.abs(normal.y) > 0.08 ? Math.sign(normal.y) : player === 0 ? -1 : 1;
+  const surfaceY = forwardSign * Math.sqrt(Math.max(0.12, 1 - side * side));
+  const swingInfluence = clamp(malletSpeed / 140, 0, 1) * 0.34;
+  const swingX = malletSpeed > 0.5 ? malletVelocity.x / malletSpeed : 0;
+  const swingY = malletSpeed > 0.5 ? malletVelocity.y / malletSpeed : 0;
+  const directionX = side * 1.15 + swingX * swingInfluence;
+  const directionY = surfaceY + swingY * swingInfluence;
+  const directionLength = Math.max(0.001, Math.hypot(directionX, directionY));
+  return { x: directionX / directionLength, y: directionY / directionLength };
 }
 
 function reflectAirHockeyX(value: number) {
@@ -80,24 +101,23 @@ export function stepAirHockeyLive(puck: AirHockeyBody, mallets: [AirHockeyPoint,
       const malletVelocity = malletVelocities[player];
       const dx = x - mallet.x;
       const dy = y - mallet.y;
-      const distance = Math.max(0.001, Math.hypot(dx, dy));
+      const rawDistance = Math.hypot(dx, dy);
+      const malletSpeed = Math.hypot(malletVelocity.x, malletVelocity.y);
+      const fallbackX = malletSpeed > 0.5 ? malletVelocity.x / malletSpeed : 0;
+      const fallbackY = malletSpeed > 0.5 ? malletVelocity.y / malletSpeed : player === 0 ? -1 : 1;
+      const distance = Math.max(0.001, rawDistance);
       if (distance > 12.5) continue;
-      const nx = dx / distance;
-      const ny = dy / distance;
+      const nx = rawDistance > 0.001 ? dx / distance : fallbackX;
+      const ny = rawDistance > 0.001 ? dy / distance : fallbackY;
       const closingSpeed = (malletVelocity.x - vx) * nx + (malletVelocity.y - vy) * ny;
       if (closingSpeed < -2 && distance > 11.7) continue;
       x = mallet.x + nx * 12.6;
       y = mallet.y + ny * 12.6;
-      const malletSpeed = Math.hypot(malletVelocity.x, malletVelocity.y);
       const incomingSpeed = Math.hypot(vx, vy);
-      const impact = clamp(22 + incomingSpeed * 0.32 + Math.max(0, closingSpeed) * 0.58 + malletSpeed * 0.22, 24, maximumPuckSpeed);
-      const hitVelocity = limitAirHockeyVelocity(
-        nx * impact + malletVelocity.x * 0.22,
-        ny * impact + malletVelocity.y * 0.22,
-        maximumPuckSpeed,
-      );
-      vx = hitVelocity.vx;
-      vy = hitVelocity.vy;
+      const impact = clamp(24 + incomingSpeed * 0.34 + Math.max(0, closingSpeed) * 0.62 + malletSpeed * 0.25, 26, maximumPuckSpeed);
+      const direction = airHockeyImpactDirection({ x: nx, y: ny }, dx, malletVelocity, player as AirHockeyPlayer);
+      vx = direction.x * impact;
+      vy = direction.y * impact;
     }
 
     const drag = Math.pow(0.996, elapsed * 60);

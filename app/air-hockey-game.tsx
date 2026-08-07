@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { HeaderChatButton } from "./chat-chrome";
 import { GameResult } from "./game-result";
-import { AIR_HOCKEY_LIVE_START, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, moveAirHockeyCpu, stepAirHockeyLive, type AirHockeyBody, type AirHockeyDifficulty, type AirHockeyPlayer, type AirHockeyPoint } from "./air-hockey";
+import { AIR_HOCKEY_LIVE_START, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, airHockeyPuckSpeedCap, moveAirHockeyCpu, stepAirHockeyLive, type AirHockeyBody, type AirHockeyDifficulty, type AirHockeyPlayer, type AirHockeyPoint } from "./air-hockey";
 
 const MALLET_STARTS: [AirHockeyPoint, AirHockeyPoint] = [{ x: 50, y: 124 }, { x: 50, y: 26 }];
 const ZERO_VELOCITY: AirHockeyPoint = { x: 0, y: 0 };
@@ -238,7 +238,7 @@ export function AirHockey({ onBack, onScore }: { onBack: () => void; onScore: (s
     <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><span className="header-title-logo game-header-logo" role="img" aria-label="Game Garden" /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Air Hockey">↻</button></div></header>
     <section className="air-hockey-game">
       <div className="air-hockey-heading"><div><p className="eyebrow">ARCADE · LIVE VS CPU · {difficulty.toUpperCase()}</p><h1>Air Hockey</h1><p>Two minutes. First to three. Move your red mallet to strike and defend against the CPU.</p></div><span>氷</span></div>
-      <div className="cpu-difficulty"><div><span>CPU LEVEL</span><small>難易度</small></div><div className="difficulty-options">{(["easy", "normal", "hard"] as AirHockeyDifficulty[]).map((level) => <button key={level} className={difficulty === level ? "active" : ""} onClick={() => { setDifficulty(level); reset(); }}><span>{level}</span><small>{level === "easy" ? "Slow" : level === "normal" ? "Moderate" : "Quick"}</small></button>)}</div></div>
+      <div className="cpu-difficulty"><div><span>CPU LEVEL</span><small>難易度</small></div><div className="difficulty-options">{(["easy", "normal", "hard"] as AirHockeyDifficulty[]).map((level) => <button key={level} className={difficulty === level ? "active" : ""} onClick={() => { setDifficulty(level); reset(); }}><span>{level}</span><small>{level === "easy" ? "Slow" : level === "normal" ? "Moderate" : "Quick"} · {airHockeyPuckSpeedCap(level)} MAX</small></button>)}</div></div>
       <div className="air-scoreboard"><div className={winner == null ? "active" : ""}><small>YOU</small><strong>{scores[0]}</strong></div><b>FIRST TO 3<small>{airHockeyClock(secondsLeft)}</small></b><div className={winner == null ? "active" : ""}><strong>{scores[1]}</strong><small>CPU</small></div></div>
       <div className="air-turn-status">{winner != null ? "MATCH COMPLETE" : "PUCK LIVE — YOU AND THE CPU MOVE AT THE SAME TIME"}</div>
       <AirHockeyRink difficulty={difficulty} round={round} scores={scores} secondsLeft={secondsLeft} disabled={winner != null} result={winner != null ? { outcome: winner === "draw" ? "Draw Match" : winner === 0 ? "You Win!" : "CPU Wins!", detail: `Final score ${scores[0]}–${scores[1]} after ${goals} goals.`, draw: winner === "draw" } : undefined} onGoal={goal} onPlayAgain={reset} onLockChange={setRinkLocked} />
