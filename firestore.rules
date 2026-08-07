@@ -78,10 +78,17 @@ service cloud.firestore {
         && request.resource.data.userB == resource.data.userB
         && request.resource.data.participants == resource.data.participants
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userAName', 'userAAvatar', 'userBName', 'userBAvatar', 'lastMessage', 'lastSenderUid', 'lastMessageAt', 'unreadBy', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userAName', 'userAAvatar', 'userBName', 'userBAvatar', 'lastMessage', 'lastSenderUid', 'lastMessageAt', 'unreadBy', 'userAClearedAt', 'userBClearedAt', 'updatedAt'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessage', 'lastSenderUid', 'lastMessageAt'])
           || (request.resource.data.lastSenderUid == request.auth.uid
-            && request.resource.data.lastMessageAt == request.time));
+            && request.resource.data.lastMessageAt == request.time))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['userAClearedAt', 'userBClearedAt'])
+          || (request.auth.uid == resource.data.userA
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userAClearedAt', 'unreadBy', 'updatedAt'])
+            && request.resource.data.userAClearedAt == request.time)
+          || (request.auth.uid == resource.data.userB
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userBClearedAt', 'unreadBy', 'updatedAt'])
+            && request.resource.data.userBClearedAt == request.time));
       allow delete: if false;
 
       match /messages/{messageId} {
@@ -302,7 +309,7 @@ service cloud.firestore {
     }
 
     function validDirectChatShape(chatId, chat) {
-      return chat.keys().hasOnly(['userA', 'userB', 'participants', 'userAName', 'userAAvatar', 'userBName', 'userBAvatar', 'lastMessage', 'lastSenderUid', 'lastMessageAt', 'unreadBy', 'updatedAt'])
+      return chat.keys().hasOnly(['userA', 'userB', 'participants', 'userAName', 'userAAvatar', 'userBName', 'userBAvatar', 'lastMessage', 'lastSenderUid', 'lastMessageAt', 'unreadBy', 'userAClearedAt', 'userBClearedAt', 'updatedAt'])
         && chat.userA is string
         && chat.userB is string
         && chat.userA != chat.userB
@@ -322,6 +329,8 @@ service cloud.firestore {
         && chat.lastSenderUid in chat.participants
         && chat.lastMessageAt is timestamp
         && chat.unreadBy is map
+        && (!chat.keys().hasAny(['userAClearedAt']) || chat.userAClearedAt is timestamp)
+        && (!chat.keys().hasAny(['userBClearedAt']) || chat.userBClearedAt is timestamp)
         && chat.updatedAt is timestamp;
     }
 

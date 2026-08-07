@@ -402,6 +402,12 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /function FriendsChat/);
   assert.match(source, /collection\(db, "directChats"\)/);
   assert.match(source, /where\("participants", "array-contains", user\.uid\)/);
+  assert.match(source, /className="chat-delete"/);
+  assert.match(source, /className="chat-delete-confirm-backdrop"/);
+  assert.match(source, /id="delete-chat-title"/);
+  assert.match(source, /userAClearedAt/);
+  assert.match(source, /userBClearedAt/);
+  assert.match(styles, /\.chat-delete-confirm/);
   assert.match(chatSource, /className=\{`header-chat/);
   assert.match(source, /className="friend-chat-button"/);
   assert.match(source, /lastActiveAt: serverTimestamp\(\)/);
@@ -494,6 +500,8 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /directChats\/\{chatId\}/);
   assert.match(firestoreRules, /messages\/\{messageId\}/);
   assert.match(firestoreRules, /validNewDirectChat/);
+  assert.match(firestoreRules, /userAClearedAt/);
+  assert.match(firestoreRules, /userBClearedAt/);
   assert.match(firestoreRules, /getAfter/);
   assert.match(firestoreRules, /invites\/\{inviteId\}/);
   assert.match(firestoreRules, /validNewInvite/);

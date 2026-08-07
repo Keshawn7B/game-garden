@@ -51,6 +51,8 @@ type DirectChatSummary = {
   lastSenderUid: string;
   lastMessageAt?: Timestamp;
   unreadBy?: Record<string, boolean>;
+  userAClearedAt?: Timestamp;
+  userBClearedAt?: Timestamp;
 };
 type DirectMessage = {
   id: string;
@@ -2314,6 +2316,17 @@ function HeaderLogo({ compact = false }: { compact?: boolean }) {
   return <span className={`header-title-logo ${compact ? "game-header-logo" : ""}`} role="img" aria-label="Game Garden" />;
 }
 
+function chatClearedAtFor(chat: DirectChatSummary | undefined, uid: string) {
+  if (!chat) return undefined;
+  return chat.userA === uid ? chat.userAClearedAt : chat.userBClearedAt;
+}
+
+function chatIsVisibleFor(chat: DirectChatSummary | undefined, uid: string) {
+  if (!chat) return false;
+  const clearedAt = chatClearedAtFor(chat, uid)?.toMillis() ?? 0;
+  return (chat.lastMessageAt?.toMillis() ?? 0) > clearedAt;
+}
+
 function FriendsChat({
   user,
   profileName,
@@ -2341,6 +2354,8 @@ function FriendsChat({
   const [search, setSearch] = useState("");
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -2354,7 +2369,7 @@ function FriendsChat({
 
   useEffect(() => {
     const unreadCount = user && !user.isAnonymous
-      ? chats.filter((chat) => chat.unreadBy?.[user.uid] === true).length
+      ? chats.filter((chat) => chatIsVisibleFor(chat, user.uid) && chat.unreadBy?.[user.uid] === true).length
       : 0;
     onUnreadCountChange(unreadCount);
   }, [chats, onUnreadCountChange, user]);
@@ -2377,8 +2392,10 @@ function FriendsChat({
     }
     return [...entries.values()].sort((left, right) => {
       if (Boolean(left.isOnline) !== Boolean(right.isOnline)) return left.isOnline ? -1 : 1;
-      const leftChat = user ? chats.find((chat) => chat.id === directChatId(user.uid, left.uid)) : undefined;
-      const rightChat = user ? chats.find((chat) => chat.id === directChatId(user.uid, right.uid)) : undefined;
+      const leftCandidate = user ? chats.find((chat) => chat.id === directChatId(user.uid, left.uid)) : undefined;
+      const rightCandidate = user ? chats.find((chat) => chat.id === directChatId(user.uid, right.uid)) : undefined;
+      const leftChat = user && chatIsVisibleFor(leftCandidate, user.uid) ? leftCandidate : undefined;
+      const rightChat = user && chatIsVisibleFor(rightCandidate, user.uid) ? rightCandidate : undefined;
       const recentDifference = (rightChat?.lastMessageAt?.toMillis() ?? 0) - (leftChat?.lastMessageAt?.toMillis() ?? 0);
       return recentDifference || left.name.localeCompare(right.name);
     });
@@ -2388,7 +2405,10 @@ function FriendsChat({
   const activeChatId = user && selectedPeer ? directChatId(user.uid, selectedPeer.uid) : "";
   const activeChat = chats.find((chat) => chat.id === activeChatId);
   const visiblePeers = peers.filter((peer) => peer.name.toLowerCase().includes(search.trim().toLowerCase()));
-  const threadMessages = messageThread.id === activeChatId ? messageThread.messages : EMPTY_DIRECT_MESSAGES;
+  const clearedAt = user ? chatClearedAtFor(activeChat, user.uid)?.toMillis() ?? 0 : 0;
+  const threadMessages = messageThread.id === activeChatId
+    ? messageThread.messages.filter((message) => (message.sentAt?.toMillis() ?? 0) > clearedAt)
+    : EMPTY_DIRECT_MESSAGES;
 
   useEffect(() => {
     if (!user || user.isAnonymous || !open || !activeChatId || !activeChat) return;
@@ -2456,6 +2476,28 @@ function FriendsChat({
     }
   };
 
+  const deleteChat = async () => {
+    if (!user || !selectedPeer || !activeChat || deleteBusy) return;
+    setDeleteBusy(true);
+    setChatError("");
+    try {
+      const clearedField = activeChat.userA === user.uid ? "userAClearedAt" : "userBClearedAt";
+      await updateDoc(doc(db, "directChats", activeChat.id), {
+        [clearedField]: serverTimestamp(),
+        [`unreadBy.${user.uid}`]: false,
+        updatedAt: serverTimestamp(),
+      });
+      setMessageThread({ id: activeChat.id, messages: EMPTY_DIRECT_MESSAGES });
+      setDeleteConfirmOpen(false);
+      onSelectFriend(null);
+    } catch {
+      setChatError("Could not delete this chat. Try again.");
+      setDeleteConfirmOpen(false);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   if (!user || user.isAnonymous || !open) return null;
 
   return (
@@ -2467,6 +2509,7 @@ function FriendsChat({
               <button className="chat-back" onClick={() => onSelectFriend(null)} aria-label="Back to conversations">←</button>
               <span className="chat-peer-avatar"><AvatarGlyph avatarId={selectedPeer.avatarId} className="chat-avatar" /><i className={selectedPeer.isOnline ? "online" : ""} /></span>
               <div><strong>{selectedPeer.name}</strong><small>{friendPresenceLabel(selectedPeer)}</small></div>
+              {activeChat && <button className="chat-delete" onClick={() => setDeleteConfirmOpen(true)} aria-label={`Delete chat with ${selectedPeer.name}`} title="Delete chat">消</button>}
             </>
           ) : <div className="chat-title"><span>話</span><div><strong>Friends chat</strong><small>フレンドチャット</small></div></div>}
           <button className="chat-close" onClick={onClose} aria-label="Close friends chat">×</button>
@@ -2478,7 +2521,8 @@ function FriendsChat({
             <div className="chat-inbox-label"><span>DIRECT MESSAGES</span><b>{peers.filter((peer) => peer.isOnline).length} ONLINE</b></div>
             <div className="chat-peer-list">
               {visiblePeers.map((peer) => {
-                const summary = chats.find((chat) => chat.id === directChatId(user.uid, peer.uid));
+                const candidate = chats.find((chat) => chat.id === directChatId(user.uid, peer.uid));
+                const summary = chatIsVisibleFor(candidate, user.uid) ? candidate : undefined;
                 const unread = summary?.unreadBy?.[user.uid] === true;
                 return (
                   <button className={`chat-peer-row ${unread ? "unread" : ""}`} key={peer.uid} onClick={() => onSelectFriend(peer.uid)}>
@@ -2509,6 +2553,7 @@ function FriendsChat({
           </>
         )}
       </div>
+      {deleteConfirmOpen && selectedPeer && <div className="chat-delete-confirm-backdrop" onMouseDown={() => { if (!deleteBusy) setDeleteConfirmOpen(false); }}><section className="chat-delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-chat-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">消</span><small>DIRECT MESSAGE · チャット</small><h2 id="delete-chat-title">Delete chat with {selectedPeer.name}?</h2><p>This clears the conversation from your account only. It will not remove your friend or erase their copy. New messages will start a fresh chat.</p><div><button autoFocus onClick={() => setDeleteConfirmOpen(false)} disabled={deleteBusy}>Cancel</button><button className="confirm-delete-chat" onClick={() => void deleteChat()} disabled={deleteBusy}>{deleteBusy ? "Deleting…" : "Delete chat"}</button></div></section></div>}
     </aside>
   );
 }
