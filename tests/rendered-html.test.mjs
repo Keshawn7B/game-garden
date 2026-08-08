@@ -353,6 +353,8 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /Choose your banner/);
   assert.match(source, /type BannerId = "torii" \| "sakura-moon" \| "koi-current" \| "golden-crane"/);
   assert.match(source, /profile-banner-change/);
+  assert.match(styles, /\.profile-banner-hero\{[^}]*flex-direction:column;[^}]*gap:8px;/);
+  assert.match(styles, /\.profile-banner-change\{[^}]*position:static;/);
   assert.match(source, /hostBanner: bannerId/);
   assert.match(source, /guestBanner: bannerId/);
   assert.match(styles, /profile-banner-torii\.jpg/);
