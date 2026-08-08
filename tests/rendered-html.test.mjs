@@ -561,7 +561,11 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /blossom-addon-red\.jpg/);
   assert.match(styles, /blossom-addon-pink\.jpg/);
   assert.match(styles, /blossom-addon-gold\.jpg/);
-  assert.match(styles, /ellipse 13px 10px/);
+  assert.match(styles, /--blossom-button-art/);
+  assert.match(styles, /blossom-button-red\.jpg/);
+  assert.match(styles, /blossom-button-pink\.jpg/);
+  assert.match(styles, /blossom-button-gold\.jpg/);
+  assert.doesNotMatch(styles, /ellipse 13px 10px/);
   assert.match(styles, /rgba\(246,243,237,\.58\)/);
   assert.match(themeBootstrap, /game-garden-blossom-addon/);
   assert.match(styles, /content:"桜"/);
