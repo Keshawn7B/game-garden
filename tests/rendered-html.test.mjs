@@ -75,6 +75,9 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /battleship-menu/);
   assert.match(source, /dotsboxes-menu/);
   assert.match(source, /airhockey-menu/);
+  assert.match(source, /appShellRef\.current\?\.scrollTo/);
+  assert.match(styles, /\.app-shell \{ height:100vh;height:100dvh;min-height:0;[^}]*overflow-y:auto/);
+  assert.match(styles, /\.profile-panel::after,\.store-panel::after/);
   assert.doesNotMatch(source, /meducktion|deducktion/i);
   assert.match(source, /function GameMenu/);
   assert.match(source, /Open Lobby/);
@@ -420,7 +423,7 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(styles, /\.bottom-nav::before/);
   assert.match(styles, /\.bottom-nav button\.active b \{ border-color:transparent;background:transparent;color:var\(--red\);box-shadow:none;/);
   assert.doesNotMatch(styles, /\.bottom-nav button\.active b \{[^}]*border-color:white/);
-  assert.match(styles, /\.app-shell[^}]*min-height:100svh/);
+  assert.match(styles, /\.app-shell[^}]*height:100dvh[^}]*overflow-y:auto/);
   assert.match(styles, /\.friend-list/);
   assert.match(styles, /\.friends-account-banner/);
   assert.match(styles, /:root\[data-theme="sakura"\] \.friends-signin-card h2\{color:#e4316b!important\}/);

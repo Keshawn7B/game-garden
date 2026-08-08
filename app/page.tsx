@@ -2688,6 +2688,7 @@ function AppHome({
   const [resetMessage, setResetMessage] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const appShellRef = useRef<HTMLElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const activeRanks = leaderboards[rankGame] ?? [];
   const liveIncoming = incomingInvites.filter(inviteIsLive);
@@ -2722,10 +2723,20 @@ function AppHome({
   }, [profileMenuOpen]);
 
   useEffect(() => {
+    appShellRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [activeTab]);
+
+  useEffect(() => {
     if (!avatarPickerOpen && !selectedFriend && !signOutConfirmOpen && !resetConfirmOpen) return;
+    const appShell = appShellRef.current;
     const previousOverflow = document.body.style.overflow;
+    const previousAppOverflow = appShell?.style.overflowY ?? "";
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previousOverflow; };
+    if (appShell) appShell.style.overflowY = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      if (appShell) appShell.style.overflowY = previousAppOverflow;
+    };
   }, [avatarPickerOpen, selectedFriend, signOutConfirmOpen, resetConfirmOpen]);
 
   useEffect(() => {
@@ -2863,7 +2874,7 @@ function AppHome({
   };
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" ref={appShellRef}>
       <header className="app-header">
         <button className="header-brand" onClick={() => onTabChange("games")} aria-label="Open Game Garden games">
           <HeaderLogo />
