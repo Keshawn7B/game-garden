@@ -145,6 +145,24 @@ test("an old account can add a missing immutable creation timestamp exactly once
   }));
 });
 
+test("an older account can safely add a missing blossom flag as locked", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const seeded = accountProfile("alice", "Alice");
+    delete seeded.blossomThemeUnlocked;
+    seeded.updatedAt = Timestamp.now();
+    await setDoc(doc(context.firestore(), "users", "alice"), seeded);
+  });
+  const alice = testEnv.authenticatedContext("alice", passwordClaims).firestore();
+  await assertSucceeds(updateDoc(doc(alice, "users", "alice"), {
+    blossomThemeUnlocked: false,
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(doc(alice, "users", "alice"), {
+    blossomThemeUnlocked: true,
+    updatedAt: serverTimestamp(),
+  }));
+});
+
 test("store records are public catalog data but checkout and fulfillment remain server-owned", async () => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const admin = context.firestore();
@@ -209,6 +227,36 @@ test("blossom theme cannot be self-granted without its auditable test redemption
     updatedAt: serverTimestamp(),
   });
   batch.update(userRef, {
+    blossomThemeUnlocked: true,
+    blossomThemeUnlockedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+});
+
+test("blossom redemption works for an account that already owns premium and gold", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const seeded = accountProfile("alice", "Alice");
+    seeded.premiumUnlocked = true;
+    seeded.premiumUnlockedAt = Timestamp.now();
+    seeded.goldModeUnlocked = true;
+    seeded.goldModeUnlockedAt = Timestamp.now();
+    seeded.legacyRank = "garden-veteran";
+    seeded.highScores = { legacyGame: 0 };
+    seeded.updatedAt = Timestamp.now();
+    await setDoc(doc(context.firestore(), "users", "alice"), seeded);
+  });
+  const alice = testEnv.authenticatedContext("alice", passwordClaims).firestore();
+  const batch = writeBatch(alice);
+  batch.set(doc(alice, "users", "alice", "redemptions", "blossom-theme-test"), {
+    uid: "alice",
+    redemptionId: "blossom-theme-test",
+    productId: "blossom-theme",
+    source: "test-code",
+    redeemedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(doc(alice, "users", "alice"), {
     blossomThemeUnlocked: true,
     blossomThemeUnlockedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

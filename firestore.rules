@@ -12,9 +12,10 @@ service cloud.firestore {
         && request.resource.data.blossomThemeUnlocked == false;
       allow update: if isOwner(userId)
         && permanentAccount()
-        && validUserProfile(userId, request.resource.data)
-        && validCreatedAtUpdate()
-        && validEntitlementUpdate(userId);
+        && ((validUserProfile(userId, request.resource.data)
+            && validCreatedAtUpdate()
+            && validEntitlementUpdate(userId))
+          || validEntitlementCodeGrant(userId));
 
       match /redemptions/{redemptionId} {
         allow get: if isOwner(userId);
@@ -389,54 +390,44 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/friendCodes/$(profile.friendCode)).data.uid == userId;
     }
 
-    function premiumPreserved() {
-      let prior = resource.data.keys().hasAny(['premiumUnlocked']) && resource.data.premiumUnlocked == true;
-      return request.resource.data.premiumUnlocked == prior
-        && ((!resource.data.keys().hasAny(['premiumUnlockedAt']) && !request.resource.data.keys().hasAny(['premiumUnlockedAt']))
-          || (resource.data.keys().hasAny(['premiumUnlockedAt'])
-            && request.resource.data.keys().hasAny(['premiumUnlockedAt'])
-            && request.resource.data.premiumUnlockedAt == resource.data.premiumUnlockedAt));
-    }
-
-    function goldPreserved() {
-      let prior = resource.data.keys().hasAny(['goldModeUnlocked']) && resource.data.goldModeUnlocked == true;
-      return request.resource.data.goldModeUnlocked == prior
-        && ((!resource.data.keys().hasAny(['goldModeUnlockedAt']) && !request.resource.data.keys().hasAny(['goldModeUnlockedAt']))
-          || (resource.data.keys().hasAny(['goldModeUnlockedAt'])
-            && request.resource.data.keys().hasAny(['goldModeUnlockedAt'])
-            && request.resource.data.goldModeUnlockedAt == resource.data.goldModeUnlockedAt));
-    }
-
-    function blossomPreserved() {
-      let prior = resource.data.keys().hasAny(['blossomThemeUnlocked']) && resource.data.blossomThemeUnlocked == true;
-      return request.resource.data.blossomThemeUnlocked == prior
-        && ((!resource.data.keys().hasAny(['blossomThemeUnlockedAt']) && !request.resource.data.keys().hasAny(['blossomThemeUnlockedAt']))
-          || (resource.data.keys().hasAny(['blossomThemeUnlockedAt'])
-            && request.resource.data.keys().hasAny(['blossomThemeUnlockedAt'])
-            && request.resource.data.blossomThemeUnlockedAt == resource.data.blossomThemeUnlockedAt));
-    }
-
     function validEntitlementUpdate(userId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let entitlementFields = ['premiumUnlocked', 'premiumUnlockedAt', 'goldModeUnlocked', 'goldModeUnlockedAt', 'blossomThemeUnlocked', 'blossomThemeUnlockedAt'];
+      return !changed.hasAny(entitlementFields)
+        || (changed.hasOnly(['premiumUnlocked', 'goldModeUnlocked', 'blossomThemeUnlocked', 'createdAt', 'updatedAt'])
+          && (!changed.hasAny(['premiumUnlocked'])
+            || (!resource.data.keys().hasAny(['premiumUnlocked']) && request.resource.data.premiumUnlocked == false))
+          && (!changed.hasAny(['goldModeUnlocked'])
+            || (!resource.data.keys().hasAny(['goldModeUnlocked']) && request.resource.data.goldModeUnlocked == false))
+          && (!changed.hasAny(['blossomThemeUnlocked'])
+            || (!resource.data.keys().hasAny(['blossomThemeUnlocked']) && request.resource.data.blossomThemeUnlocked == false)))
+        || validEntitlementCodeGrant(userId);
+    }
+
+    function validEntitlementCodeGrant(userId) {
       let premiumRedemption = /databases/$(database)/documents/users/$(userId)/redemptions/legacy-premium-test;
       let goldRedemption = /databases/$(database)/documents/users/$(userId)/redemptions/gold-mode-test;
       let blossomRedemption = /databases/$(database)/documents/users/$(userId)/redemptions/blossom-theme-test;
-      return (premiumPreserved() && goldPreserved() && blossomPreserved())
-        || (goldPreserved() && blossomPreserved()
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return (changed.hasOnly(['premiumUnlocked', 'premiumUnlockedAt', 'updatedAt'])
           && (!resource.data.keys().hasAny(['premiumUnlocked']) || resource.data.premiumUnlocked != true)
           && request.resource.data.premiumUnlocked == true
           && request.resource.data.premiumUnlockedAt == request.time
+          && request.resource.data.updatedAt == request.time
           && existsAfter(premiumRedemption)
           && getAfter(premiumRedemption).data.productId == 'premium-avatars')
-        || (premiumPreserved() && blossomPreserved()
+        || (changed.hasOnly(['goldModeUnlocked', 'goldModeUnlockedAt', 'updatedAt'])
           && (!resource.data.keys().hasAny(['goldModeUnlocked']) || resource.data.goldModeUnlocked != true)
           && request.resource.data.goldModeUnlocked == true
           && request.resource.data.goldModeUnlockedAt == request.time
+          && request.resource.data.updatedAt == request.time
           && existsAfter(goldRedemption)
           && getAfter(goldRedemption).data.productId == 'gold-mode')
-        || (premiumPreserved() && goldPreserved()
+        || (changed.hasOnly(['blossomThemeUnlocked', 'blossomThemeUnlockedAt', 'updatedAt'])
           && (!resource.data.keys().hasAny(['blossomThemeUnlocked']) || resource.data.blossomThemeUnlocked != true)
           && request.resource.data.blossomThemeUnlocked == true
           && request.resource.data.blossomThemeUnlockedAt == request.time
+          && request.resource.data.updatedAt == request.time
           && existsAfter(blossomRedemption)
           && getAfter(blossomRedemption).data.productId == 'blossom-theme');
     }
