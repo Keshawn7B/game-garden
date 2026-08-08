@@ -199,7 +199,8 @@ test("routes every game through a start menu", async () => {
   assert.match(gameResultSource, /PLAY AGAIN/);
   assert.match(gameResultSource, /aria-live="assertive"/);
   assert.match(styles, /\.game-result-banner/);
-  assert.match(styles, /\.game-result-replay/);
+  assert.match(styles, /\.game-result-replay\{[^}]*justify-content:center;[^}]*text-align:center;/);
+  assert.match(styles, /\.game-result-replay b\{[^}]*position:absolute;[^}]*right:15px;/);
   assert.match(source, /<GameResult outcome=/);
   assert.match(onlineSource, /const finish = <GameResult/);
   assert.match(battleshipSource, /<GameResult outcome=/);
