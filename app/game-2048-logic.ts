@@ -9,6 +9,12 @@ export type Game2048Move = {
   moved: boolean;
 };
 
+export type Game2048TileMovement = {
+  from: number;
+  to: number;
+  merged: boolean;
+};
+
 function collapseLine(line: number[]) {
   const values = line.filter(Boolean);
   const collapsed: number[] = [];
@@ -51,6 +57,29 @@ export function move2048Board(board: number[], direction: Game2048Direction): Ga
   }
 
   return { board: next, gained, moved: next.some((value, index) => value !== board[index]) };
+}
+
+export function trace2048Move(board: number[], direction: Game2048Direction): Game2048TileMovement[] {
+  if (board.length !== GAME_2048_SIZE ** 2) throw new Error("A 2048 board must contain sixteen cells.");
+  const movements: Game2048TileMovement[] = [];
+
+  for (let line = 0; line < GAME_2048_SIZE; line += 1) {
+    const indices = lineIndices(direction, line);
+    const tiles = indices.flatMap((index) => board[index] ? [{ index, value: board[index] }] : []);
+    let destination = 0;
+
+    for (let tile = 0; tile < tiles.length; tile += 1) {
+      const merges = tiles[tile].value === tiles[tile + 1]?.value;
+      movements.push({ from: tiles[tile].index, to: indices[destination], merged: merges });
+      if (merges) {
+        movements.push({ from: tiles[tile + 1].index, to: indices[destination], merged: true });
+        tile += 1;
+      }
+      destination += 1;
+    }
+  }
+
+  return movements;
 }
 
 export function addRandom2048Tile(board: number[], random: () => number = Math.random) {
