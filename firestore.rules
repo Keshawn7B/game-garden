@@ -8,7 +8,8 @@ service cloud.firestore {
         && permanentAccount()
         && validUserProfile(userId, request.resource.data)
         && request.resource.data.premiumUnlocked == false
-        && request.resource.data.goldModeUnlocked == false;
+        && request.resource.data.goldModeUnlocked == false
+        && request.resource.data.blossomThemeUnlocked == false;
       allow update: if isOwner(userId)
         && permanentAccount()
         && validUserProfile(userId, request.resource.data)
@@ -345,8 +346,8 @@ service cloud.firestore {
     }
 
     function validUserProfile(userId, profile) {
-      return profile.keys().hasOnly(['uid', 'displayName', 'photoURL', 'avatarId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'premiumUnlockedAt', 'goldModeUnlocked', 'goldModeUnlockedAt', 'createdAt', 'updatedAt'])
-        && profile.keys().hasAll(['uid', 'displayName', 'photoURL', 'avatarId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'goldModeUnlocked', 'createdAt', 'updatedAt'])
+      return profile.keys().hasOnly(['uid', 'displayName', 'photoURL', 'avatarId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'premiumUnlockedAt', 'goldModeUnlocked', 'goldModeUnlockedAt', 'blossomThemeUnlocked', 'blossomThemeUnlockedAt', 'createdAt', 'updatedAt'])
+        && profile.keys().hasAll(['uid', 'displayName', 'photoURL', 'avatarId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'goldModeUnlocked', 'blossomThemeUnlocked', 'createdAt', 'updatedAt'])
         && profile.uid == userId
         && validDisplayName(profile.displayName)
         && profile.photoURL is string
@@ -356,8 +357,10 @@ service cloud.firestore {
         && profile.scoreSeason == 2
         && profile.premiumUnlocked is bool
         && profile.goldModeUnlocked is bool
+        && profile.blossomThemeUnlocked is bool
         && (!profile.keys().hasAny(['premiumUnlockedAt']) || profile.premiumUnlockedAt is timestamp)
         && (!profile.keys().hasAny(['goldModeUnlockedAt']) || profile.goldModeUnlockedAt is timestamp)
+        && (!profile.keys().hasAny(['blossomThemeUnlockedAt']) || profile.blossomThemeUnlockedAt is timestamp)
         && profile.createdAt is timestamp
         && profile.updatedAt == request.time;
     }
@@ -404,22 +407,38 @@ service cloud.firestore {
             && request.resource.data.goldModeUnlockedAt == resource.data.goldModeUnlockedAt));
     }
 
+    function blossomPreserved() {
+      let prior = resource.data.keys().hasAny(['blossomThemeUnlocked']) && resource.data.blossomThemeUnlocked == true;
+      return request.resource.data.blossomThemeUnlocked == prior
+        && ((!resource.data.keys().hasAny(['blossomThemeUnlockedAt']) && !request.resource.data.keys().hasAny(['blossomThemeUnlockedAt']))
+          || (resource.data.keys().hasAny(['blossomThemeUnlockedAt'])
+            && request.resource.data.keys().hasAny(['blossomThemeUnlockedAt'])
+            && request.resource.data.blossomThemeUnlockedAt == resource.data.blossomThemeUnlockedAt));
+    }
+
     function validEntitlementUpdate(userId) {
       let premiumRedemption = /databases/$(database)/documents/users/$(userId)/redemptions/legacy-premium-test;
       let goldRedemption = /databases/$(database)/documents/users/$(userId)/redemptions/gold-mode-test;
-      return (premiumPreserved() && goldPreserved())
-        || (goldPreserved()
+      let blossomRedemption = /databases/$(database)/documents/users/$(userId)/redemptions/blossom-theme-test;
+      return (premiumPreserved() && goldPreserved() && blossomPreserved())
+        || (goldPreserved() && blossomPreserved()
           && (!resource.data.keys().hasAny(['premiumUnlocked']) || resource.data.premiumUnlocked != true)
           && request.resource.data.premiumUnlocked == true
           && request.resource.data.premiumUnlockedAt == request.time
           && existsAfter(premiumRedemption)
           && getAfter(premiumRedemption).data.productId == 'premium-avatars')
-        || (premiumPreserved()
+        || (premiumPreserved() && blossomPreserved()
           && (!resource.data.keys().hasAny(['goldModeUnlocked']) || resource.data.goldModeUnlocked != true)
           && request.resource.data.goldModeUnlocked == true
           && request.resource.data.goldModeUnlockedAt == request.time
           && existsAfter(goldRedemption)
-          && getAfter(goldRedemption).data.productId == 'gold-mode');
+          && getAfter(goldRedemption).data.productId == 'gold-mode')
+        || (premiumPreserved() && goldPreserved()
+          && (!resource.data.keys().hasAny(['blossomThemeUnlocked']) || resource.data.blossomThemeUnlocked != true)
+          && request.resource.data.blossomThemeUnlocked == true
+          && request.resource.data.blossomThemeUnlockedAt == request.time
+          && existsAfter(blossomRedemption)
+          && getAfter(blossomRedemption).data.productId == 'blossom-theme');
     }
 
     function validTestRedemption(userId, redemptionId, redemption) {
@@ -430,6 +449,7 @@ service cloud.firestore {
         && redemption.redeemedAt == request.time
         && redemption.updatedAt == request.time
         && ((redemptionId == 'gold-mode-test' && redemption.productId == 'gold-mode')
+          || (redemptionId == 'blossom-theme-test' && redemption.productId == 'blossom-theme')
           || (redemptionId == 'legacy-premium-test' && redemption.productId == 'premium-avatars'));
     }
 

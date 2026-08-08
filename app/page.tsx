@@ -16,7 +16,7 @@ import { Game2048 } from "./game-2048";
 
 type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "2048";
 type LibraryGameId = PlayableGameId;
-type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile";
+type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile" | "addons";
 type ThemeMode = "classic" | "sakura" | "gold";
 type GameMode = "solo" | "multi";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu` | `${PlayableGameId}-lobby`;
@@ -119,6 +119,8 @@ const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
 const PREMIUM_ACCESS_CODE = "SOKEY";
 const GOLD_MODE_ACCESS_CODE = "GOLD";
+const BLOSSOM_THEME_ACCESS_CODE = "BLOSSOM";
+const BLOSSOM_ADDON_STORAGE_KEY = "game-garden-blossom-addon";
 const SCORE_SEASON = 2;
 const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: string }> = {
   games: { label: "ARCADE", japanese: "ゲーム", glyph: "遊" },
@@ -126,6 +128,7 @@ const HEADER_META: Record<AppTab, { label: string; japanese: string; glyph: stri
   friends: { label: "SOCIAL", japanese: "フレンド", glyph: "友" },
   store: { label: "STORE", japanese: "売店", glyph: "店" },
   profile: { label: "PLAYER", japanese: "プロフィール", glyph: "人" },
+  addons: { label: "ADD-ONS", japanese: "追加", glyph: "花" },
 };
 
 const AVATARS: { id: AvatarId; glyph?: string; label: string; premium?: boolean }[] = [
@@ -2636,6 +2639,9 @@ function AppHome({
   onOpenChat,
   premiumUnlocked,
   goldModeUnlocked,
+  blossomThemeUnlocked,
+  blossomThemeEnabled,
+  onBlossomThemeToggle,
   onUnlockPremium,
 }: {
   activeTab: AppTab;
@@ -2677,6 +2683,9 @@ function AppHome({
   onOpenChat: (friend: FriendEntry) => void;
   premiumUnlocked: boolean;
   goldModeUnlocked: boolean;
+  blossomThemeUnlocked: boolean;
+  blossomThemeEnabled: boolean;
+  onBlossomThemeToggle: () => void;
   onUnlockPremium: (code: string) => Promise<string>;
 }) {
   const completedGames = Object.keys(highScores).length;
@@ -2914,6 +2923,7 @@ function AppHome({
               <button role="menuitem" onClick={() => chooseProfileMenu("leaderboard")}><b>冠</b><span>Leaderboard</span></button>
               <button role="menuitem" onClick={() => chooseProfileMenu("friends")}><b>友</b><span>Friends</span></button>
               <button role="menuitem" onClick={() => chooseProfileMenu("friends", true)}><b>招</b><span>Invites</span>{socialNoticeCount > 0 && <em>{socialNoticeCount}</em>}</button>
+              <button role="menuitem" onClick={() => chooseProfileMenu("addons")}><b>花</b><span>Add-ons</span></button>
             </div>}
           </div> : <button className="header-signin-button" onClick={() => onTabChange("profile")}><b>人</b><span>SIGN IN</span></button>}
         </div>
@@ -3080,11 +3090,43 @@ function AppHome({
                 <div className="store-product-status"><span><small>{goldModeUnlocked ? "ACCOUNT ITEM" : "PRICE"}</small><strong>{goldModeUnlocked ? "UNLOCKED" : "TBD"}</strong></span><button disabled>{goldModeUnlocked ? "OWNED" : "COMING SOON"}</button></div>
               </div>
             </div>
+            <div className={`store-product-card blossom-theme-product ${blossomThemeUnlocked ? "owned" : ""}`}>
+              <div className="blossom-theme-art" aria-hidden="true">
+                <span className="blossom-preview blossom-preview-red" />
+                <span className="blossom-preview blossom-preview-pink" />
+                <span className="blossom-preview blossom-preview-gold" />
+                <b>花</b><i>02</i>
+              </div>
+              <div className="store-product-copy">
+                <small>SCENERY ADD-ON · 花景色</small>
+                <h2>Blossom Theme</h2>
+                <p>Flower-petal controls and illustrated blossom gardens made for the Red, Pink, and Gold color modes.</p>
+                <div className="store-product-status"><span><small>{blossomThemeUnlocked ? "ACCOUNT ITEM" : "PRICE"}</small><strong>{blossomThemeUnlocked ? "UNLOCKED" : "TBD"}</strong></span><button disabled>{blossomThemeUnlocked ? "OWNED" : "COMING SOON"}</button></div>
+              </div>
+            </div>
             <section className={`store-code-card store-code-minimal store-redeem-card ${premiumUnlocked ? "unlocked" : ""}`} aria-label="Redeem a code">
               <div className="store-code-label"><small>REDEEM CODE</small><span>コード入力</span></div>
               <div className="store-code-form"><input value={premiumCode} maxLength={12} onChange={(event) => setPremiumCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && premiumCode) void submitPremiumCode(); }} placeholder="ENTER CODE" aria-label="Enter a store code" autoComplete="off" /><button onClick={() => void submitPremiumCode()} disabled={!premiumCode || premiumBusy} aria-label="Submit code">{premiumBusy ? "…" : "→"}</button></div>
               {premiumMessage && <p className="store-code-message" role="status">{premiumMessage}</p>}
             </section>
+          </section>
+        )}
+
+        {activeTab === "addons" && (
+          <section className="app-panel addons-panel">
+            <div className="app-title"><div><p>PERSONALIZE</p><h1>Add-ons <span>追加</span></h1></div><strong>花<small>EXTRAS</small></strong></div>
+            {!signedIn ? <div className="addons-signin-card">
+              <span aria-hidden="true">花</span><small>ACCOUNT ADD-ONS</small><h2>Sign in to use add-ons.</h2><p>Your owned extras follow your account on every device.</p>
+              <button className="primary-button" onClick={() => onTabChange("profile")}>Open profile</button>
+            </div> : <>
+              <article className={`addon-card ${blossomThemeUnlocked ? "owned" : "locked"} ${blossomThemeEnabled ? "enabled" : ""}`}>
+                <div className="addon-preview-triptych" aria-hidden="true"><span /><span /><span /><b>花</b></div>
+                <div className="addon-card-copy"><small>{blossomThemeUnlocked ? "OWNED ADD-ON" : "LOCKED ADD-ON"} · 花景色</small><h2>Blossom Theme</h2><p>Colored blossom trees frame the app while petal patterns decorate its main controls. The scenery changes with Red, Pink, and Gold modes.</p>
+                  <div className="addon-card-footer"><span><i className={blossomThemeEnabled ? "on" : ""} />{blossomThemeEnabled ? "ACTIVE" : blossomThemeUnlocked ? "READY" : "STORE ITEM"}</span>{blossomThemeUnlocked ? <button className="primary-button" onClick={onBlossomThemeToggle}>{blossomThemeEnabled ? "Disable" : "Enable"}</button> : <button className="primary-button" onClick={() => onTabChange("store")}>View in store</button>}</div>
+                </div>
+              </article>
+              <div className="addons-coming"><span>＋</span><div><small>MORE TO GROW</small><strong>More add-ons coming soon</strong></div></div>
+            </>}
           </section>
         )}
 
@@ -3221,6 +3263,8 @@ export default function Home() {
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [premiumUnlocked, setPremiumUnlocked] = useState(false);
   const [goldModeUnlocked, setGoldModeUnlocked] = useState(false);
+  const [blossomThemeUnlocked, setBlossomThemeUnlocked] = useState(false);
+  const [blossomThemeEnabled, setBlossomThemeEnabled] = useState(false);
   const authLoadId = useRef(0);
 
   useEffect(() => {
@@ -3273,6 +3317,8 @@ export default function Home() {
       setAvatarId("play");
       setPremiumUnlocked(false);
       setGoldModeUnlocked(false);
+      setBlossomThemeUnlocked(false);
+      setBlossomThemeEnabled(false);
       setFriends([]);
       setFriendProfiles({});
       setIncomingFriendRequests([]);
@@ -3284,6 +3330,8 @@ export default function Home() {
       setChatTargetUid(null);
       setChatUnreadCount(0);
       if (!user) {
+        window.localStorage.removeItem(BLOSSOM_ADDON_STORAGE_KEY);
+        delete document.documentElement.dataset.addon;
         if (window.localStorage.getItem("game-garden-theme") === "gold") {
           window.localStorage.setItem("game-garden-theme", "classic");
           setTheme("classic");
@@ -3298,6 +3346,8 @@ export default function Home() {
       }
 
       if (user.isAnonymous) {
+        window.localStorage.removeItem(BLOSSOM_ADDON_STORAGE_KEY);
+        delete document.documentElement.dataset.addon;
         if (window.localStorage.getItem("game-garden-theme") === "gold") {
           window.localStorage.setItem("game-garden-theme", "classic");
           setTheme("classic");
@@ -3313,17 +3363,20 @@ export default function Home() {
 
       try {
         const profileRef = doc(db, "users", user.uid);
-        const [profile, premiumEntitlement, goldEntitlement] = await Promise.all([
+        const [profile, premiumEntitlement, goldEntitlement, blossomEntitlement] = await Promise.all([
           getDoc(profileRef),
           getDoc(doc(db, "users", user.uid, "entitlements", "premium-avatars")),
           getDoc(doc(db, "users", user.uid, "entitlements", "gold-mode")),
+          getDoc(doc(db, "users", user.uid, "entitlements", "blossom-theme")),
         ]);
         if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         const data = profile.data();
         const legacyPremiumAccess = data?.premiumUnlocked === true;
         const legacyGoldMode = data?.goldModeUnlocked === true;
+        const legacyBlossomTheme = data?.blossomThemeUnlocked === true;
         const hasPremiumAccess = legacyPremiumAccess || activeEntitlement(premiumEntitlement);
         const hasGoldMode = legacyGoldMode || activeEntitlement(goldEntitlement);
+        const hasBlossomTheme = legacyBlossomTheme || activeEntitlement(blossomEntitlement);
         const accountName = window.localStorage.getItem(playerStorageKey(user, "name"));
         const cloudName = typeof data?.displayName === "string" ? data.displayName : user.displayName || accountName || "Player One";
         const savedAvatar = window.localStorage.getItem(playerStorageKey(user, "avatar"));
@@ -3335,6 +3388,14 @@ export default function Home() {
         setAvatarId(cloudAvatar);
         setPremiumUnlocked(hasPremiumAccess);
         setGoldModeUnlocked(hasGoldMode);
+        setBlossomThemeUnlocked(hasBlossomTheme);
+        const enableBlossomTheme = hasBlossomTheme && window.localStorage.getItem(BLOSSOM_ADDON_STORAGE_KEY) === "enabled";
+        setBlossomThemeEnabled(enableBlossomTheme);
+        if (enableBlossomTheme) document.documentElement.dataset.addon = "blossom";
+        else {
+          window.localStorage.removeItem(BLOSSOM_ADDON_STORAGE_KEY);
+          delete document.documentElement.dataset.addon;
+        }
         setHighScores(cloudScores);
         if (hasGoldMode && window.localStorage.getItem("game-garden-theme") === "gold") {
           setTheme("gold");
@@ -3354,10 +3415,11 @@ export default function Home() {
           avatarId: cloudAvatar,
           highScores: cloudScores,
           scoreSeason: SCORE_SEASON,
-          // Paid entitlements stay server-owned. These two fields only preserve
+          // Paid entitlements stay server-owned. These fields only preserve
           // the existing test-code grants and are never derived from a purchase.
           premiumUnlocked: legacyPremiumAccess,
           goldModeUnlocked: legacyGoldMode,
+          blossomThemeUnlocked: legacyBlossomTheme,
           updatedAt: serverTimestamp(),
           ...(data?.createdAt instanceof Timestamp ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
@@ -3517,6 +3579,35 @@ export default function Home() {
   const unlockPremium = useCallback(async (rawCode: string) => {
     if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before redeeming store codes.";
     const normalizedCode = rawCode.trim().toUpperCase();
+    if (normalizedCode === BLOSSOM_THEME_ACCESS_CODE) {
+      if (blossomThemeUnlocked) return "Blossom Theme is already unlocked for this account.";
+      try {
+        const redemptionRef = doc(db, "users", firebaseUser.uid, "redemptions", "blossom-theme-test");
+        const batch = writeBatch(db);
+        if (!(await getDoc(redemptionRef)).exists()) batch.set(redemptionRef, {
+          uid: firebaseUser.uid,
+          redemptionId: "blossom-theme-test",
+          productId: "blossom-theme",
+          source: "test-code",
+          redeemedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        batch.set(doc(db, "users", firebaseUser.uid), {
+          blossomThemeUnlocked: true,
+          blossomThemeUnlockedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        await batch.commit();
+        setBlossomThemeUnlocked(true);
+        setBlossomThemeEnabled(true);
+        document.documentElement.dataset.addon = "blossom";
+        window.localStorage.setItem(BLOSSOM_ADDON_STORAGE_KEY, "enabled");
+        setAuthError("");
+        return "Blossom Theme unlocked and enabled for this account.";
+      } catch {
+        return "Could not unlock Blossom Theme. Try again.";
+      }
+    }
     if (normalizedCode === GOLD_MODE_ACCESS_CODE) {
       if (goldModeUnlocked) return "Gold Mode is already unlocked for this account.";
       try {
@@ -3571,7 +3662,22 @@ export default function Home() {
     } catch {
       return "Could not unlock premium access. Try again.";
     }
-  }, [firebaseUser, goldModeUnlocked, premiumUnlocked]);
+  }, [blossomThemeUnlocked, firebaseUser, goldModeUnlocked, premiumUnlocked]);
+
+  const toggleBlossomTheme = useCallback(() => {
+    if (!blossomThemeUnlocked) return;
+    setBlossomThemeEnabled((current) => {
+      const next = !current;
+      if (next) {
+        document.documentElement.dataset.addon = "blossom";
+        window.localStorage.setItem(BLOSSOM_ADDON_STORAGE_KEY, "enabled");
+      } else {
+        delete document.documentElement.dataset.addon;
+        window.localStorage.removeItem(BLOSSOM_ADDON_STORAGE_KEY);
+      }
+      return next;
+    });
+  }, [blossomThemeUnlocked]);
 
   const toggleTheme = useCallback(() => {
     setTheme((current) => {
@@ -3691,6 +3797,7 @@ export default function Home() {
         scoreSeason: SCORE_SEASON,
         premiumUnlocked: false,
         goldModeUnlocked: false,
+        blossomThemeUnlocked: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
@@ -4088,9 +4195,9 @@ export default function Home() {
     if (game === "dotsboxes") return <DotsAndBoxes onBack={() => selectGame("dotsboxes-menu")} onScore={(score) => recordScore("dotsboxes", score)} />;
     if (game === "airhockey") return <AirHockey onBack={() => selectGame("airhockey-menu")} onScore={(score) => recordScore("airhockey", score)} />;
     if (game === "2048") return <Game2048 onBack={() => selectGame("2048-menu")} onScore={(score) => recordScore("2048", score)} />;
-    const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} goldModeUnlocked={goldModeUnlocked} onUnlockPremium={unlockPremium} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, goldModeUnlocked, unlockPremium]);
+    const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" || game === "addons" ? game : "games";
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} goldModeUnlocked={goldModeUnlocked} blossomThemeUnlocked={blossomThemeUnlocked} blossomThemeEnabled={blossomThemeEnabled} onBlossomThemeToggle={toggleBlossomTheme} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, goldModeUnlocked, blossomThemeUnlocked, blossomThemeEnabled, toggleBlossomTheme, unlockPremium]);
 
   return <ChatChromeProvider enabled={Boolean(firebaseUser && !firebaseUser.isAnonymous)} open={chatOpen} unreadCount={chatUnreadCount} onToggle={() => setChatOpen((current) => !current)}>{view}<FriendsChat key={firebaseUser?.uid ?? "signed-out"} user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} onUnreadCountChange={setChatUnreadCount} /></ChatChromeProvider>;
 }

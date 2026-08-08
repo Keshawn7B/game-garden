@@ -424,8 +424,11 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(source, /PLAYER PROFILE <span>プロフィール<\/span>/);
   assert.match(source, /const PREMIUM_ACCESS_CODE = "SOKEY"/);
   assert.match(source, /const GOLD_MODE_ACCESS_CODE = "GOLD"/);
+  assert.match(source, /const BLOSSOM_THEME_ACCESS_CODE = "BLOSSOM"/);
   assert.match(source, /premiumUnlocked/);
   assert.match(source, /goldModeUnlocked/);
+  assert.match(source, /blossomThemeUnlocked/);
+  assert.match(source, /chooseProfileMenu\("addons"\)/);
   assert.match(source, /onUnlockPremium/);
   assert.match(source, /Premium unlocked for this account/);
   assert.match(source, /className="store-code-form"/);
@@ -554,6 +557,11 @@ test("routes every game through a start menu", async () => {
   assert.equal((styles.match(/\.hub-nav\{height:65px/g) ?? []).length, 1);
   assert.match(styles, /data-theme="sakura"/);
   assert.match(styles, /data-theme="gold"/);
+  assert.match(styles, /data-addon="blossom"/);
+  assert.match(styles, /blossom-addon-red\.jpg/);
+  assert.match(styles, /blossom-addon-pink\.jpg/);
+  assert.match(styles, /blossom-addon-gold\.jpg/);
+  assert.match(themeBootstrap, /game-garden-blossom-addon/);
   assert.match(styles, /content:"桜"/);
   assert.doesNotMatch(styles, /data-theme="sakura"[^}]*\.bottom-nav[^}]*position:relative/);
   assert.match(firebaseSource, /game-garden-658de/);
@@ -574,6 +582,8 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /request\.auth\.uid == userId/);
   assert.match(firestoreRules, /premiumUnlocked is bool/);
   assert.match(firestoreRules, /goldModeUnlocked is bool/);
+  assert.match(firestoreRules, /blossomThemeUnlocked is bool/);
+  assert.match(firestoreRules, /blossom-theme-test/);
   assert.match(firestoreRules, /validAccountAvatar/);
   assert.match(firestoreRules, /activeServerEntitlement/);
   assert.match(firestoreRules, /match \/entitlements\/\{productId\}[\s\S]*allow write: if false/);

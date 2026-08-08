@@ -34,6 +34,7 @@ function accountProfile(uid, displayName = "Player One") {
     scoreSeason: 2,
     premiumUnlocked: false,
     goldModeUnlocked: false,
+    blossomThemeUnlocked: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -183,6 +184,33 @@ test("gold cannot be self-granted without its auditable test redemption", async 
   batch.update(userRef, {
     goldModeUnlocked: true,
     goldModeUnlockedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+});
+
+test("blossom theme cannot be self-granted without its auditable test redemption", async () => {
+  const alice = await createAccount("alice", "Alice");
+  const userRef = doc(alice, "users", "alice");
+
+  await assertFails(updateDoc(userRef, {
+    blossomThemeUnlocked: true,
+    blossomThemeUnlockedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+
+  const batch = writeBatch(alice);
+  batch.set(doc(alice, "users", "alice", "redemptions", "blossom-theme-test"), {
+    uid: "alice",
+    redemptionId: "blossom-theme-test",
+    productId: "blossom-theme",
+    source: "test-code",
+    redeemedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(userRef, {
+    blossomThemeUnlocked: true,
+    blossomThemeUnlockedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
   await assertSucceeds(batch.commit());
