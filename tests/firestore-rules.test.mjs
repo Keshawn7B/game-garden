@@ -385,6 +385,23 @@ test("2048 accepts an account-specific high score and rejects impossible values"
   }));
 });
 
+test("Word Garden accepts an account-specific guess score", async () => {
+  const alice = await createAccount("alice", "Alice");
+  await createPublicProfile("alice", "Alice", "ABC12345");
+  const score = 4;
+  const batch = writeBatch(alice);
+  batch.update(doc(alice, "users", "alice"), {
+    highScores: { wordgarden: score }, scoreSeason: 2, avatarId: "play", bannerId: "torii", updatedAt: serverTimestamp(),
+  });
+  batch.set(doc(alice, "publicProfiles", "alice"), {
+    uid: "alice", name: "Alice", avatarId: "play", bannerId: "torii", friendCode: "ABC12345", highScores: { wordgarden: score }, scoreSeason: 2, updatedAt: serverTimestamp(),
+  }, { merge: true });
+  batch.set(doc(alice, "leaderboards", "wordgarden", "entries", "alice"), {
+    uid: "alice", name: "Alice", photoURL: "", avatarId: "play", bannerId: "torii", score, scoreSeason: 2, updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+});
+
 test("room codes allow a direct join lookup but cannot be listed", async () => {
   const host = testEnv.authenticatedContext("host", anonymousClaims).firestore();
   const guest = testEnv.authenticatedContext("guest", anonymousClaims).firestore();

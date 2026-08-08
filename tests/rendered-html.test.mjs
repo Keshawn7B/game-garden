@@ -226,6 +226,15 @@ test("routes every game through a start menu", async () => {
   assert.doesNotMatch(airHockeySource, /PULL PUCK|beginPull|movePull|releasePull/);
   assert.match(onlineSource, /OnlineAirHockeyRink/);
   assert.match(onlineSource, /SIMULTANEOUS ONLINE/);
+  const wordGardenSource = await readFile(new URL("../app/word-garden-game.tsx", import.meta.url), "utf8");
+  assert.match(source, /<GameMenu game="wordgarden"/);
+  assert.match(source, /recordScore\("wordgarden", score\)/);
+  assert.match(wordGardenSource, /export function WordGarden/);
+  assert.match(wordGardenSource, /WORD_GARDEN_VALID_WORDS\.has/);
+  assert.match(wordGardenSource, /KEY_ROWS/);
+  assert.match(wordGardenSource, /<GameResult/);
+  assert.match(styles, /\.word-garden-board/);
+  assert.match(styles, /game-word-garden\.png/);
   assert.doesNotMatch(onlineSource, /Each shot synchronizes/);
   assert.match(onlineAirHockeySource, /requestAnimationFrame/);
   assert.doesNotMatch(onlineAirHockeySource, /setDisplayPuck|setDisplayMallets/);
@@ -246,8 +255,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /game-air-hockey\.png/);
   assert.match(source, /<GameMenu game="2048"/);
   assert.match(source, /recordScore\("2048", score\)/);
-  assert.match(source, /const soloOnly = game === "2048"/);
-  assert.match(source, /MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS\.filter\(\(gameId\) => gameId !== "2048"\)/);
+  assert.match(source, /const soloOnly = game === "2048" \|\| game === "wordgarden"/);
+  assert.match(source, /MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS\.filter\(\(gameId\) => gameId !== "2048" && gameId !== "wordgarden"\)/);
   assert.match(source, /orderBy\("score", gameId === "2048" \? "desc" : "asc"\)/);
   assert.match(source, /higherIsBetter = gameId === "2048"/);
   assert.match(game2048Source, /export function Game2048/);

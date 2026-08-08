@@ -13,8 +13,9 @@ import { DotsAndBoxes } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
 import { AirHockey } from "./air-hockey-game";
 import { Game2048 } from "./game-2048";
+import { WordGarden } from "./word-garden-game";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "2048";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "2048" | "wordgarden";
 type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile" | "addons";
 type ThemeMode = "classic" | "sakura" | "gold";
@@ -2119,12 +2120,25 @@ const GAME_MENUS: Record<LibraryGameId, {
       "Build the 2048 tile before the board runs out of moves.",
     ],
   },
+  wordgarden: {
+    title: "Word Garden",
+    japanese: "言葉庭園",
+    category: "Word puzzle",
+    glyph: "言",
+    color: "wordgarden",
+    players: "1 Player",
+    rules: [
+      "Enter a real five-letter word. You have six guesses.",
+      "Green means the right letter and spot; gold means the letter belongs somewhere else.",
+      "Gray letters are not in the hidden word. Repeated letters are scored precisely.",
+    ],
+  },
 };
 
 function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
   const details = GAME_MENUS[game];
   const [selectedMode, setSelectedMode] = useState<GameMode>("solo");
-  const soloOnly = game === "2048";
+  const soloOnly = game === "2048" || game === "wordgarden";
 
   return (
     <main className="game-menu-shell">
@@ -2298,10 +2312,11 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "dotsboxes", number: "12", name: "Dots & Boxes", japanese: "点と箱", meta: "STRATEGY", scoreGame: "dotsboxes" },
   { id: "airhockey", number: "13", name: "Air Hockey", japanese: "エアホッケー", meta: "ARCADE", scoreGame: "airhockey" },
   { id: "2048", number: "14", name: "2048", japanese: "二〇四八", meta: "PUZZLE", scoreGame: "2048" },
+  { id: "wordgarden", number: "15", name: "Word Garden", japanese: "言葉庭園", meta: "WORD", scoreGame: "wordgarden" },
 ];
 
-const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes", "airhockey", "2048"];
-const MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS.filter((gameId) => gameId !== "2048");
+const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes", "airhockey", "2048", "wordgarden"];
+const MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS.filter((gameId) => gameId !== "2048" && gameId !== "wordgarden");
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
@@ -4243,6 +4258,7 @@ export default function Home() {
     if (game === "dotsboxes-menu") return <GameMenu game="dotsboxes" onPlay={(mode) => playFromMenu("dotsboxes", mode)} onBack={() => selectGame("games")} />;
     if (game === "airhockey-menu") return <GameMenu game="airhockey" onPlay={(mode) => playFromMenu("airhockey", mode)} onBack={() => selectGame("games")} />;
     if (game === "2048-menu") return <GameMenu game="2048" onPlay={(mode) => playFromMenu("2048", mode)} onBack={() => selectGame("games")} />;
+    if (game === "wordgarden-menu") return <GameMenu game="wordgarden" onPlay={(mode) => playFromMenu("wordgarden", mode)} onBack={() => selectGame("games")} />;
     if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && MULTIPLAYER_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
     if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
@@ -4258,6 +4274,7 @@ export default function Home() {
     if (game === "dotsboxes") return <DotsAndBoxes onBack={() => selectGame("dotsboxes-menu")} onScore={(score) => recordScore("dotsboxes", score)} />;
     if (game === "airhockey") return <AirHockey onBack={() => selectGame("airhockey-menu")} onScore={(score) => recordScore("airhockey", score)} />;
     if (game === "2048") return <Game2048 onBack={() => selectGame("2048-menu")} onScore={(score) => recordScore("2048", score)} />;
+    if (game === "wordgarden") return <WordGarden onBack={() => selectGame("wordgarden-menu")} onScore={(score) => recordScore("wordgarden", score)} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" || game === "addons" ? game : "games";
     return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} bannerId={bannerId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onBannerChange={updateBanner} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} goldModeUnlocked={goldModeUnlocked} blossomThemeUnlocked={blossomThemeUnlocked} blossomThemeEnabled={blossomThemeEnabled} onBlossomThemeToggle={toggleBlossomTheme} onUnlockPremium={unlockPremium} />;
   }, [game, gameMode, theme, highScores, profileName, avatarId, bannerId, recordScore, toggleTheme, updateProfileName, updateAvatar, updateBanner, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, goldModeUnlocked, blossomThemeUnlocked, blossomThemeEnabled, toggleBlossomTheme, unlockPremium]);
