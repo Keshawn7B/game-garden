@@ -3225,10 +3225,13 @@ export default function Home() {
           setHighScores(storedScores(null));
           if (isAvatarId(guestAvatar) && !isPremiumAvatar(guestAvatar)) setAvatarId(guestAvatar);
         }
-        if (savedTheme === "sakura") {
-          setTheme("sakura");
-          document.documentElement.dataset.theme = "sakura";
-        } else delete document.documentElement.dataset.theme;
+        if (savedTheme === "sakura" || savedTheme === "gold") {
+          setTheme(savedTheme);
+          document.documentElement.dataset.theme = savedTheme;
+        } else {
+          setTheme("classic");
+          delete document.documentElement.dataset.theme;
+        }
       } catch { /* Device storage may be unavailable. */ }
     }, 0);
     window.addEventListener("hashchange", onPopState);
@@ -3250,10 +3253,6 @@ export default function Home() {
       setAvatarId("play");
       setPremiumUnlocked(false);
       setGoldModeUnlocked(false);
-      if (document.documentElement.dataset.theme === "gold") {
-        setTheme("classic");
-        delete document.documentElement.dataset.theme;
-      }
       setFriends([]);
       setFriendProfiles({});
       setIncomingFriendRequests([]);
@@ -3265,7 +3264,11 @@ export default function Home() {
       setChatTargetUid(null);
       setChatUnreadCount(0);
       if (!user) {
-        if (window.localStorage.getItem("game-garden-theme") === "gold") window.localStorage.setItem("game-garden-theme", "classic");
+        if (window.localStorage.getItem("game-garden-theme") === "gold") {
+          window.localStorage.setItem("game-garden-theme", "classic");
+          setTheme("classic");
+          delete document.documentElement.dataset.theme;
+        }
         const guestName = window.localStorage.getItem(playerStorageKey(null, "name")) || "Player One";
         const guestAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
         setProfileName(guestName);
@@ -3275,7 +3278,11 @@ export default function Home() {
       }
 
       if (user.isAnonymous) {
-        if (window.localStorage.getItem("game-garden-theme") === "gold") window.localStorage.setItem("game-garden-theme", "classic");
+        if (window.localStorage.getItem("game-garden-theme") === "gold") {
+          window.localStorage.setItem("game-garden-theme", "classic");
+          setTheme("classic");
+          delete document.documentElement.dataset.theme;
+        }
         const savedGuestName = window.localStorage.getItem("game-garden-guest-name") || window.localStorage.getItem(playerStorageKey(null, "name")) || `Guest ${user.uid.slice(0, 4).toUpperCase()}`;
         const savedAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
         setProfileName(savedGuestName);
@@ -3314,6 +3321,8 @@ export default function Home() {
           document.documentElement.dataset.theme = "gold";
         } else if (!hasGoldMode && window.localStorage.getItem("game-garden-theme") === "gold") {
           window.localStorage.setItem("game-garden-theme", "classic");
+          setTheme("classic");
+          delete document.documentElement.dataset.theme;
         }
         window.localStorage.setItem(playerStorageKey(user, "name"), cloudName);
         window.localStorage.removeItem(playerStorageKey(user, "scores"));

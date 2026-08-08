@@ -324,6 +324,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /Choose a profile picture/);
   assert.match(source, /aria-label=\{`Change color mode\. Current mode:[^>]*><span>MODE<\/span><\/button>/);
   assert.match(source, /game-garden-theme/);
+  assert.match(layoutSource, /suppressHydrationWarning/);
+  assert.match(layoutSource, /<script src="\/theme-init\.js"/);
+  const themeBootstrap = await readFile(new URL("../public/theme-init.js", import.meta.url), "utf8");
+  assert.match(themeBootstrap, /savedTheme === "sakura" \|\| savedTheme === "gold"/);
+  assert.match(themeBootstrap, /document\.documentElement\.dataset\.theme = savedTheme/);
   assert.match(source, /avatar-style-/);
   const avatarOptions = source.match(/const AVATARS[\s\S]*?\n\];/)?.[0] ?? "";
   assert.equal((avatarOptions.match(/id: "/g) ?? []).length, 24);
@@ -410,7 +415,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.premium-avatar-picker button\.locked::after/);
   assert.match(styles, /\.profile-stats-menu/);
   assert.match(styles, /\.profile-stats-menu \{ box-shadow:none; \}/);
-  assert.match(styles, /\.theme-toggle\[data-mode="gold"\][^}]*linear-gradient\(#0d0d0d,#0d0d0d\) padding-box/);
+  assert.match(styles, /:root\[data-theme="gold"\] \.theme-toggle[^}]*linear-gradient\(#0d0d0d,#0d0d0d\) padding-box/);
   assert.match(styles, /\.friend-link-actions/);
   assert.match(styles, /\.friends-panel \.app-title h1[^}]*color:var\(--red\)/);
   assert.match(styles, /\.invite-center-heading[^}]*color:var\(--red\)/);

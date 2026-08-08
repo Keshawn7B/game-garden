@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-sync-scripts -- The same-origin theme bootstrap must run before first paint to prevent a red color flash. */
 import type { Metadata } from "next";
 import { Noto_Sans_JP } from "next/font/google";
 import { headers } from "next/headers";
@@ -47,5 +48,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={japanese.variable}>{children}</body></html>;
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script src="/theme-init.js" />
+      </head>
+      <body className={japanese.variable}>{children}</body>
+    </html>
+  );
 }
