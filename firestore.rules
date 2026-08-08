@@ -321,9 +321,13 @@ service cloud.firestore {
       return score is int && score >= 1 && score <= 10000;
     }
 
+    function valid2048Score(score) {
+      return score is int && score >= 1 && score <= 1000000;
+    }
+
     function validHighScores(scores) {
       return scores is map
-        && scores.keys().hasOnly(['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey'])
+        && scores.keys().hasOnly(['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey', '2048'])
         && (!scores.keys().hasAny(['codebreaker']) || validStoredScore(scores.codebreaker))
         && (!scores.keys().hasAny(['order']) || validStoredScore(scores.order))
         && (!scores.keys().hasAny(['number']) || validStoredScore(scores.number))
@@ -336,7 +340,8 @@ service cloud.firestore {
         && (!scores.keys().hasAny(['checkers']) || validStoredScore(scores.checkers))
         && (!scores.keys().hasAny(['battleship']) || validStoredScore(scores.battleship))
         && (!scores.keys().hasAny(['dotsboxes']) || validStoredScore(scores.dotsboxes))
-        && (!scores.keys().hasAny(['airhockey']) || validStoredScore(scores.airhockey));
+        && (!scores.keys().hasAny(['airhockey']) || validStoredScore(scores.airhockey))
+        && (!scores.keys().hasAny(['2048']) || valid2048Score(scores['2048']));
     }
 
     function validUserProfile(userId, profile) {
@@ -430,7 +435,7 @@ service cloud.firestore {
 
     function validScore(gameId, userId) {
       return isOwner(userId)
-        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey']
+        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey', '2048']
         && request.resource.data.keys().hasOnly(['uid', 'name', 'photoURL', 'avatarId', 'score', 'scoreSeason', 'updatedAt'])
         && request.resource.data.uid == userId
         && validDisplayName(request.resource.data.name)
@@ -441,7 +446,7 @@ service cloud.firestore {
         && request.resource.data.score is int
         && request.resource.data.scoreSeason == 2
         && request.resource.data.score >= 1
-        && request.resource.data.score <= 10000
+        && request.resource.data.score <= (gameId == '2048' ? 1000000 : 10000)
         && getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.highScores.keys().hasAny([gameId])
         && getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.highScores[gameId] == request.resource.data.score
         && request.resource.data.updatedAt == request.time;

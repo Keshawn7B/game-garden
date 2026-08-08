@@ -286,6 +286,26 @@ test("leaderboard writes succeed only when the same atomic write updates the acc
   await assertFails(updateDoc(entryRef, { score: 2, updatedAt: serverTimestamp() }));
 });
 
+test("2048 accepts an account-specific high score and rejects impossible values", async () => {
+  const alice = await createAccount("alice", "Alice");
+  await createPublicProfile("alice", "Alice", "ABC12345");
+  const score = 32768;
+  const batch = writeBatch(alice);
+  batch.update(doc(alice, "users", "alice"), {
+    highScores: { "2048": score }, scoreSeason: 2, avatarId: "play", updatedAt: serverTimestamp(),
+  });
+  batch.set(doc(alice, "publicProfiles", "alice"), {
+    uid: "alice", name: "Alice", avatarId: "play", friendCode: "ABC12345", highScores: { "2048": score }, scoreSeason: 2, updatedAt: serverTimestamp(),
+  }, { merge: true });
+  batch.set(doc(alice, "leaderboards", "2048", "entries", "alice"), {
+    uid: "alice", name: "Alice", photoURL: "", avatarId: "play", score, scoreSeason: 2, updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+  await assertFails(updateDoc(doc(alice, "users", "alice"), {
+    highScores: { "2048": 1000001 }, updatedAt: serverTimestamp(),
+  }));
+});
+
 test("room codes allow a direct join lookup but cannot be listed", async () => {
   const host = testEnv.authenticatedContext("host", anonymousClaims).firestore();
   const guest = testEnv.authenticatedContext("guest", anonymousClaims).firestore();

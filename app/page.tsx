@@ -12,8 +12,9 @@ import { Battleship } from "./battleship-game";
 import { DotsAndBoxes } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
 import { AirHockey } from "./air-hockey-game";
+import { Game2048 } from "./game-2048";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "2048";
 type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile";
 type ThemeMode = "classic" | "sakura" | "gold";
@@ -181,7 +182,8 @@ function storedScores(user: User | null): HighScores {
     const parsed = JSON.parse(saved) as Record<string, unknown>;
     return Object.fromEntries(SCORE_GAME_IDS.flatMap((gameId) => {
       const score = parsed[gameId];
-      return Number.isInteger(score) && Number(score) >= 1 && Number(score) <= 10_000 ? [[gameId, Number(score)]] : [];
+      const maximum = gameId === "2048" ? 1_000_000 : 10_000;
+      return Number.isInteger(score) && Number(score) >= 1 && Number(score) <= maximum ? [[gameId, Number(score)]] : [];
     })) as HighScores;
   } catch {
     return {};
@@ -2085,11 +2087,25 @@ const GAME_MENUS: Record<LibraryGameId, {
       "Play for two minutes; the first player to three goals wins immediately.",
     ],
   },
+  "2048": {
+    title: "2048",
+    japanese: "二〇四八",
+    category: "Number puzzle",
+    glyph: "2048",
+    color: "2048",
+    players: "1 Player",
+    rules: [
+      "Swipe the board or use the arrows to slide every tile.",
+      "Matching numbers merge once per move and add to your score.",
+      "Build the 2048 tile before the board runs out of moves.",
+    ],
+  },
 };
 
 function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
   const details = GAME_MENUS[game];
   const [selectedMode, setSelectedMode] = useState<GameMode>("solo");
+  const soloOnly = game === "2048";
 
   return (
     <main className="game-menu-shell">
@@ -2105,15 +2121,15 @@ function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode
           <p className="menu-japanese">{details.japanese}</p>
           <h1>{details.title}</h1>
           <div className="menu-meta"><span>{details.players}</span><span>{details.category}</span></div>
-          <div className="mode-picker" aria-label="Choose game mode">
+          {!soloOnly && <div className="mode-picker" aria-label="Choose game mode">
             <button className={selectedMode === "solo" ? "active" : ""} onClick={() => setSelectedMode("solo")}><b>一</b><span>SOLO<small>1 PLAYER</small></span></button>
             <button className={selectedMode === "multi" ? "active" : ""} onClick={() => setSelectedMode("multi")}><b>対</b><span>VERSUS<small>2 PLAYERS</small></span></button>
-          </div>
+          </div>}
           <div className="menu-rules">
             <h2>How to play <span>遊び方</span></h2>
             <ol>{details.rules.map((rule, index) => <li key={rule}><b>{index + 1}</b><span>{rule}</span></li>)}</ol>
           </div>
-          <button className="primary-button menu-start" onClick={() => onPlay(selectedMode)}>{selectedMode === "multi" ? "Open Lobby" : "Start Game"} <span>→</span></button>
+          <button className="primary-button menu-start" onClick={() => onPlay(soloOnly ? "solo" : selectedMode)}>{!soloOnly && selectedMode === "multi" ? "Open Lobby" : "Start Game"} <span>→</span></button>
         </div>
       </section>
     </main>
@@ -2262,12 +2278,15 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "battleship", number: "11", name: "Battleship", japanese: "海戦ゲーム", meta: "STRATEGY", scoreGame: "battleship" },
   { id: "dotsboxes", number: "12", name: "Dots & Boxes", japanese: "点と箱", meta: "STRATEGY", scoreGame: "dotsboxes" },
   { id: "airhockey", number: "13", name: "Air Hockey", japanese: "エアホッケー", meta: "ARCADE", scoreGame: "airhockey" },
+  { id: "2048", number: "14", name: "2048", japanese: "二〇四八", meta: "PUZZLE", scoreGame: "2048" },
 ];
 
-const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes", "airhockey"];
+const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes", "airhockey", "2048"];
+const MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS.filter((gameId) => gameId !== "2048");
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
+  if (game === "2048") return `${score.toLocaleString()} pts`;
   const unit = game === "airhockey" ? "seconds" : game === "battleship" ? "shots" : game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" || game === "checkers" || game === "dotsboxes" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
@@ -2297,8 +2316,9 @@ async function saveCloudScore(user: User, gameId: PlayableGameId, score: number,
   const publicProfileRef = doc(db, "publicProfiles", user.uid);
   await runTransaction(db, async (transaction) => {
     const current = await transaction.get(entryRef);
-    const previousScore = current.exists() ? Number(current.data().score) : Number.POSITIVE_INFINITY;
-    const bestScore = Math.min(previousScore, score);
+    const higherIsBetter = gameId === "2048";
+    const previousScore = current.exists() ? Number(current.data().score) : higherIsBetter ? 0 : Number.POSITIVE_INFINITY;
+    const bestScore = higherIsBetter ? Math.max(previousScore, score) : Math.min(previousScore, score);
     transaction.set(entryRef, {
       uid: user.uid,
       name: profileName.trim() || user.displayName || "Player One",
@@ -3453,7 +3473,7 @@ export default function Home() {
 
   useEffect(() => {
     const unsubscribers = SCORE_GAME_IDS.map((gameId) => onSnapshot(
-      query(collection(db, "leaderboards", gameId, "entries"), orderBy("score", "asc"), limit(10)),
+      query(collection(db, "leaderboards", gameId, "entries"), orderBy("score", gameId === "2048" ? "desc" : "asc"), limit(10)),
       (snapshot) => setLeaderboards((previous) => ({ ...previous, [gameId]: snapshot.docs.map((entry) => entry.data()).filter((entry) => entry.scoreSeason === SCORE_SEASON) as LeaderboardEntry[] })),
       () => undefined,
     ));
@@ -3468,7 +3488,9 @@ export default function Home() {
 
   const recordScore = useCallback((gameId: PlayableGameId, score: number) => {
     setHighScores((previous) => {
-      if (previous[gameId] != null && previous[gameId]! <= score) return previous;
+      const previousScore = previous[gameId];
+      const improved = gameId === "2048" ? previousScore == null || score > previousScore : previousScore == null || score < previousScore;
+      if (!improved) return previous;
       const next = { ...previous, [gameId]: score };
       if (!firebaseUser || firebaseUser.isAnonymous) {
         try { window.localStorage.setItem(playerStorageKey(null, "scores"), JSON.stringify(next)); } catch { /* Device storage may be unavailable. */ }
@@ -4035,7 +4057,7 @@ export default function Home() {
       setGameMode("solo");
       selectGame(gameId);
     };
-    const lobbyGame = SCORE_GAME_IDS.find((gameId) => game === `${gameId}-lobby`);
+    const lobbyGame = MULTIPLAYER_GAME_IDS.find((gameId) => game === `${gameId}-lobby`);
     if (lobbyGame) return <GameLobby game={lobbyGame} firebaseUser={firebaseUser} profileName={profileName} friends={visibleFriends} outgoingInvites={outgoingInvites} roomCode={roomCode} room={activeRoom?.gameId === lobbyGame ? activeRoom : null} onCreateRoom={createRoom} onJoinRoom={joinRoom} onLeaveRoom={leaveRoom} onSendInvite={sendInvite} onCancelInvite={cancelInvite} onStart={() => startVersus(lobbyGame)} onBack={() => selectGame(`${lobbyGame}-menu`)} onOpenFriends={() => selectGame("friends")} />;
     if (game === "codebreaker-menu") return <GameMenu game="codebreaker" onPlay={(mode) => playFromMenu("codebreaker", mode)} onBack={() => selectGame("games")} />;
     if (game === "order-menu") return <GameMenu game="order" onPlay={(mode) => playFromMenu("order", mode)} onBack={() => selectGame("games")} />;
@@ -4050,7 +4072,8 @@ export default function Home() {
     if (game === "battleship-menu") return <GameMenu game="battleship" onPlay={(mode) => playFromMenu("battleship", mode)} onBack={() => selectGame("games")} />;
     if (game === "dotsboxes-menu") return <GameMenu game="dotsboxes" onPlay={(mode) => playFromMenu("dotsboxes", mode)} onBack={() => selectGame("games")} />;
     if (game === "airhockey-menu") return <GameMenu game="airhockey" onPlay={(mode) => playFromMenu("airhockey", mode)} onBack={() => selectGame("games")} />;
-    if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && SCORE_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
+    if (game === "2048-menu") return <GameMenu game="2048" onPlay={(mode) => playFromMenu("2048", mode)} onBack={() => selectGame("games")} />;
+    if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && MULTIPLAYER_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
     if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
     if (game === "number") return gameMode === "multi" && activeRoom?.gameId === "number" && firebaseUser ? <OnlineNumberHunt room={activeRoom} user={firebaseUser} onLeave={leaveRoom} /> : <NumberHunt mode="solo" onBack={() => selectGame("number-menu")} onScore={(score) => recordScore("number", score)} />;
@@ -4064,6 +4087,7 @@ export default function Home() {
     if (game === "battleship") return <Battleship onBack={() => selectGame("battleship-menu")} onScore={(score) => recordScore("battleship", score)} />;
     if (game === "dotsboxes") return <DotsAndBoxes onBack={() => selectGame("dotsboxes-menu")} onScore={(score) => recordScore("dotsboxes", score)} />;
     if (game === "airhockey") return <AirHockey onBack={() => selectGame("airhockey-menu")} onScore={(score) => recordScore("airhockey", score)} />;
+    if (game === "2048") return <Game2048 onBack={() => selectGame("2048-menu")} onScore={(score) => recordScore("2048", score)} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" ? game : "games";
     return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} goldModeUnlocked={goldModeUnlocked} onUnlockPremium={unlockPremium} />;
   }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, goldModeUnlocked, unlockPremium]);
