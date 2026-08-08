@@ -469,7 +469,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.profile-stats-menu \{ box-shadow:none; \}/);
   assert.match(styles, /:root\[data-theme="gold"\] \.theme-toggle[^}]*linear-gradient\(#0d0d0d,#0d0d0d\) padding-box/);
   assert.match(styles, /\.friend-link-actions/);
-  assert.match(styles, /\.friends-panel \.app-title h1[^}]*color:var\(--red\)/);
+  assert.match(styles, /\.friends-panel \.app-title p,\.friends-panel \.app-title h1,\.friends-panel \.app-title h1 span\{color:var\(--black\)\}/);
   assert.match(styles, /\.invite-center-heading[^}]*color:var\(--red\)/);
   assert.match(styles, /\.friend-list-heading[^}]*color:var\(--red\)/);
   assert.match(styles, /\.global-rank-list/);
