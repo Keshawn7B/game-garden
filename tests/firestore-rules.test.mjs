@@ -30,6 +30,7 @@ function accountProfile(uid, displayName = "Player One") {
     displayName,
     photoURL: "",
     avatarId: "play",
+    bannerId: "torii",
     highScores: {},
     scoreSeason: 2,
     premiumUnlocked: false,
@@ -53,6 +54,7 @@ async function createPublicProfile(uid, displayName = "Player One", code = "ABC1
     uid,
     name: displayName,
     avatarId: "play",
+    bannerId: "torii",
     friendCode: code,
     highScores: {},
     scoreSeason: 2,
@@ -339,18 +341,19 @@ test("leaderboard writes succeed only when the same atomic write updates the acc
   await createPublicProfile("alice", "Alice", "ABC12345");
   const entryRef = doc(alice, "leaderboards", "tictactoe", "entries", "alice");
   const entry = {
-    uid: "alice", name: "Alice", photoURL: "", avatarId: "play", score: 3, scoreSeason: 2, updatedAt: serverTimestamp(),
+    uid: "alice", name: "Alice", photoURL: "", avatarId: "play", bannerId: "torii", score: 3, scoreSeason: 2, updatedAt: serverTimestamp(),
   };
   await assertFails(setDoc(entryRef, entry));
 
   const scoreBatch = writeBatch(alice);
   scoreBatch.update(doc(alice, "users", "alice"), {
-    highScores: { tictactoe: 3 }, scoreSeason: 2, avatarId: "play", updatedAt: serverTimestamp(),
+    highScores: { tictactoe: 3 }, scoreSeason: 2, avatarId: "play", bannerId: "torii", updatedAt: serverTimestamp(),
   });
   scoreBatch.set(doc(alice, "publicProfiles", "alice"), {
     uid: "alice",
     name: "Alice",
     avatarId: "play",
+    bannerId: "torii",
     friendCode: "ABC12345",
     highScores: { tictactoe: 3 },
     scoreSeason: 2,
@@ -368,13 +371,13 @@ test("2048 accepts an account-specific high score and rejects impossible values"
   const score = 32768;
   const batch = writeBatch(alice);
   batch.update(doc(alice, "users", "alice"), {
-    highScores: { "2048": score }, scoreSeason: 2, avatarId: "play", updatedAt: serverTimestamp(),
+    highScores: { "2048": score }, scoreSeason: 2, avatarId: "play", bannerId: "torii", updatedAt: serverTimestamp(),
   });
   batch.set(doc(alice, "publicProfiles", "alice"), {
-    uid: "alice", name: "Alice", avatarId: "play", friendCode: "ABC12345", highScores: { "2048": score }, scoreSeason: 2, updatedAt: serverTimestamp(),
+    uid: "alice", name: "Alice", avatarId: "play", bannerId: "torii", friendCode: "ABC12345", highScores: { "2048": score }, scoreSeason: 2, updatedAt: serverTimestamp(),
   }, { merge: true });
   batch.set(doc(alice, "leaderboards", "2048", "entries", "alice"), {
-    uid: "alice", name: "Alice", photoURL: "", avatarId: "play", score, scoreSeason: 2, updatedAt: serverTimestamp(),
+    uid: "alice", name: "Alice", photoURL: "", avatarId: "play", bannerId: "torii", score, scoreSeason: 2, updatedAt: serverTimestamp(),
   });
   await assertSucceeds(batch.commit());
   await assertFails(updateDoc(doc(alice, "users", "alice"), {
@@ -393,6 +396,7 @@ test("room codes allow a direct join lookup but cannot be listed", async () => {
     hostUid: "host",
     hostName: "Host Player",
     hostAvatar: "play",
+    hostBanner: "torii",
     status: "open",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -405,6 +409,7 @@ test("room codes allow a direct join lookup but cannot be listed", async () => {
     guestUid: "guest",
     guestName: "Guest Player",
     guestAvatar: "play",
+    guestBanner: "sakura-moon",
     status: "ready",
     updatedAt: serverTimestamp(),
   }));
@@ -413,6 +418,7 @@ test("room codes allow a direct join lookup but cannot be listed", async () => {
     guestUid: deleteField(),
     guestName: deleteField(),
     guestAvatar: deleteField(),
+    guestBanner: deleteField(),
     status: "open",
     updatedAt: serverTimestamp(),
   }));
@@ -430,6 +436,7 @@ test("a joined room can start and play an online game without exposing it to out
     hostUid: "host",
     hostName: "Host Player",
     hostAvatar: "play",
+    hostBanner: "torii",
     status: "open",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -439,6 +446,7 @@ test("a joined room can start and play an online game without exposing it to out
     guestUid: "guest",
     guestName: "Guest Player",
     guestAvatar: "play",
+    guestBanner: "koi-current",
     status: "ready",
     updatedAt: serverTimestamp(),
   }));

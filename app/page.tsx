@@ -19,13 +19,14 @@ type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile" | "addons";
 type ThemeMode = "classic" | "sakura" | "gold";
 type GameMode = "solo" | "multi";
+type BannerId = "torii" | "sakura-moon" | "koi-current" | "golden-crane";
 type GameId = AppTab | LibraryGameId | `${LibraryGameId}-menu` | `${PlayableGameId}-lobby`;
 type ColorId = "coral" | "gold" | "mint" | "blue" | "violet" | "pink";
 type AvatarId = "play" | "sakura" | "fox" | "koi" | "moon" | "crane" | "dragon" | "cat" | "ninja" | "sun" | "pink-blossom" | "pink-heart" | "pink-bunny" | "pink-fan" | "pink-peach" | "premium-shogun" | "premium-kitsune" | "premium-empress" | "premium-dragon" | "premium-koi" | "premium-ronin" | "premium-cat" | "premium-blossom" | "premium-dual-swords";
 type HighScores = Partial<Record<PlayableGameId, number>>;
-type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; score: number };
+type LeaderboardEntry = { uid: string; name: string; photoURL: string; avatarId?: AvatarId; bannerId?: BannerId; score: number };
 type Leaderboards = Partial<Record<PlayableGameId, LeaderboardEntry[]>>;
-type FriendEntry = { uid: string; name: string; avatarId: AvatarId; highScores?: HighScores; online?: boolean; lastActiveAt?: Timestamp; isOnline?: boolean };
+type FriendEntry = { uid: string; name: string; avatarId: AvatarId; bannerId?: BannerId; highScores?: HighScores; online?: boolean; lastActiveAt?: Timestamp; isOnline?: boolean };
 type FriendRequestStatus = "pending" | "accepted" | "declined" | "cancelled";
 type FriendRequest = {
   id: string;
@@ -88,9 +89,11 @@ type GameRoom = {
   hostUid: string;
   hostName: string;
   hostAvatar: AvatarId;
+  hostBanner: BannerId;
   guestUid?: string;
   guestName?: string;
   guestAvatar?: AvatarId;
+  guestBanner?: BannerId;
   status: "open" | "ready" | "playing";
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -158,6 +161,14 @@ const AVATARS: { id: AvatarId; glyph?: string; label: string; premium?: boolean 
   { id: "premium-dual-swords", label: "Crimson Dual Swords", premium: true },
 ];
 
+const BANNERS: { id: BannerId; label: string; japanese: string }[] = [
+  { id: "torii", label: "Crimson Torii", japanese: "赤鳥居" },
+  { id: "sakura-moon", label: "Moonlit Sakura", japanese: "月桜" },
+  { id: "koi-current", label: "Koi Current", japanese: "錦鯉" },
+  { id: "golden-crane", label: "Golden Crane", japanese: "金鶴" },
+];
+const DEFAULT_BANNER_ID: BannerId = "torii";
+
 function isAvatarId(value: unknown): value is AvatarId {
   return typeof value === "string" && AVATARS.some((avatar) => avatar.id === value);
 }
@@ -166,11 +177,15 @@ function isPremiumAvatar(value: AvatarId) {
   return AVATARS.some((avatar) => avatar.id === value && avatar.premium);
 }
 
+function isBannerId(value: unknown): value is BannerId {
+  return typeof value === "string" && BANNERS.some((banner) => banner.id === value);
+}
+
 function friendCodeFor(uid: string) {
   return uid.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase();
 }
 
-type PlayerStorageField = "scores" | "name" | "avatar";
+type PlayerStorageField = "scores" | "name" | "avatar" | "banner";
 
 function playerStorageKey(user: User | null, field: PlayerStorageField) {
   return user && !user.isAnonymous
@@ -249,13 +264,14 @@ function inviteTimeLeft(invite: GameInvite) {
   return `${hours}h left`;
 }
 
-async function syncPublicProfile(user: User, name: string, avatarId: AvatarId, highScores: HighScores) {
+async function syncPublicProfile(user: User, name: string, avatarId: AvatarId, bannerId: BannerId, highScores: HighScores) {
   const friendCode = friendCodeFor(user.uid);
   const batch = writeBatch(db);
   batch.set(doc(db, "publicProfiles", user.uid), {
     uid: user.uid,
     name: name.trim() || user.displayName || "Player One",
     avatarId,
+    bannerId,
     friendCode,
     highScores,
     scoreSeason: SCORE_SEASON,
@@ -2250,11 +2266,11 @@ function GameLobby({
             <>
               <div className="room-share-card"><div><small>ROOM CODE</small><strong>{room.code}</strong><span>{roomReady ? "Two players ready" : "Waiting for player two"}</span></div><div><button onClick={() => void shareRoomLink()}>SHARE LINK</button><button onClick={() => void copyRoomLink()}>COPY LINK</button></div></div>
               <div className="lobby-players" aria-label="Lobby players">
-                <div className="lobby-player ready"><AvatarGlyph avatarId={room.hostAvatar} className="lobby-avatar" /><span><small>HOST</small><strong>{room.hostName}</strong><em>READY</em></span></div>
+                <div className={`lobby-player ready banner-surface banner-style-${isBannerId(room.hostBanner) ? room.hostBanner : DEFAULT_BANNER_ID}`}><AvatarGlyph avatarId={room.hostAvatar} className="lobby-avatar" /><span><small>HOST</small><strong>{room.hostName}</strong><em>READY</em></span></div>
                 <b>VS</b>
-                <div className={`lobby-player ${roomReady ? "ready" : "waiting"}`}>{room.guestUid && room.guestAvatar ? <AvatarGlyph avatarId={room.guestAvatar} className="lobby-avatar" /> : <span className="lobby-empty-avatar">?</span>}<span><small>GUEST</small><strong>{room.guestName || "Waiting for guest"}</strong><em>{roomReady ? "READY" : "OPEN"}</em></span></div>
+                <div className={`lobby-player ${roomReady ? "ready" : "waiting"} ${room.guestUid ? `banner-surface banner-style-${isBannerId(room.guestBanner) ? room.guestBanner : DEFAULT_BANNER_ID}` : ""}`}>{room.guestUid && room.guestAvatar ? <AvatarGlyph avatarId={room.guestAvatar} className="lobby-avatar" /> : <span className="lobby-empty-avatar">?</span>}<span><small>GUEST</small><strong>{room.guestName || "Waiting for guest"}</strong><em>{roomReady ? "READY" : "OPEN"}</em></span></div>
               </div>
-              {isHost && !roomReady && friends.length > 0 && !firebaseUser?.isAnonymous && <div className="lobby-friends"><div className="lobby-section-title"><span>Invite friends</span><span>友達を招待</span></div>{friends.map((friend) => <div className="lobby-friend" key={friend.uid}><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="lobby-friend-avatar" /><strong>{friend.name}</strong><button onClick={() => void inviteFriend(friend)} disabled={busyFriend !== null || Boolean(activeInvite)}>{busyFriend === friend.uid ? "SENDING…" : activeInvite?.toUid === friend.uid ? "SENT" : "INVITE"}</button></div>)}</div>}
+              {isHost && !roomReady && friends.length > 0 && !firebaseUser?.isAnonymous && <div className="lobby-friends"><div className="lobby-section-title"><span>Invite friends</span><span>友達を招待</span></div>{friends.map((friend) => <div className={`lobby-friend banner-surface banner-style-${isBannerId(friend.bannerId) ? friend.bannerId : DEFAULT_BANNER_ID}`} key={friend.uid}><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="lobby-friend-avatar" /><strong>{friend.name}</strong><button onClick={() => void inviteFriend(friend)} disabled={busyFriend !== null || Boolean(activeInvite)}>{busyFriend === friend.uid ? "SENDING…" : activeInvite?.toUid === friend.uid ? "SENT" : "INVITE"}</button></div>)}</div>}
               {isHost && !roomReady && !friends.length && !firebaseUser?.isAnonymous && <div className="lobby-empty-state"><strong>Share the link or invite a friend.</strong><span>Your friend list is currently empty.</span><button className="primary-button" onClick={onOpenFriends}>Add Friends</button></div>}
               {!isHost && roomReady && <p className="lobby-message host-start-message" role="status">Both players are ready. Waiting for the host to start.</p>}
               <div className="lobby-room-actions room-footer-actions">{roomReady && isHost && <button className="primary-button" onClick={() => void onStart()}>Start Online Versus</button>}{activeInvite && inviteIsLive(activeInvite) && <button className="secondary-button" onClick={() => void onCancelInvite(activeInvite)}>Cancel Friend Invite</button>}<button className="secondary-button" onClick={() => void onLeaveRoom()}>Leave Room</button></div>
@@ -2313,7 +2329,7 @@ function activeEntitlement(snapshot: DocumentSnapshot) {
   return data.status === "active" && (expiresAt == null || expiresAt > Date.now());
 }
 
-async function saveCloudScore(user: User, gameId: PlayableGameId, score: number, profileName: string, avatarId: AvatarId) {
+async function saveCloudScore(user: User, gameId: PlayableGameId, score: number, profileName: string, avatarId: AvatarId, bannerId: BannerId) {
   const entryRef = doc(db, "leaderboards", gameId, "entries", user.uid);
   const profileRef = doc(db, "users", user.uid);
   const publicProfileRef = doc(db, "publicProfiles", user.uid);
@@ -2327,15 +2343,17 @@ async function saveCloudScore(user: User, gameId: PlayableGameId, score: number,
       name: profileName.trim() || user.displayName || "Player One",
       photoURL: "",
       avatarId,
+      bannerId,
       score: bestScore,
       scoreSeason: SCORE_SEASON,
       updatedAt: serverTimestamp(),
     }, { merge: true });
-    transaction.set(profileRef, { highScores: { [gameId]: bestScore }, scoreSeason: SCORE_SEASON, avatarId, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(profileRef, { highScores: { [gameId]: bestScore }, scoreSeason: SCORE_SEASON, avatarId, bannerId, updatedAt: serverTimestamp() }, { merge: true });
     transaction.set(publicProfileRef, {
       uid: user.uid,
       name: profileName.trim() || user.displayName || "Player One",
       avatarId,
+      bannerId,
       friendCode: friendCodeFor(user.uid),
       highScores: { [gameId]: bestScore },
       scoreSeason: SCORE_SEASON,
@@ -2351,6 +2369,10 @@ function AvatarGlyph({ avatarId, className = "" }: { avatarId: AvatarId; classNa
 
 function PlayerAvatar({ small = false, avatarId }: { small?: boolean; avatarId: AvatarId }) {
   return <AvatarGlyph avatarId={avatarId} className={`player-avatar ${small ? "avatar-small" : ""}`} />;
+}
+
+function ProfileBanner({ bannerId, className = "" }: { bannerId: BannerId; className?: string }) {
+  return <span className={`${className} profile-banner-art banner-style-${bannerId}`} aria-hidden="true" />;
 }
 
 function HeaderLogo({ compact = false }: { compact?: boolean }) {
@@ -2608,8 +2630,10 @@ function AppHome({
   highScores,
   profileName,
   avatarId,
+  bannerId,
   onProfileNameChange,
   onAvatarChange,
+  onBannerChange,
   onProfileSave,
   onResetScores,
   firebaseUser,
@@ -2652,8 +2676,10 @@ function AppHome({
   highScores: HighScores;
   profileName: string;
   avatarId: AvatarId;
+  bannerId: BannerId;
   onProfileNameChange: (name: string) => void;
   onAvatarChange: (avatarId: AvatarId) => void;
+  onBannerChange: (bannerId: BannerId) => void;
   onProfileSave: () => Promise<boolean>;
   onResetScores: () => Promise<string>;
   firebaseUser: User | null;
@@ -2710,6 +2736,7 @@ function AppHome({
   const [premiumMessage, setPremiumMessage] = useState("");
   const [premiumBusy, setPremiumBusy] = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [bannerPickerOpen, setBannerPickerOpen] = useState(false);
   const [profileSaveBusy, setProfileSaveBusy] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
@@ -2756,7 +2783,7 @@ function AppHome({
   }, [activeTab]);
 
   useEffect(() => {
-    if (!avatarPickerOpen && !selectedFriend && !signOutConfirmOpen && !resetConfirmOpen) return;
+    if (!avatarPickerOpen && !bannerPickerOpen && !selectedFriend && !signOutConfirmOpen && !resetConfirmOpen) return;
     const appShell = appShellRef.current;
     const previousOverflow = document.body.style.overflow;
     const previousAppOverflow = appShell?.style.overflowY ?? "";
@@ -2766,7 +2793,7 @@ function AppHome({
       document.body.style.overflow = previousOverflow;
       if (appShell) appShell.style.overflowY = previousAppOverflow;
     };
-  }, [avatarPickerOpen, selectedFriend, signOutConfirmOpen, resetConfirmOpen]);
+  }, [avatarPickerOpen, bannerPickerOpen, selectedFriend, signOutConfirmOpen, resetConfirmOpen]);
 
   useEffect(() => {
     if (!profileSaved) return;
@@ -2966,7 +2993,7 @@ function AppHome({
         {activeTab === "leaderboard" && (
           <section className="app-panel rank-panel">
             <div className="app-title"><div><p>GLOBAL</p><h1>Leaderboard <span>ランキング</span></h1></div></div>
-            {signedIn ? <div className="player-rank-card">
+            {signedIn ? <div className={`player-rank-card banner-surface banner-style-${bannerId}`}>
               <span className="rank-number">YOU</span><PlayerAvatar avatarId={avatarId} />
               <div><strong>{profileName || "Player One"}</strong></div>
               <b>{completedGames}<small>BESTS</small></b>
@@ -2976,7 +3003,7 @@ function AppHome({
             </div>
             <div className="global-rank-list">
               {activeRanks.length ? activeRanks.map((entry, index) => (
-                <div className="global-rank-row" key={entry.uid}>
+                <div className={`global-rank-row rank-banner-row banner-style-${isBannerId(entry.bannerId) ? entry.bannerId : DEFAULT_BANNER_ID}`} key={entry.uid}>
                   <strong>{String(index + 1).padStart(2, "0")}</strong>
                   <AvatarGlyph avatarId={isAvatarId(entry.avatarId) ? entry.avatarId : "play"} className="rank-avatar" />
                   <span>{entry.name}</span>
@@ -3001,11 +3028,13 @@ function AppHome({
           <section className="app-panel profile-panel">
             {signedIn ? <>
             <div className="profile-card">
-              <button className="profile-avatar-button" onClick={() => setAvatarPickerOpen(true)} aria-label="Change profile picture">
-                <PlayerAvatar avatarId={avatarId} />
-                <span className="profile-avatar-label">CHANGE PICTURE</span>
-                <small>画像を変更</small>
-              </button>
+              <div className={`profile-banner-hero banner-style-${bannerId}`}>
+                <button className="profile-avatar-button" onClick={() => setAvatarPickerOpen(true)} aria-label="Change profile picture">
+                  <PlayerAvatar avatarId={avatarId} />
+                  <span className="profile-avatar-label">CHANGE PICTURE</span>
+                </button>
+                <button className="profile-banner-change" onClick={() => setBannerPickerOpen(true)}><span>景</span> CHANGE BANNER</button>
+              </div>
               {avatarPickerOpen && (
                 <div className="avatar-picker-backdrop" onMouseDown={() => setAvatarPickerOpen(false)}>
                   <section className="avatar-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setAvatarPickerOpen(false); }}>
@@ -3027,6 +3056,16 @@ function AppHome({
                       ))}
                     </div>
                     {!premiumUnlocked && <p className="avatar-picker-lock-note">Enter your access code in the Store to unlock the legendary collection.</p>}
+                  </section>
+                </div>
+              )}
+              {bannerPickerOpen && (
+                <div className="avatar-picker-backdrop" onMouseDown={() => setBannerPickerOpen(false)}>
+                  <section className="avatar-picker-dialog banner-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="banner-picker-title" onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setBannerPickerOpen(false); }}>
+                    <div className="avatar-picker-heading"><div><small>PROFILE BANNER · 背景</small><h2 id="banner-picker-title">Choose your banner</h2></div><button autoFocus onClick={() => setBannerPickerOpen(false)} aria-label="Close profile banner chooser">×</button></div>
+                    <div className="banner-picker" role="group" aria-label="Choose a profile banner">
+                      {BANNERS.map((banner) => <button key={banner.id} className={bannerId === banner.id ? "selected" : ""} onClick={() => { onBannerChange(banner.id); setBannerPickerOpen(false); }} aria-pressed={bannerId === banner.id}><ProfileBanner bannerId={banner.id} /><span><strong>{banner.label}</strong><small>{banner.japanese}</small></span><b>{bannerId === banner.id ? "✓" : "選"}</b></button>)}
+                    </div>
                   </section>
                 </div>
               )}
@@ -3140,7 +3179,7 @@ function AppHome({
                 <button className="primary-button" onClick={() => onTabChange("profile")}>Open profile</button>
               </div>
             ) : <>
-              <div className="friends-account-banner">
+              <div className={`friends-account-banner banner-surface banner-style-${bannerId}`}>
                 <span className="friends-account-avatar"><PlayerAvatar avatarId={avatarId} /></span>
                 <div><small>YOUR NAME · あなた</small><strong>{profileName || "Player One"}</strong><span><i /> ONLINE</span></div>
                 <b>{onlineFriends.length}<small>FRIENDS ONLINE</small></b>
@@ -3151,7 +3190,7 @@ function AppHome({
                 {inviteMessage && <p className="invite-message" role="status">{inviteMessage}</p>}
                 {displayedFriends.length ? displayedFriends.map((friend) => (
                   <article className={`friend-banner ${friend.isOnline ? "is-online" : ""}`} key={friend.uid}>
-                    <button className="friend-banner-profile" onClick={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(friend); }} aria-label={`Open ${friend.name}'s profile details`}>
+                    <button className={`friend-banner-profile banner-surface banner-style-${isBannerId(friend.bannerId) ? friend.bannerId : DEFAULT_BANNER_ID}`} onClick={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(friend); }} aria-label={`Open ${friend.name}'s profile details`}>
                       <span className="friend-avatar-wrap"><AvatarGlyph avatarId={isAvatarId(friend.avatarId) ? friend.avatarId : "play"} className="friend-avatar" /><i className={friend.isOnline ? "online" : ""} /></span>
                       <span className="friend-identity"><strong>{friend.name}</strong><small className={friend.isOnline ? "online" : ""}>{friendPresenceLabel(friend)}</small></span>
                       <span className="friend-banner-view"><small>VIEW PROFILE</small><b>›</b></span>
@@ -3219,7 +3258,7 @@ function AppHome({
                   {friendMessage && <p className="friend-add-message" role="status">{friendMessage}</p>}
                 </div>
               </div>
-              {selectedFriend && <div className="friend-profile-backdrop" onMouseDown={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(null); }}><section className="friend-profile-dialog" role="dialog" aria-modal="true" aria-label={`${selectedFriend.name}'s profile`} onMouseDown={(event) => event.stopPropagation()}><button className="friend-profile-close" onClick={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(null); }} aria-label="Close friend profile">×</button><AvatarGlyph avatarId={selectedFriend.avatarId} className="friend-profile-avatar" /><small>FRIEND PROFILE</small><h2>{selectedFriend.name}</h2><p className={selectedFriend.isOnline ? "online" : ""}>{friendPresenceLabel(selectedFriend)}</p><div className="friend-profile-actions"><button className="primary-button" onClick={() => { onOpenChat(selectedFriend); setSelectedFriend(null); }}>Message</button><button className="secondary-button" onClick={() => { setInviteTarget(selectedFriend.uid); setSelectedFriend(null); }}>Invite to play</button><button className="friend-profile-remove" onClick={() => setFriendRemoveConfirmOpen(true)}>Remove friend</button></div><div className="friend-profile-scores">{scoredGames.map((game) => <div key={game.id}><span>{game.name}</span><b>{formatScore(game.scoreGame, selectedFriend.highScores?.[game.scoreGame])}</b></div>)}</div></section></div>}
+              {selectedFriend && <div className="friend-profile-backdrop" onMouseDown={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(null); }}><section className="friend-profile-dialog" role="dialog" aria-modal="true" aria-label={`${selectedFriend.name}'s profile`} onMouseDown={(event) => event.stopPropagation()}><button className="friend-profile-close" onClick={() => { setFriendRemoveConfirmOpen(false); setSelectedFriend(null); }} aria-label="Close friend profile">×</button><div className={`friend-profile-hero banner-style-${isBannerId(selectedFriend.bannerId) ? selectedFriend.bannerId : DEFAULT_BANNER_ID}`}><AvatarGlyph avatarId={selectedFriend.avatarId} className="friend-profile-avatar" /></div><small>FRIEND PROFILE</small><h2>{selectedFriend.name}</h2><p className={selectedFriend.isOnline ? "online" : ""}>{friendPresenceLabel(selectedFriend)}</p><div className="friend-profile-actions"><button className="primary-button" onClick={() => { onOpenChat(selectedFriend); setSelectedFriend(null); }}>Message</button><button className="secondary-button" onClick={() => { setInviteTarget(selectedFriend.uid); setSelectedFriend(null); }}>Invite to play</button><button className="friend-profile-remove" onClick={() => setFriendRemoveConfirmOpen(true)}>Remove friend</button></div><div className="friend-profile-scores">{scoredGames.map((game) => <div key={game.id}><span>{game.name}</span><b>{formatScore(game.scoreGame, selectedFriend.highScores?.[game.scoreGame])}</b></div>)}</div></section></div>}
               {selectedFriend && friendRemoveConfirmOpen && <div className="friend-remove-confirm-backdrop" onMouseDown={() => setFriendRemoveConfirmOpen(false)}><section className="friend-remove-confirm" role="alertdialog" aria-modal="true" aria-labelledby="remove-friend-title" onMouseDown={(event) => event.stopPropagation()}><span aria-hidden="true">友</span><small>FRIENDSHIP</small><h2 id="remove-friend-title">Remove {selectedFriend.name}?</h2><p>They will disappear from your friends list. You can send a new request later.</p><div><button onClick={() => setFriendRemoveConfirmOpen(false)} disabled={friendRemoveBusy}>Cancel</button><button className="confirm-remove-friend" onClick={() => void confirmFriendRemoval()} disabled={friendRemoveBusy}>{friendRemoveBusy ? "Removing…" : "Remove friend"}</button></div></section></div>}
             </>}
           </section>
@@ -3246,6 +3285,7 @@ export default function Home() {
   const [highScores, setHighScores] = useState<HighScores>({});
   const [profileName, setProfileName] = useState("Player One");
   const [avatarId, setAvatarId] = useState<AvatarId>("play");
+  const [bannerId, setBannerId] = useState<BannerId>(DEFAULT_BANNER_ID);
   const [theme, setTheme] = useState<ThemeMode>("classic");
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -3285,9 +3325,11 @@ export default function Home() {
         if (!auth.currentUser) {
           const guestName = window.localStorage.getItem(playerStorageKey(null, "name"));
           const guestAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
+          const guestBanner = window.localStorage.getItem(playerStorageKey(null, "banner"));
           setProfileName(guestName || "Player One");
           setHighScores(storedScores(null));
           if (isAvatarId(guestAvatar) && !isPremiumAvatar(guestAvatar)) setAvatarId(guestAvatar);
+          if (isBannerId(guestBanner)) setBannerId(guestBanner);
         }
         if (savedTheme === "sakura" || savedTheme === "gold") {
           setTheme(savedTheme);
@@ -3315,6 +3357,7 @@ export default function Home() {
       setHighScores({});
       setProfileName("Player One");
       setAvatarId("play");
+      setBannerId(DEFAULT_BANNER_ID);
       setPremiumUnlocked(false);
       setGoldModeUnlocked(false);
       setBlossomThemeUnlocked(false);
@@ -3339,9 +3382,11 @@ export default function Home() {
         }
         const guestName = window.localStorage.getItem(playerStorageKey(null, "name")) || "Player One";
         const guestAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
+        const guestBanner = window.localStorage.getItem(playerStorageKey(null, "banner"));
         setProfileName(guestName);
         setHighScores(storedScores(null));
         if (isAvatarId(guestAvatar) && !isPremiumAvatar(guestAvatar)) setAvatarId(guestAvatar);
+        if (isBannerId(guestBanner)) setBannerId(guestBanner);
         return;
       }
 
@@ -3355,9 +3400,11 @@ export default function Home() {
         }
         const savedGuestName = window.localStorage.getItem("game-garden-guest-name") || window.localStorage.getItem(playerStorageKey(null, "name")) || `Guest ${user.uid.slice(0, 4).toUpperCase()}`;
         const savedAvatar = window.localStorage.getItem(playerStorageKey(null, "avatar"));
+        const savedBanner = window.localStorage.getItem(playerStorageKey(null, "banner"));
         setProfileName(savedGuestName);
         setHighScores(storedScores(null));
         if (isAvatarId(savedAvatar) && !isPremiumAvatar(savedAvatar)) setAvatarId(savedAvatar);
+        if (isBannerId(savedBanner)) setBannerId(savedBanner);
         return;
       }
 
@@ -3382,10 +3429,13 @@ export default function Home() {
         const savedAvatar = window.localStorage.getItem(playerStorageKey(user, "avatar"));
         const avatarCandidate: AvatarId = isAvatarId(data?.avatarId) ? data.avatarId : isAvatarId(savedAvatar) ? savedAvatar : "play";
         const cloudAvatar: AvatarId = isPremiumAvatar(avatarCandidate) && !hasPremiumAccess ? "play" : avatarCandidate;
+        const accountBanner = window.localStorage.getItem(playerStorageKey(user, "banner"));
+        const cloudBanner: BannerId = isBannerId(data?.bannerId) ? data.bannerId : isBannerId(accountBanner) ? accountBanner : DEFAULT_BANNER_ID;
         const cloudScores = data?.scoreSeason === SCORE_SEASON && data?.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {};
         if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         setProfileName(cloudName);
         setAvatarId(cloudAvatar);
+        setBannerId(cloudBanner);
         setPremiumUnlocked(hasPremiumAccess);
         setGoldModeUnlocked(hasGoldMode);
         setBlossomThemeUnlocked(hasBlossomTheme);
@@ -3408,11 +3458,13 @@ export default function Home() {
         window.localStorage.setItem(playerStorageKey(user, "name"), cloudName);
         window.localStorage.removeItem(playerStorageKey(user, "scores"));
         window.localStorage.setItem(playerStorageKey(user, "avatar"), cloudAvatar);
+        window.localStorage.setItem(playerStorageKey(user, "banner"), cloudBanner);
         await setDoc(profileRef, {
           uid: user.uid,
           displayName: cloudName,
           photoURL: user.photoURL || "",
           avatarId: cloudAvatar,
+          bannerId: cloudBanner,
           highScores: cloudScores,
           scoreSeason: SCORE_SEASON,
           // Paid entitlements stay server-owned. These fields only preserve
@@ -3423,7 +3475,7 @@ export default function Home() {
           updatedAt: serverTimestamp(),
           ...(data?.createdAt instanceof Timestamp ? {} : { createdAt: serverTimestamp() }),
         }, { merge: true });
-        await syncPublicProfile(user, cloudName, cloudAvatar, cloudScores);
+        await syncPublicProfile(user, cloudName, cloudAvatar, cloudBanner, cloudScores);
       } catch (error) {
         if (authLoadId.current !== loadId || auth.currentUser?.uid !== user.uid) return;
         setAuthError(error instanceof Error ? error.message : "Could not load the cloud profile.");
@@ -3524,6 +3576,7 @@ export default function Home() {
           uid: friend.uid,
           name: typeof data.name === "string" ? data.name : friend.name,
           avatarId: isAvatarId(data.avatarId) ? data.avatarId : friend.avatarId,
+          bannerId: isBannerId(data.bannerId) ? data.bannerId : DEFAULT_BANNER_ID,
           highScores: data.scoreSeason === SCORE_SEASON && data.highScores && typeof data.highScores === "object" ? data.highScores as HighScores : {},
           online: data.online === true,
           lastActiveAt: data.lastActiveAt instanceof Timestamp ? data.lastActiveAt : undefined,
@@ -3559,8 +3612,8 @@ export default function Home() {
       }
       return next;
     });
-    if (firebaseUser && !firebaseUser.isAnonymous) void saveCloudScore(firebaseUser, gameId, score, profileName, avatarId).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
-  }, [firebaseUser, profileName, avatarId]);
+    if (firebaseUser && !firebaseUser.isAnonymous) void saveCloudScore(firebaseUser, gameId, score, profileName, avatarId, bannerId).catch((error: unknown) => setAuthError(error instanceof Error ? error.message : "Could not save the score online."));
+  }, [firebaseUser, profileName, avatarId, bannerId]);
 
   const updateProfileName = useCallback((name: string) => {
     setProfileName(name);
@@ -3575,6 +3628,11 @@ export default function Home() {
     setAvatarId(nextAvatar);
     try { window.localStorage.setItem(playerStorageKey(firebaseUser, "avatar"), nextAvatar); } catch { /* Device storage may be unavailable. */ }
   }, [firebaseUser, premiumUnlocked]);
+
+  const updateBanner = useCallback((nextBanner: BannerId) => {
+    setBannerId(nextBanner);
+    try { window.localStorage.setItem(playerStorageKey(firebaseUser, "banner"), nextBanner); } catch { /* Device storage may be unavailable. */ }
+  }, [firebaseUser]);
 
   const unlockPremium = useCallback(async (rawCode: string) => {
     if (!firebaseUser || firebaseUser.isAnonymous) return "Sign in before redeeming store codes.";
@@ -3701,11 +3759,12 @@ export default function Home() {
         displayName,
         photoURL: firebaseUser.photoURL || "",
         avatarId: savedAvatar,
+        bannerId,
         highScores,
         scoreSeason: SCORE_SEASON,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      await syncPublicProfile(firebaseUser, displayName, savedAvatar, highScores);
+      await syncPublicProfile(firebaseUser, displayName, savedAvatar, bannerId, highScores);
       await updateProfile(firebaseUser, { displayName });
       const batch = writeBatch(db);
       for (const [gameId, score] of Object.entries(highScores) as [PlayableGameId, number][]) {
@@ -3714,6 +3773,7 @@ export default function Home() {
           name: displayName,
           photoURL: "",
           avatarId: savedAvatar,
+          bannerId,
           score,
           scoreSeason: SCORE_SEASON,
           updatedAt: serverTimestamp(),
@@ -3723,12 +3783,13 @@ export default function Home() {
       window.localStorage.setItem(playerStorageKey(firebaseUser, "name"), displayName);
       setAvatarId(savedAvatar);
       window.localStorage.setItem(playerStorageKey(firebaseUser, "avatar"), savedAvatar);
+      window.localStorage.setItem(playerStorageKey(firebaseUser, "banner"), bannerId);
       return true;
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Could not save the profile.");
       return false;
     }
-  }, [firebaseUser, highScores, profileName, avatarId, premiumUnlocked]);
+  }, [firebaseUser, highScores, profileName, avatarId, bannerId, premiumUnlocked]);
 
   const resetScores = useCallback(async () => {
     const user = firebaseUser;
@@ -3793,6 +3854,7 @@ export default function Home() {
         displayName,
         photoURL: "",
         avatarId,
+        bannerId,
         highScores: {},
         scoreSeason: SCORE_SEASON,
         premiumUnlocked: false,
@@ -3801,14 +3863,14 @@ export default function Home() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      await syncPublicProfile(credential.user, displayName, avatarId, {});
+      await syncPublicProfile(credential.user, displayName, avatarId, bannerId, {});
       setProfileName(displayName);
     } catch (error) {
       setAuthError(friendlyAuthError(error));
     } finally {
       setAuthLoading(false);
     }
-  }, [profileName, avatarId]);
+  }, [profileName, avatarId, bannerId]);
 
   const signOutProfile = useCallback(() => {
     const user = auth.currentUser;
@@ -3962,7 +4024,7 @@ export default function Home() {
         const code = makeRoomCode();
         const roomRef = doc(db, "rooms", code);
         if ((await getDoc(roomRef)).exists()) continue;
-        const nextRoom: Omit<GameRoom, "createdAt" | "updatedAt" | "expiresAt"> = { code, gameId, gameName: gameDetails.name, hostUid: user.uid, hostName: name, hostAvatar: avatarId, status: "open" };
+        const nextRoom: Omit<GameRoom, "createdAt" | "updatedAt" | "expiresAt"> = { code, gameId, gameName: gameDetails.name, hostUid: user.uid, hostName: name, hostAvatar: avatarId, hostBanner: bannerId, status: "open" };
         await setDoc(roomRef, { ...nextRoom, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + INVITE_LIFETIME_MS) });
         setActiveRoom(nextRoom);
         rememberRoom(code, gameId);
@@ -3973,7 +4035,7 @@ export default function Home() {
       setAuthError(error instanceof Error ? error.message : "Could not create the room.");
       return "Could not create the room.";
     }
-  }, [avatarId, rememberRoom, roomIdentity]);
+  }, [avatarId, bannerId, rememberRoom, roomIdentity]);
 
   const joinRoom = useCallback(async (rawCode: string, requestedName: string) => {
     const code = rawCode.trim().toUpperCase();
@@ -3987,9 +4049,9 @@ export default function Home() {
       if ((foundRoom.expiresAt?.toMillis() ?? 0) <= Date.now()) return "That room has expired.";
       if (foundRoom.hostUid !== user.uid && foundRoom.guestUid && foundRoom.guestUid !== user.uid) return "That room already has two players.";
       if (foundRoom.hostUid !== user.uid && foundRoom.guestUid !== user.uid) {
-        await updateDoc(roomRef, { guestUid: user.uid, guestName: name, guestAvatar: avatarId, status: "ready", updatedAt: serverTimestamp() });
+        await updateDoc(roomRef, { guestUid: user.uid, guestName: name, guestAvatar: avatarId, guestBanner: bannerId, status: "ready", updatedAt: serverTimestamp() });
       }
-      const joinedRoom: GameRoom = foundRoom.hostUid === user.uid ? foundRoom : { ...foundRoom, guestUid: user.uid, guestName: name, guestAvatar: avatarId, status: "ready" };
+      const joinedRoom: GameRoom = foundRoom.hostUid === user.uid ? foundRoom : { ...foundRoom, guestUid: user.uid, guestName: name, guestAvatar: avatarId, guestBanner: bannerId, status: "ready" };
       setActiveRoom(joinedRoom);
       rememberRoom(code, foundRoom.gameId);
       return `Joined room ${code}.`;
@@ -3997,7 +4059,7 @@ export default function Home() {
       setAuthError(error instanceof Error ? error.message : "Could not join the room.");
       return "Could not join the room.";
     }
-  }, [avatarId, rememberRoom, roomIdentity]);
+  }, [avatarId, bannerId, rememberRoom, roomIdentity]);
 
   const startVersus = useCallback(async (gameId: PlayableGameId) => {
     const user = auth.currentUser;
@@ -4061,6 +4123,7 @@ export default function Home() {
               guestUid: deleteField(),
               guestName: deleteField(),
               guestAvatar: deleteField(),
+              guestBanner: deleteField(),
               status: "open",
               updatedAt: serverTimestamp(),
             });
@@ -4196,8 +4259,8 @@ export default function Home() {
     if (game === "airhockey") return <AirHockey onBack={() => selectGame("airhockey-menu")} onScore={(score) => recordScore("airhockey", score)} />;
     if (game === "2048") return <Game2048 onBack={() => selectGame("2048-menu")} onScore={(score) => recordScore("2048", score)} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" || game === "addons" ? game : "games";
-    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} goldModeUnlocked={goldModeUnlocked} blossomThemeUnlocked={blossomThemeUnlocked} blossomThemeEnabled={blossomThemeEnabled} onBlossomThemeToggle={toggleBlossomTheme} onUnlockPremium={unlockPremium} />;
-  }, [game, gameMode, theme, highScores, profileName, avatarId, recordScore, toggleTheme, updateProfileName, updateAvatar, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, goldModeUnlocked, blossomThemeUnlocked, blossomThemeEnabled, toggleBlossomTheme, unlockPremium]);
+    return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} bannerId={bannerId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onBannerChange={updateBanner} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} goldModeUnlocked={goldModeUnlocked} blossomThemeUnlocked={blossomThemeUnlocked} blossomThemeEnabled={blossomThemeEnabled} onBlossomThemeToggle={toggleBlossomTheme} onUnlockPremium={unlockPremium} />;
+  }, [game, gameMode, theme, highScores, profileName, avatarId, bannerId, recordScore, toggleTheme, updateProfileName, updateAvatar, updateBanner, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, goldModeUnlocked, blossomThemeUnlocked, blossomThemeEnabled, toggleBlossomTheme, unlockPremium]);
 
   return <ChatChromeProvider enabled={Boolean(firebaseUser && !firebaseUser.isAnonymous)} open={chatOpen} unreadCount={chatUnreadCount} onToggle={() => setChatOpen((current) => !current)}>{view}<FriendsChat key={firebaseUser?.uid ?? "signed-out"} user={firebaseUser} profileName={profileName} avatarId={avatarId} friends={visibleFriends} open={chatOpen} selectedUid={chatTargetUid} onClose={() => setChatOpen(false)} onSelectFriend={setChatTargetUid} onUnreadCountChange={setChatUnreadCount} /></ChatChromeProvider>;
 }

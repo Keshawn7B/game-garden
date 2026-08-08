@@ -330,7 +330,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /className="friend-connect-card"/);
   assert.match(source, /className="friend-connect-code"/);
   assert.match(source, /className="friend-connect-add"/);
-  assert.match(source, /className="friends-account-banner"/);
+  assert.match(source, /friends-account-banner banner-surface/);
   assert.match(source, /className="friends-signin-emblem"/);
   assert.doesNotMatch(source, /avatarId="pink-blossom" className="friend-hero-avatar"/);
   assert.match(source, /className="friends-account-avatar"><PlayerAvatar avatarId=\{avatarId\}/);
@@ -350,6 +350,15 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /signInWithEmailAndPassword/);
   assert.match(source, /createUserWithEmailAndPassword/);
   assert.match(source, /Choose a profile picture/);
+  assert.match(source, /Choose your banner/);
+  assert.match(source, /type BannerId = "torii" \| "sakura-moon" \| "koi-current" \| "golden-crane"/);
+  assert.match(source, /profile-banner-change/);
+  assert.match(source, /hostBanner: bannerId/);
+  assert.match(source, /guestBanner: bannerId/);
+  assert.match(styles, /profile-banner-torii\.jpg/);
+  assert.match(styles, /profile-banner-sakura-moon\.jpg/);
+  assert.match(styles, /profile-banner-koi\.jpg/);
+  assert.match(styles, /profile-banner-crane\.jpg/);
   assert.match(source, /aria-label=\{`Change color mode\. Current mode:[^>]*><span>MODE<\/span><\/button>/);
   assert.match(source, /game-garden-theme/);
   assert.match(layoutSource, /suppressHydrationWarning/);
@@ -368,7 +377,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /className="header-signin-button"/);
   assert.match(source, /className="profile-signin-only"/);
   assert.match(source, /signedIn && <div className="score-list">/);
-  assert.match(source, /signedIn \? <div className="player-rank-card">/);
+  assert.match(source, /signedIn \? <div className=\{`player-rank-card banner-surface/);
   assert.match(source, /className="profile-dropdown" role="menu"/);
   assert.match(source, />Profile<\/span>/);
   assert.match(source, />Leaderboard<\/span>/);
@@ -527,7 +536,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /await onRemoveFriend\(selectedFriend\.uid\)/);
   assert.match(styles, /\.friend-profile-dialog\{[^}]*touch-action:pan-y/);
   assert.match(styles, /\.friend-profile-close\{position:sticky/);
-  assert.match(source, /!avatarPickerOpen && !selectedFriend/);
+  assert.match(source, /!avatarPickerOpen && !bannerPickerOpen && !selectedFriend/);
   assert.match(source, /friendRequests/);
   assert.match(source, /onRespondFriendRequest/);
   assert.match(source, /type InviteStatus = "pending" \| "accepted" \| "declined" \| "cancelled"/);

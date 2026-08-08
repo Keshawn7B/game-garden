@@ -201,16 +201,17 @@ service cloud.firestore {
         && (
           (resource.data.status == 'open'
             && resource.data.expiresAt > request.time
-            && !resource.data.keys().hasAny(['guestUid', 'guestName', 'guestAvatar'])
+            && !resource.data.keys().hasAny(['guestUid', 'guestName', 'guestAvatar', 'guestBanner'])
             && request.auth.uid != resource.data.hostUid
             && request.resource.data.guestUid == request.auth.uid
             && request.resource.data.guestName is string
             && request.resource.data.guestName.size() >= 2
             && request.resource.data.guestName.size() <= 18
             && validRoomAvatar(request.auth.uid, request.resource.data.guestAvatar)
+            && validBanner(request.resource.data.guestBanner)
             && request.resource.data.status == 'ready'
             && request.resource.data.updatedAt == request.time
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'status', 'updatedAt']))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'guestBanner', 'status', 'updatedAt']))
           ||
           (resource.data.status == 'ready'
             && request.auth.uid == resource.data.hostUid
@@ -219,12 +220,12 @@ service cloud.firestore {
             && request.resource.data.updatedAt == request.time
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
           ||
-          (resource.data.keys().hasAll(['guestUid', 'guestName', 'guestAvatar'])
+          (resource.data.keys().hasAll(['guestUid', 'guestName', 'guestAvatar', 'guestBanner'])
             && request.auth.uid == resource.data.guestUid
             && request.resource.data.status == 'open'
-            && !request.resource.data.keys().hasAny(['guestUid', 'guestName', 'guestAvatar'])
+            && !request.resource.data.keys().hasAny(['guestUid', 'guestName', 'guestAvatar', 'guestBanner'])
             && request.resource.data.updatedAt == request.time
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'status', 'updatedAt']))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'guestAvatar', 'guestBanner', 'status', 'updatedAt']))
         );
       allow delete: if signedIn() && request.auth.uid == resource.data.hostUid;
     }
@@ -347,13 +348,14 @@ service cloud.firestore {
     }
 
     function validUserProfile(userId, profile) {
-      return profile.keys().hasOnly(['uid', 'displayName', 'photoURL', 'avatarId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'premiumUnlockedAt', 'goldModeUnlocked', 'goldModeUnlockedAt', 'blossomThemeUnlocked', 'blossomThemeUnlockedAt', 'createdAt', 'updatedAt'])
-        && profile.keys().hasAll(['uid', 'displayName', 'photoURL', 'avatarId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'goldModeUnlocked', 'blossomThemeUnlocked', 'createdAt', 'updatedAt'])
+      return profile.keys().hasOnly(['uid', 'displayName', 'photoURL', 'avatarId', 'bannerId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'premiumUnlockedAt', 'goldModeUnlocked', 'goldModeUnlockedAt', 'blossomThemeUnlocked', 'blossomThemeUnlockedAt', 'createdAt', 'updatedAt'])
+        && profile.keys().hasAll(['uid', 'displayName', 'photoURL', 'avatarId', 'bannerId', 'highScores', 'scoreSeason', 'premiumUnlocked', 'goldModeUnlocked', 'blossomThemeUnlocked', 'createdAt', 'updatedAt'])
         && profile.uid == userId
         && validDisplayName(profile.displayName)
         && profile.photoURL is string
         && profile.photoURL.size() <= 2048
         && validAccountAvatar(userId, profile.avatarId)
+        && validBanner(profile.bannerId)
         && validHighScores(profile.highScores)
         && profile.scoreSeason == 2
         && profile.premiumUnlocked is bool
@@ -374,12 +376,13 @@ service cloud.firestore {
     }
 
     function validPublicProfile(userId, profile) {
-      return profile.keys().hasOnly(['uid', 'name', 'avatarId', 'friendCode', 'highScores', 'scoreSeason', 'online', 'lastActiveAt', 'updatedAt'])
-        && profile.keys().hasAll(['uid', 'name', 'avatarId', 'friendCode', 'highScores', 'scoreSeason', 'online', 'lastActiveAt', 'updatedAt'])
+      return profile.keys().hasOnly(['uid', 'name', 'avatarId', 'bannerId', 'friendCode', 'highScores', 'scoreSeason', 'online', 'lastActiveAt', 'updatedAt'])
+        && profile.keys().hasAll(['uid', 'name', 'avatarId', 'bannerId', 'friendCode', 'highScores', 'scoreSeason', 'online', 'lastActiveAt', 'updatedAt'])
         && profile.uid == userId
         && validDisplayName(profile.name)
         && validFriendCode(profile.friendCode)
         && validAccountAvatar(userId, profile.avatarId)
+        && validBanner(profile.bannerId)
         && validHighScores(profile.highScores)
         && profile.highScores == getAfter(/databases/$(database)/documents/users/$(userId)).data.highScores
         && profile.scoreSeason == 2
@@ -447,13 +450,15 @@ service cloud.firestore {
     function validScore(gameId, userId) {
       return isOwner(userId)
         && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey', '2048']
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'photoURL', 'avatarId', 'score', 'scoreSeason', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'photoURL', 'avatarId', 'bannerId', 'score', 'scoreSeason', 'updatedAt'])
         && request.resource.data.uid == userId
         && validDisplayName(request.resource.data.name)
         && request.resource.data.name == getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.name
         && request.resource.data.photoURL == ''
         && validAccountAvatar(userId, request.resource.data.avatarId)
         && request.resource.data.avatarId == getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.avatarId
+        && validBanner(request.resource.data.bannerId)
+        && request.resource.data.bannerId == getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.bannerId
         && request.resource.data.score is int
         && request.resource.data.scoreSeason == 2
         && request.resource.data.score >= 1
@@ -582,6 +587,7 @@ service cloud.firestore {
         && validDisplayName(room.hostName)
         && room.hostName.size() >= 2
         && validRoomAvatar(room.hostUid, room.hostAvatar)
+        && validBanner(room.hostBanner)
         && validInviteGame(room.gameId, room.gameName)
         && room.status == 'open'
         && room.createdAt == request.time
@@ -589,7 +595,7 @@ service cloud.firestore {
         && room.expiresAt is timestamp
         && room.expiresAt > request.time
         && room.expiresAt <= request.time + duration.value(24, 'h')
-        && room.keys().hasOnly(['code', 'gameId', 'gameName', 'hostUid', 'hostName', 'hostAvatar', 'status', 'createdAt', 'updatedAt', 'expiresAt']);
+        && room.keys().hasOnly(['code', 'gameId', 'gameName', 'hostUid', 'hostName', 'hostAvatar', 'hostBanner', 'status', 'createdAt', 'updatedAt', 'expiresAt']);
     }
 
     function validRoomCode(roomCode) {
@@ -860,6 +866,10 @@ service cloud.firestore {
 
     function validAvatar(avatarId) {
       return avatarId in ['play', 'sakura', 'fox', 'koi', 'moon', 'crane', 'dragon', 'cat', 'ninja', 'sun', 'pink-blossom', 'pink-heart', 'pink-bunny', 'pink-fan', 'pink-peach', 'premium-shogun', 'premium-kitsune', 'premium-empress', 'premium-dragon', 'premium-koi', 'premium-ronin', 'premium-cat', 'premium-blossom', 'premium-dual-swords'];
+    }
+
+    function validBanner(bannerId) {
+      return bannerId in ['torii', 'sakura-moon', 'koi-current', 'golden-crane'];
     }
 
     function isPremiumAvatar(avatarId) {
