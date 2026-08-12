@@ -37,6 +37,7 @@ test("server-renders the Game Garden hub", async () => {
   assert.match(html, /Battleship/);
   assert.match(html, /Dots &amp; Boxes/);
   assert.match(html, /Air Hockey/);
+  assert.match(html, /Blackjack/);
   assert.doesNotMatch(html, /Meducktion|Deducktion/);
   assert.match(html, /App navigation/);
   assert.match(html, /Ranks/);
@@ -69,6 +70,8 @@ test("routes every game through a start menu", async () => {
   const pwaManifest = await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8");
   const pwaInit = await readFile(new URL("../public/pwa-init.js", import.meta.url), "utf8");
   const serviceWorker = await readFile(new URL("../public/service-worker.js", import.meta.url), "utf8");
+  const blackjackSource = await readFile(new URL("../app/blackjack-game.tsx", import.meta.url), "utf8");
+  const blackjackLogic = await readFile(new URL("../app/blackjack-logic.ts", import.meta.url), "utf8");
   assert.match(source, /codebreaker-menu/);
   assert.match(source, /order-menu/);
   assert.match(source, /number-menu/);
@@ -81,6 +84,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /dotsboxes-menu/);
   assert.match(source, /airhockey-menu/);
   assert.match(source, /2048-menu/);
+  assert.match(source, /blackjack-menu/);
   assert.match(source, /appShellRef\.current\?\.scrollTo/);
   assert.match(styles, /\.app-shell \{ height:100vh;height:100dvh;min-height:0;[^}]*overflow-y:auto/);
   assert.match(styles, /\.profile-panel::after,\.store-panel::after/);
@@ -258,10 +262,10 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /game-air-hockey\.png/);
   assert.match(source, /<GameMenu game="2048"/);
   assert.match(source, /recordScore\("2048", score\)/);
-  assert.match(source, /const soloOnly = game === "2048" \|\| game === "wordgarden"/);
-  assert.match(source, /MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS\.filter\(\(gameId\) => gameId !== "2048" && gameId !== "wordgarden"\)/);
-  assert.match(source, /orderBy\("score", gameId === "2048" \? "desc" : "asc"\)/);
-  assert.match(source, /higherIsBetter = gameId === "2048"/);
+  assert.match(source, /const soloOnly = game === "2048" \|\| game === "wordgarden" \|\| game === "blackjack"/);
+  assert.match(source, /MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS\.filter\(\(gameId\) => gameId !== "2048" && gameId !== "wordgarden" && gameId !== "blackjack"\)/);
+  assert.match(source, /orderBy\("score", gameId === "2048" \|\| gameId === "blackjack" \? "desc" : "asc"\)/);
+  assert.match(source, /higherIsBetter = gameId === "2048" \|\| gameId === "blackjack"/);
   assert.match(game2048Source, /export function Game2048/);
   assert.match(game2048Source, /onPointerDown/);
   assert.match(game2048Source, /trace2048Move/);
@@ -281,6 +285,16 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.game-2048-result[^}]*position:fixed/);
   assert.match(firestoreRules, /valid2048Score/);
   assert.match(firestoreRules, /'2048'/);
+  assert.match(source, /<GameMenu game="blackjack"/);
+  assert.match(source, /recordScore\("blackjack", score\)/);
+  assert.match(blackjackSource, /export function Blackjack/);
+  assert.match(blackjackSource, /DOUBLE/);
+  assert.match(blackjackSource, /Play chips only/);
+  assert.match(blackjackLogic, /createBlackjackShoe\(decks = 6\)/);
+  assert.match(blackjackLogic, /wager \* 2\.5/);
+  assert.match(styles, /\.blackjack-table/);
+  assert.match(styles, /\.art-blackjack/);
+  assert.match(firestoreRules, /'blackjack'/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);
   assert.match(source, /blocksWin \? 120/);

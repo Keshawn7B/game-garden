@@ -10,7 +10,7 @@
     "build": "vinext build",
     "build:firebase": "npm run build && node scripts/export-firebase-static.mjs",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/air-hockey-rules.test.mjs tests/game-2048-rules.test.mjs tests/word-garden-logic.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/air-hockey-rules.test.mjs tests/game-2048-rules.test.mjs tests/word-garden-logic.test.mjs tests/blackjack-logic.test.mjs",
     "test:rules": "npx --yes firebase-tools@15.26.0 emulators:exec --only firestore \"node --test tests/firestore-rules.test.mjs\" --project demo-game-garden-security",
     "test:security": "npm audit --omit=dev --audit-level=high && npm run test:rules",
     "lint": "eslint . --ignore-pattern firebase-public --ignore-pattern dist --ignore-pattern .next"
