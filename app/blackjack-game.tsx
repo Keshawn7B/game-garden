@@ -119,7 +119,7 @@ export function Blackjack({ onBack, onScore }: { onBack: () => void; onScore: (s
   return <main className="game-shell blackjack-shell">
     <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><span className="header-title-logo game-header-logo" role="img" aria-label="Game Garden" /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={resetBankroll} aria-label="Reset blackjack table">↻</button></div></header>
     <section className="blackjack-game">
-      <div className="blackjack-heading"><div><p className="eyebrow">CASINO · SOLO TABLE</p><h1>Blackjack</h1><p>Beat the dealer without going over 21.</p></div><span aria-hidden="true">二一</span></div>
+      <div className="blackjack-heading"><div><p className="eyebrow">CASINO · SOLO TABLE</p><h1>Blackjack</h1><p>Beat the dealer without going over 21.</p></div><span className="blackjack-heading-mark" aria-hidden="true"><i>A<small>♠</small></i><b>K<small>♥</small></b></span></div>
       <div className="blackjack-bank"><div><small>BANKROLL</small><strong>{bankroll.toLocaleString()}<em> CHIPS</em></strong></div><b>BET <span>{wager || selectedBet}</span></b><div><small>ROUND</small><strong>{round || "—"}</strong></div></div>
       <div className="blackjack-table">
         <div className="blackjack-felt-mark" aria-hidden="true"><span>BLACKJACK</span><small>PAYS 3 TO 2 · DEALER STANDS ON 17</small></div>
