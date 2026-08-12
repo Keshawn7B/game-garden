@@ -1,4 +1,4 @@
-const CACHE_NAME = "game-garden-shell-v1";
+const CACHE_NAME = "game-garden-shell-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/app-icon-192.png", "/app-icon-512.png", "/game-garden-logo-red.png"];
 
 self.addEventListener("install", (event) => {
