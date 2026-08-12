@@ -180,7 +180,7 @@ span[class*="avatar-style-"]>.avatar-mark { position:relative;z-index:2;width:au
 .art-2048 i { opacity:0; }
 .art-wordgarden { position:relative;overflow:hidden;background-color:#090807;background-image:url('/game-word-garden.png');background-size:cover;background-position:center; }
 .art-wordgarden i { opacity:0; }
-.art-blackjack{position:relative;overflow:hidden;background:#071b14;background-image:radial-gradient(circle at 50% 42%,#17583d 0 37%,#0a2e21 38% 61%,#06130e 62%);background-size:cover;background-position:center}.art-blackjack::before{content:"A\A  ♠";white-space:pre;width:43%;height:59%;position:absolute;left:17%;top:16%;display:grid;place-items:start;padding:10% 0 0 10%;border:3px solid #171717;border-radius:8%;background:#fff;color:#111;font-size:clamp(12px,3vw,26px);font-weight:1000;line-height:.7;box-shadow:9px 8px 0 #c42331;transform:rotate(-10deg)}.art-blackjack i{left:auto;right:9px;top:auto;bottom:9px;width:34px;height:30px;border-color:#d9ac46;border-radius:50%;background:#111;color:#f0c75f;font-size:11px}.score-art.art-blackjack::before{padding:6px 0 0 6px;font-size:11px;box-shadow:4px 4px 0 #c42331}
+.art-blackjack{position:relative;overflow:hidden;background-color:#071b14;background-image:url('/game-blackjack.png');background-size:cover;background-position:center}.art-blackjack::before{display:none}.art-blackjack i{opacity:0}
 .game-card-copy { display:block;padding:14px 3px 0; }
 .game-card-copy strong { display:block;font-size:14px;font-weight:900;line-height:1.1; }
 .game-card-copy small { display:block;margin-top:4px;color:var(--red);font-size:7px;font-weight:900;letter-spacing:.09em; }

@@ -298,6 +298,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.blackjack-table-wager/);
   assert.match(styles, /@keyframes blackjackChipDrop/);
   assert.match(styles, /\.art-blackjack/);
+  assert.match(styles, /game-blackjack\.png/);
   assert.match(firestoreRules, /'blackjack'/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);
