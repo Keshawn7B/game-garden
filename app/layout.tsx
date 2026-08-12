@@ -44,7 +44,6 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     applicationName: "Game Garden",
     manifest: "/manifest.webmanifest",
-    themeColor: "#ef0018",
     appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Game Garden" },
     formatDetection: { telephone: false },
     icons: {
@@ -60,6 +59,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <meta id="game-garden-theme-color" name="theme-color" content="#e60012" />
         <script src="/theme-init.js" />
         <script src="/pwa-init.js" defer />
       </head>

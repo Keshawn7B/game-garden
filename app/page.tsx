@@ -3323,6 +3323,11 @@ export default function Home() {
   const authLoadId = useRef(0);
 
   useEffect(() => {
+    const themeColors: Record<ThemeMode, string> = { classic: "#e60012", sakura: "#e4316b", gold: "#c89216" };
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", themeColors[theme]);
+  }, [theme]);
+
+  useEffect(() => {
     const onPopState = () => setGame((window.location.hash.slice(1) as GameId) || "games");
     onPopState();
     const restoreTimer = window.setTimeout(() => {

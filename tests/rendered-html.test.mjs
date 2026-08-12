@@ -379,6 +379,7 @@ test("routes every game through a start menu", async () => {
   assert.match(layoutSource, /suppressHydrationWarning/);
   assert.match(layoutSource, /<script src="\/theme-init\.js"/);
   assert.match(layoutSource, /manifest: "\/manifest\.webmanifest"/);
+  assert.match(layoutSource, /id="game-garden-theme-color" name="theme-color" content="#e60012"/);
   assert.match(layoutSource, /appleWebApp:/);
   assert.match(layoutSource, /<script src="\/pwa-init\.js" defer/);
   assert.equal(JSON.parse(pwaManifest).display, "standalone");
@@ -388,6 +389,8 @@ test("routes every game through a start menu", async () => {
   assert.match(serviceWorker, /request\.mode === "navigate"/);
   const themeBootstrap = await readFile(new URL("../public/theme-init.js", import.meta.url), "utf8");
   assert.match(themeBootstrap, /savedTheme === "sakura" \|\| savedTheme === "gold"/);
+  assert.match(themeBootstrap, /sakura: "#e4316b", gold: "#c89216"/);
+  assert.match(themeBootstrap, /themeColor\.setAttribute\("content", themeColors\[activeTheme\]\)/);
   assert.match(themeBootstrap, /document\.documentElement\.dataset\.theme = savedTheme/);
   assert.match(source, /avatar-style-/);
   const avatarOptions = source.match(/const AVATARS[\s\S]*?\n\];/)?.[0] ?? "";
