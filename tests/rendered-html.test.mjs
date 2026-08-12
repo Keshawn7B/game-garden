@@ -290,9 +290,13 @@ test("routes every game through a start menu", async () => {
   assert.match(blackjackSource, /export function Blackjack/);
   assert.match(blackjackSource, /DOUBLE/);
   assert.match(blackjackSource, /Play chips only/);
+  assert.match(blackjackSource, /className={`blackjack-table-wager chip-\$\{tableChipColor\}`}/);
+  assert.match(blackjackSource, /aria-label={`\$\{tableBet\} chips wagered`}/);
   assert.match(blackjackLogic, /createBlackjackShoe\(decks = 6\)/);
   assert.match(blackjackLogic, /wager \* 2\.5/);
   assert.match(styles, /\.blackjack-table/);
+  assert.match(styles, /\.blackjack-table-wager/);
+  assert.match(styles, /@keyframes blackjackChipDrop/);
   assert.match(styles, /\.art-blackjack/);
   assert.match(firestoreRules, /'blackjack'/);
   assert.match(source, /function chooseBarricadeCpuAction/);

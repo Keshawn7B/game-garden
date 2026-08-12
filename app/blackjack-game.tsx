@@ -113,6 +113,8 @@ export function Blackjack({ onBack, onScore }: { onBack: () => void; onScore: (s
   const dealerShownTotal = phase === "player" ? blackjackHandValue(dealer.slice(0, 1)).total : dealerValue.total;
   const canDouble = phase === "player" && player.length === 2 && bankroll >= wager;
   const resultCopy = outcome ? OUTCOME_COPY[outcome] : null;
+  const tableBet = wager || selectedBet;
+  const tableChipColor = tableBet >= 250 ? "gold" : tableBet >= 100 ? "red" : tableBet >= 50 ? "blue" : "black";
 
   return <main className="game-shell blackjack-shell">
     <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><span className="header-title-logo game-header-logo" role="img" aria-label="Game Garden" /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={resetBankroll} aria-label="Reset blackjack table">↻</button></div></header>
@@ -121,6 +123,7 @@ export function Blackjack({ onBack, onScore }: { onBack: () => void; onScore: (s
       <div className="blackjack-bank"><div><small>BANKROLL</small><strong>{bankroll.toLocaleString()}<em> CHIPS</em></strong></div><b>BET <span>{wager || selectedBet}</span></b><div><small>ROUND</small><strong>{round || "—"}</strong></div></div>
       <div className="blackjack-table">
         <div className="blackjack-felt-mark" aria-hidden="true"><span>BLACKJACK</span><small>PAYS 3 TO 2 · DEALER STANDS ON 17</small></div>
+        <div key={`${phase}-${tableBet}`} className={`blackjack-table-wager chip-${tableChipColor}`} aria-label={`${tableBet} chips wagered`}><small>YOUR BET</small><span /><span /><span><b>{tableBet}</b></span></div>
         <section className="blackjack-hand dealer-hand"><div><small>DEALER</small><strong>{dealer.length ? dealerShownTotal : "—"}</strong></div><div className="blackjack-cards">{dealer.map((card, index) => <PlayingCard key={card.id} card={card} hidden={index === 1 && phase === "player"} index={index} />)}</div></section>
         <div className="blackjack-status" role="status">{phase === "betting" ? "PLACE YOUR BET" : phase === "player" ? playerValue.total > 21 ? "BUST" : "YOUR MOVE" : phase === "dealer" ? "DEALER PLAYING" : resultCopy?.title.toUpperCase()}</div>
         <section className="blackjack-hand player-hand"><div><small>PLAYER</small><strong>{player.length ? playerValue.total : "—"}{playerValue.soft && player.length ? <em> SOFT</em> : null}</strong></div><div className="blackjack-cards">{player.map((card, index) => <PlayingCard key={card.id} card={card} index={index + 2} />)}</div></section>
