@@ -66,6 +66,9 @@ test("routes every game through a start menu", async () => {
   const firebaseHosting = await readFile(new URL("../firebase.json", import.meta.url), "utf8");
   const firebaseExport = await readFile(new URL("../scripts/export-firebase-static.mjs", import.meta.url), "utf8");
   const layoutSource = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
+  const pwaManifest = await readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8");
+  const pwaInit = await readFile(new URL("../public/pwa-init.js", import.meta.url), "utf8");
+  const serviceWorker = await readFile(new URL("../public/service-worker.js", import.meta.url), "utf8");
   assert.match(source, /codebreaker-menu/);
   assert.match(source, /order-menu/);
   assert.match(source, /number-menu/);
@@ -375,6 +378,14 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /game-garden-theme/);
   assert.match(layoutSource, /suppressHydrationWarning/);
   assert.match(layoutSource, /<script src="\/theme-init\.js"/);
+  assert.match(layoutSource, /manifest: "\/manifest\.webmanifest"/);
+  assert.match(layoutSource, /appleWebApp:/);
+  assert.match(layoutSource, /<script src="\/pwa-init\.js" defer/);
+  assert.equal(JSON.parse(pwaManifest).display, "standalone");
+  assert.match(pwaManifest, /app-icon-512\.png/);
+  assert.match(pwaInit, /navigator\.serviceWorker\.register\("\/service-worker\.js"/);
+  assert.match(serviceWorker, /game-garden-shell-v1/);
+  assert.match(serviceWorker, /request\.mode === "navigate"/);
   const themeBootstrap = await readFile(new URL("../public/theme-init.js", import.meta.url), "utf8");
   assert.match(themeBootstrap, /savedTheme === "sakura" \|\| savedTheme === "gold"/);
   assert.match(themeBootstrap, /document\.documentElement\.dataset\.theme = savedTheme/);
@@ -469,7 +480,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.profile-stats-menu \{ box-shadow:none; \}/);
   assert.match(styles, /:root\[data-theme="gold"\] \.theme-toggle[^}]*linear-gradient\(#0d0d0d,#0d0d0d\) padding-box/);
   assert.match(styles, /\.friend-link-actions/);
-  assert.match(styles, /\.friends-panel \.app-title p,\.friends-panel \.app-title h1,\.friends-panel \.app-title h1 span\{color:var\(--black\)\}/);
+  assert.match(styles, /\.friends-panel \.app-title h1\{color:var\(--black\)\}/);
+  assert.match(styles, /\.friends-panel \.app-title p,\.friends-panel \.app-title h1 span\{color:var\(--red\)\}/);
   assert.match(styles, /\.invite-center-heading[^}]*color:var\(--red\)/);
   assert.match(styles, /\.friend-list-heading[^}]*color:var\(--red\)/);
   assert.match(styles, /\.global-rank-list/);

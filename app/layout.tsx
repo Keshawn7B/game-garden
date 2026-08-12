@@ -42,6 +42,15 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: baseUrl,
     title,
     description,
+    applicationName: "Game Garden",
+    manifest: "/manifest.webmanifest",
+    themeColor: "#ef0018",
+    appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Game Garden" },
+    formatDetection: { telephone: false },
+    icons: {
+      icon: [{ url: "/app-icon-192.png", sizes: "192x192", type: "image/png" }, { url: "/app-icon-512.png", sizes: "512x512", type: "image/png" }],
+      apple: [{ url: "/app-icon-512.png", sizes: "512x512", type: "image/png" }],
+    },
     openGraph: { title, description, type: "website", images: [{ url: "/og-game-garden.png", width: 1774, height: 887, alt: "Game Garden arcade app" }] },
     twitter: { card: "summary_large_image", title, description, images: ["/og-game-garden.png"] },
   };
@@ -52,6 +61,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <head>
         <script src="/theme-init.js" />
+        <script src="/pwa-init.js" defer />
       </head>
       <body className={japanese.variable}>{children}</body>
     </html>
