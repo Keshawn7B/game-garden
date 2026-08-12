@@ -408,7 +408,7 @@ test("routes every game through a start menu", async () => {
   assert.equal(JSON.parse(pwaManifest).display, "standalone");
   assert.match(pwaManifest, /app-icon-512\.png/);
   assert.match(pwaInit, /navigator\.serviceWorker\.register\("\/service-worker\.js"/);
-  assert.match(serviceWorker, /game-garden-shell-v2/);
+  assert.match(serviceWorker, /game-garden-shell-v3/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
   const themeBootstrap = await readFile(new URL("../public/theme-init.js", import.meta.url), "utf8");
   assert.match(themeBootstrap, /savedTheme === "sakura" \|\| savedTheme === "gold"/);
