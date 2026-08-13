@@ -329,7 +329,10 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.art-queens/);
   assert.match(styles, /\.art-queens\{[^}]*url\('\/game-queens\.png'\)/);
   assert.match(styles, /\.queens-board\{[^}]*grid-template-rows:repeat\(var\(--queens-size\),minmax\(0,1fr\)\)/);
+  assert.match(styles, /\.queens-board\{[^}]*overflow:hidden[^}]*border-radius:18px[^}]*box-shadow:0 16px 34px/);
   assert.match(styles, /\.queens-cell\{[^}]*width:100%;height:100%[^}]*contain:layout paint/);
+  assert.match(styles, /\.queens-cell span\{[^}]*width:68%;height:68%[^}]*border-radius:50%/);
+  assert.match(styles, /\.queens-cell\.edge-top\{border-top:2px solid/);
   assert.match(styles, /\.queens-cell\.region-0\{--queens-cell-color:color-mix\(in srgb,var\(--red\) 48%,#ffd9df\)\}/);
   assert.match(styles, /\.queens-shell\{[^}]*overflow-x:hidden/);
   assert.match(firestoreRules, /'queens'/);
