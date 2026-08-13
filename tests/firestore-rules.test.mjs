@@ -422,6 +422,26 @@ test("Blackjack accepts an account-specific chip bankroll and rejects impossible
   }));
 });
 
+test("Queens accepts an account-specific best time and rejects impossible values", async () => {
+  const alice = await createAccount("alice", "Alice");
+  await createPublicProfile("alice", "Alice", "ABC12345");
+  const score = 94;
+  const batch = writeBatch(alice);
+  batch.update(doc(alice, "users", "alice"), {
+    highScores: { queens: score }, scoreSeason: 2, avatarId: "play", bannerId: "torii", updatedAt: serverTimestamp(),
+  });
+  batch.set(doc(alice, "publicProfiles", "alice"), {
+    uid: "alice", name: "Alice", avatarId: "play", bannerId: "torii", friendCode: "ABC12345", highScores: { queens: score }, scoreSeason: 2, updatedAt: serverTimestamp(),
+  }, { merge: true });
+  batch.set(doc(alice, "leaderboards", "queens", "entries", "alice"), {
+    uid: "alice", name: "Alice", photoURL: "", avatarId: "play", bannerId: "torii", score, scoreSeason: 2, updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+  await assertFails(updateDoc(doc(alice, "users", "alice"), {
+    highScores: { queens: 10001 }, updatedAt: serverTimestamp(),
+  }));
+});
+
 test("room codes allow a direct join lookup but cannot be listed", async () => {
   const host = testEnv.authenticatedContext("host", anonymousClaims).firestore();
   const guest = testEnv.authenticatedContext("guest", anonymousClaims).firestore();

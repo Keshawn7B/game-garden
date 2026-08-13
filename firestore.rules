@@ -330,7 +330,7 @@ service cloud.firestore {
 
     function validHighScores(scores) {
       return scores is map
-        && scores.keys().hasOnly(['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey', '2048', 'wordgarden', 'blackjack'])
+        && scores.keys().hasOnly(['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey', '2048', 'wordgarden', 'blackjack', 'queens'])
         && (!scores.keys().hasAny(['codebreaker']) || validStoredScore(scores.codebreaker))
         && (!scores.keys().hasAny(['order']) || validStoredScore(scores.order))
         && (!scores.keys().hasAny(['number']) || validStoredScore(scores.number))
@@ -346,7 +346,8 @@ service cloud.firestore {
         && (!scores.keys().hasAny(['airhockey']) || validStoredScore(scores.airhockey))
         && (!scores.keys().hasAny(['2048']) || valid2048Score(scores['2048']))
         && (!scores.keys().hasAny(['wordgarden']) || validStoredScore(scores.wordgarden))
-        && (!scores.keys().hasAny(['blackjack']) || valid2048Score(scores.blackjack));
+        && (!scores.keys().hasAny(['blackjack']) || valid2048Score(scores.blackjack))
+        && (!scores.keys().hasAny(['queens']) || validStoredScore(scores.queens));
     }
 
     function validUserProfile(userId, profile) {
@@ -451,7 +452,7 @@ service cloud.firestore {
 
     function validScore(gameId, userId) {
       return isOwner(userId)
-        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey', '2048', 'wordgarden', 'blackjack']
+        && gameId in ['codebreaker', 'order', 'number', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey', '2048', 'wordgarden', 'blackjack', 'queens']
         && request.resource.data.keys().hasOnly(['uid', 'name', 'photoURL', 'avatarId', 'bannerId', 'score', 'scoreSeason', 'updatedAt'])
         && request.resource.data.uid == userId
         && validDisplayName(request.resource.data.name)

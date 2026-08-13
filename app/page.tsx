@@ -15,8 +15,9 @@ import { AirHockey } from "./air-hockey-game";
 import { Game2048 } from "./game-2048";
 import { WordGarden } from "./word-garden-game";
 import { Blackjack } from "./blackjack-game";
+import { Queens } from "./queens-game";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "2048" | "wordgarden" | "blackjack";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "2048" | "wordgarden" | "blackjack" | "queens";
 type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile" | "addons";
 type ThemeMode = "classic" | "sakura" | "gold";
@@ -2147,12 +2148,25 @@ const GAME_MENUS: Record<LibraryGameId, {
       "Beat the dealer without passing 21. A natural blackjack pays 3 to 2.",
     ],
   },
+  queens: {
+    title: "Queens",
+    japanese: "女王",
+    category: "Logic puzzle",
+    glyph: "♛",
+    color: "queens",
+    players: "1 Player",
+    rules: [
+      "Place exactly one crown in every row, column, and colored region.",
+      "Crowns cannot touch each other, including along a diagonal.",
+      "Tap a cell to cycle between empty, a × mark, and a crown.",
+    ],
+  },
 };
 
 function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
   const details = GAME_MENUS[game];
   const [selectedMode, setSelectedMode] = useState<GameMode>("solo");
-  const soloOnly = game === "2048" || game === "wordgarden" || game === "blackjack";
+  const soloOnly = game === "2048" || game === "wordgarden" || game === "blackjack" || game === "queens";
 
   return (
     <main className="game-menu-shell">
@@ -2328,16 +2342,17 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "2048", number: "14", name: "2048", japanese: "二〇四八", meta: "PUZZLE", scoreGame: "2048" },
   { id: "wordgarden", number: "15", name: "Word Garden", japanese: "言葉庭園", meta: "WORD", scoreGame: "wordgarden" },
   { id: "blackjack", number: "16", name: "Blackjack", japanese: "ブラックジャック", meta: "CASINO", scoreGame: "blackjack" },
+  { id: "queens", number: "17", name: "Queens", japanese: "女王", meta: "LOGIC", scoreGame: "queens" },
 ];
 
-const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes", "airhockey", "2048", "wordgarden", "blackjack"];
-const MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS.filter((gameId) => gameId !== "2048" && gameId !== "wordgarden" && gameId !== "blackjack");
+const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes", "airhockey", "2048", "wordgarden", "blackjack", "queens"];
+const MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS.filter((gameId) => gameId !== "2048" && gameId !== "wordgarden" && gameId !== "blackjack" && gameId !== "queens");
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
   if (game === "2048") return `${score.toLocaleString()} pts`;
   if (game === "blackjack") return `${score.toLocaleString()} chips`;
-  const unit = game === "airhockey" ? "seconds" : game === "battleship" ? "shots" : game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" || game === "checkers" || game === "dotsboxes" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
+  const unit = game === "airhockey" || game === "queens" ? "seconds" : game === "battleship" ? "shots" : game === "memory" || game === "tictactoe" || game === "connect4" || game === "barricade" || game === "checkers" || game === "dotsboxes" ? "moves" : game === "order" ? "checks" : game === "rps" ? "rounds" : game === "dice" ? "rolls" : "guesses";
   return `${score} ${score === 1 ? unit.slice(0, -1) : unit}`;
 }
 
@@ -4281,6 +4296,7 @@ export default function Home() {
     if (game === "2048-menu") return <GameMenu game="2048" onPlay={(mode) => playFromMenu("2048", mode)} onBack={() => selectGame("games")} />;
     if (game === "wordgarden-menu") return <GameMenu game="wordgarden" onPlay={(mode) => playFromMenu("wordgarden", mode)} onBack={() => selectGame("games")} />;
     if (game === "blackjack-menu") return <GameMenu game="blackjack" onPlay={(mode) => playFromMenu("blackjack", mode)} onBack={() => selectGame("games")} />;
+    if (game === "queens-menu") return <GameMenu game="queens" onPlay={(mode) => playFromMenu("queens", mode)} onBack={() => selectGame("games")} />;
     if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && MULTIPLAYER_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
     if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;
@@ -4298,6 +4314,7 @@ export default function Home() {
     if (game === "2048") return <Game2048 onBack={() => selectGame("2048-menu")} onScore={(score) => recordScore("2048", score)} />;
     if (game === "wordgarden") return <WordGarden onBack={() => selectGame("wordgarden-menu")} onScore={(score) => recordScore("wordgarden", score)} />;
     if (game === "blackjack") return <Blackjack onBack={() => selectGame("blackjack-menu")} onScore={(score) => recordScore("blackjack", score)} />;
+    if (game === "queens") return <Queens onBack={() => selectGame("queens-menu")} onScore={(score) => recordScore("queens", score)} />;
     const activeTab: AppTab = game === "leaderboard" || game === "friends" || game === "store" || game === "profile" || game === "addons" ? game : "games";
     return <AppHome activeTab={activeTab} theme={theme} onThemeToggle={toggleTheme} onTabChange={selectGame} onSelect={(selected) => selectGame(`${selected}-menu`)} highScores={highScores} profileName={profileName} avatarId={avatarId} bannerId={bannerId} onProfileNameChange={updateProfileName} onAvatarChange={updateAvatar} onBannerChange={updateBanner} onProfileSave={saveProfile} onResetScores={resetScores} firebaseUser={firebaseUser} authLoading={authLoading} authError={authError} onSignIn={signIn} onEmailSignIn={emailSignIn} onEmailCreate={emailCreate} onSignOut={signOutProfile} leaderboards={leaderboards} friends={visibleFriends} friendCode={firebaseUser && !firebaseUser.isAnonymous ? friendCodeFor(firebaseUser.uid) : ""} friendLinkCode={friendLinkCode} onAddFriend={addFriend} onRemoveFriend={removeFriend} incomingFriendRequests={incomingFriendRequests} outgoingFriendRequests={outgoingFriendRequests} onRespondFriendRequest={respondFriendRequest} onCancelFriendRequest={cancelFriendRequest} incomingInvites={incomingInvites} outgoingInvites={outgoingInvites} onSendInvite={sendInvite} onRespondInvite={respondInvite} onCancelInvite={cancelInvite} onCloseInvite={closeInvite} onJoinLobby={(gameId, inviteRoomCode) => { if (inviteRoomCode) void joinRoom(inviteRoomCode, profileName); else selectGame(`${gameId}-lobby`); }} onOpenChat={openFriendChat} premiumUnlocked={premiumUnlocked} goldModeUnlocked={goldModeUnlocked} blossomThemeUnlocked={blossomThemeUnlocked} blossomThemeEnabled={blossomThemeEnabled} onBlossomThemeToggle={toggleBlossomTheme} onUnlockPremium={unlockPremium} />;
   }, [game, gameMode, theme, highScores, profileName, avatarId, bannerId, recordScore, toggleTheme, updateProfileName, updateAvatar, updateBanner, saveProfile, resetScores, firebaseUser, authLoading, authError, signIn, emailSignIn, emailCreate, signOutProfile, leaderboards, visibleFriends, friendLinkCode, addFriend, removeFriend, incomingFriendRequests, outgoingFriendRequests, respondFriendRequest, cancelFriendRequest, incomingInvites, outgoingInvites, activeRoom, roomCode, createRoom, joinRoom, leaveRoom, startVersus, sendInvite, respondInvite, cancelInvite, closeInvite, openFriendChat, premiumUnlocked, goldModeUnlocked, blossomThemeUnlocked, blossomThemeEnabled, toggleBlossomTheme, unlockPremium]);

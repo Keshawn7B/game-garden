@@ -2,6 +2,8 @@
 
 Game Garden is a mobile-first Japanese-styled game hub with single-player games, live Firebase multiplayer rooms, account profiles, friends, chat, leaderboards, and a preview store.
 
+The arcade includes logic, memory, strategy, word, arcade, and card games, including Queens: a color-region crown puzzle with four rotating courts and account-specific best times.
+
 Public builds:
 
 - <https://gamegardenplay.web.app>
