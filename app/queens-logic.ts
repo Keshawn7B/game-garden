@@ -43,6 +43,14 @@ export const QUEENS_PUZZLES: QueensPuzzle[] = [
   transformedPuzzle("sakura", "Sakura Hall", (row, column) => [column, row]),
 ];
 
+export function randomQueensPuzzleIndex(currentIndex = -1, random = Math.random) {
+  const puzzleCount = QUEENS_PUZZLES.length;
+  if (puzzleCount <= 1) return 0;
+  const available = Array.from({ length: puzzleCount }, (_, index) => index).filter((index) => index !== currentIndex);
+  const randomIndex = Math.min(available.length - 1, Math.max(0, Math.floor(random() * available.length)));
+  return available[randomIndex];
+}
+
 export function queensConflictCells(regions: number[][], cells: QueensCellState[]) {
   const size = regions.length;
   const queens = cells.flatMap((state, index) => state === 2 ? [index] : []);

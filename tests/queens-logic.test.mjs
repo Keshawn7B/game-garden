@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cycleQueensCell, isQueensSolved, QUEENS_PUZZLES, queensConflictCells, queensSolutionCells } from "../app/queens-logic.ts";
+import { cycleQueensCell, isQueensSolved, QUEENS_PUZZLES, queensConflictCells, queensSolutionCells, randomQueensPuzzleIndex } from "../app/queens-logic.ts";
 
 function countSolutions(puzzle, limit = 2) {
   const size = puzzle.regions.length;
@@ -86,4 +86,16 @@ test("Queens cells cycle through empty, mark, crown, and empty", () => {
   assert.equal(cycleQueensCell(0), 1);
   assert.equal(cycleQueensCell(1), 2);
   assert.equal(cycleQueensCell(2), 0);
+});
+
+test("Queens chooses random courts without immediately repeating one", () => {
+  assert.equal(randomQueensPuzzleIndex(1, () => 0), 0);
+  assert.equal(randomQueensPuzzleIndex(1, () => 0.999), 3);
+  for (let current = 0; current < QUEENS_PUZZLES.length; current += 1) {
+    for (const random of [0, 0.25, 0.5, 0.75, 0.999]) {
+      const chosen = randomQueensPuzzleIndex(current, () => random);
+      assert.notEqual(chosen, current);
+      assert.ok(chosen >= 0 && chosen < QUEENS_PUZZLES.length);
+    }
+  }
 });

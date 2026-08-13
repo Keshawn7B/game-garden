@@ -3,15 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { HeaderChatButton } from "./chat-chrome";
 import { GameResult } from "./game-result";
-import { cycleQueensCell, isQueensSolved, QUEENS_PUZZLES, queensConflictCells, queensSolutionCells, type QueensCellState } from "./queens-logic";
+import { cycleQueensCell, isQueensSolved, QUEENS_PUZZLES, queensConflictCells, queensSolutionCells, randomQueensPuzzleIndex, type QueensCellState } from "./queens-logic";
 
 const HINT_PENALTY_SECONDS = 15;
-
-function dailyPuzzleIndex() {
-  const now = new Date();
-  const day = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 86_400_000);
-  return day % QUEENS_PUZZLES.length;
-}
 
 function formatTime(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -19,7 +13,7 @@ function formatTime(seconds: number) {
 }
 
 export function Queens({ onBack, onScore }: { onBack: () => void; onScore: (score: number) => void }) {
-  const [puzzleIndex, setPuzzleIndex] = useState(dailyPuzzleIndex);
+  const [puzzleIndex, setPuzzleIndex] = useState(0);
   const puzzle = QUEENS_PUZZLES[puzzleIndex];
   const size = puzzle.regions.length;
   const [cells, setCells] = useState<QueensCellState[]>(() => Array(size * size).fill(0));
@@ -30,8 +24,15 @@ export function Queens({ onBack, onScore }: { onBack: () => void; onScore: (scor
   const [message, setMessage] = useState("Place one crown in every row, column, and color.");
   const [hintedCell, setHintedCell] = useState<number | null>(null);
   const scored = useRef(false);
+  const choseOpeningPuzzle = useRef(false);
   const conflicts = useMemo(() => new Set(queensConflictCells(puzzle.regions, cells)), [cells, puzzle]);
   const crownCount = cells.filter((state) => state === 2).length;
+
+  useEffect(() => {
+    if (choseOpeningPuzzle.current) return;
+    choseOpeningPuzzle.current = true;
+    setPuzzleIndex(randomQueensPuzzleIndex());
+  }, []);
 
   useEffect(() => {
     if (result != null) return;
@@ -92,7 +93,7 @@ export function Queens({ onBack, onScore }: { onBack: () => void; onScore: (scor
   };
 
   const nextPuzzle = () => {
-    const nextIndex = (puzzleIndex + 1) % QUEENS_PUZZLES.length;
+    const nextIndex = randomQueensPuzzleIndex(puzzleIndex);
     setPuzzleIndex(nextIndex);
     reset(nextIndex);
   };
