@@ -320,6 +320,11 @@ test("routes every game through a start menu", async () => {
   assert.match(queensLogic, /export function isQueensSolved/);
   assert.match(queensLogic, /export function randomQueensPuzzleIndex/);
   assert.match(queensSource, /randomQueensPuzzleIndex\(puzzleIndex\)/);
+  const clearBoard = queensSource.match(/const clearBoard = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[size\]\);/)?.[0] ?? "";
+  assert.match(clearBoard, /setCells\(Array\(size \* size\)\.fill\(0\)\)/);
+  assert.match(clearBoard, /The clock is still running/);
+  assert.doesNotMatch(clearBoard, /setStartedAt|setElapsed|setPenalty/);
+  assert.match(queensSource, /onClick=\{clearBoard\}>Clear board/);
   assert.match(styles, /\.queens-board/);
   assert.match(styles, /\.art-queens/);
   assert.match(styles, /\.art-queens\{[^}]*url\('\/game-queens\.png'\)/);

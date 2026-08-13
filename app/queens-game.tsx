@@ -54,6 +54,12 @@ export function Queens({ onBack, onScore }: { onBack: () => void; onScore: (scor
     scored.current = false;
   }, [puzzleIndex]);
 
+  const clearBoard = useCallback(() => {
+    setCells(Array(size * size).fill(0));
+    setMessage("Board cleared. The clock is still running.");
+    setHintedCell(null);
+  }, [size]);
+
   const finishIfSolved = useCallback((nextCells: QueensCellState[], addedPenalty = 0) => {
     if (!isQueensSolved(puzzle.regions, nextCells)) return;
     const totalPenalty = penalty + addedPenalty;
@@ -145,7 +151,7 @@ export function Queens({ onBack, onScore }: { onBack: () => void; onScore: (scor
         <span><b>1</b> PER ROW</span><span><b>1</b> PER COLUMN</span><span><b>1</b> PER COLOR</span><span><b>↗</b> NO TOUCHING</span>
       </div>
 
-      {!result && <div className="queens-actions"><button className="secondary-button" onClick={useHint}>Hint <small>+15s</small></button><button className="secondary-button" onClick={() => reset()}>Clear board</button></div>}
+      {!result && <div className="queens-actions"><button className="secondary-button" onClick={useHint}>Hint <small>+15s</small></button><button className="secondary-button" onClick={clearBoard}>Clear board</button></div>}
       {result != null && <GameResult outcome="Court Complete!" detail={`Solved ${puzzle.title} in ${formatTime(result)}${penalty ? ` with ${penalty} seconds of hints` : ""}.`} onPlayAgain={nextPuzzle} />}
     </section>
   </main>;
