@@ -60,10 +60,23 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta id="game-garden-theme-color" name="theme-color" content="#e60012" />
-        <script src="/theme-init.js" />
-        <script src="/pwa-init.js" defer />
+        <script src="/theme-init.js?v=4" />
+        <script src="/startup-loader.js?v=1" defer />
+        <script src="/pwa-init.js?v=2" defer />
       </head>
-      <body className={japanese.variable}>{children}</body>
+      <body className={japanese.variable}>
+        <div id="game-garden-startup" className="startup-loader" role="status" aria-live="polite" aria-label="Loading Game Garden">
+          <div className="startup-loader-grid" aria-hidden="true" />
+          <div className="startup-loader-card">
+            <div className="startup-seal" aria-hidden="true"><span>遊</span><i /></div>
+            <div className="startup-wordmark"><small>ゲームガーデン</small><strong>GAME <em>GARDEN</em></strong></div>
+            <p>Preparing your garden</p>
+            <div className="startup-progress" aria-hidden="true"><i className="startup-progress-fill" /></div>
+            <div className="startup-progress-meta"><span>LOADING ARCADE</span><b data-startup-progress>08%</b></div>
+          </div>
+        </div>
+        {children}
+      </body>
     </html>
   );
 }

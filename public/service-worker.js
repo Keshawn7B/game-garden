@@ -1,5 +1,5 @@
-const CACHE_NAME = "game-garden-shell-v3";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/app-icon-192.png", "/app-icon-512.png", "/game-garden-logo-red.png"];
+const CACHE_NAME = "game-garden-shell-v4";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/app-icon-192.png", "/app-icon-512.png", "/game-garden-logo-red.png", "/theme-init.js?v=4", "/startup-loader.js?v=1", "/pwa-init.js?v=2"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => Promise.all(APP_SHELL.map((url) => cache.add(url).catch(() => undefined)))).then(() => self.skipWaiting()));

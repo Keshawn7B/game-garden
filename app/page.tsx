@@ -3354,6 +3354,10 @@ export default function Home() {
   const authLoadId = useRef(0);
 
   useEffect(() => {
+    document.dispatchEvent(new Event("game-garden:ready"));
+  }, []);
+
+  useEffect(() => {
     const themeColors: Record<ThemeMode, string> = { classic: "#e60012", sakura: "#e4316b", gold: "#c89216" };
     document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", themeColors[theme]);
   }, [theme]);

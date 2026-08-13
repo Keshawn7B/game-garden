@@ -1,4 +1,10 @@
 (function restoreGameGardenTheme() {
+  document.documentElement.classList.add("startup-active");
+  window.setTimeout(function releaseMissingStartupController() {
+    if (!document.documentElement.classList.contains("startup-controller-ready")) {
+      document.documentElement.classList.remove("startup-active");
+    }
+  }, 6500);
   try {
     var savedTheme = window.localStorage.getItem("game-garden-theme");
     var themeColors = { classic: "#e60012", sakura: "#e4316b", gold: "#c89216" };
