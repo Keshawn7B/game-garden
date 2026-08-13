@@ -419,7 +419,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /game-garden-theme/);
   assert.match(layoutSource, /suppressHydrationWarning/);
   assert.match(layoutSource, /<script src="\/theme-init\.js\?v=4"/);
-  assert.match(layoutSource, /<script src="\/startup-loader\.js\?v=1" defer/);
+  assert.match(layoutSource, /<script src="\/startup-loader\.js\?v=2" defer/);
   assert.match(layoutSource, /id="game-garden-startup" className="startup-loader" role="status"/);
   assert.match(layoutSource, /manifest: "\/manifest\.webmanifest"/);
   assert.match(layoutSource, /id="game-garden-theme-color" name="theme-color" content="#e60012"/);
@@ -428,8 +428,8 @@ test("routes every game through a start menu", async () => {
   assert.equal(JSON.parse(pwaManifest).display, "standalone");
   assert.match(pwaManifest, /app-icon-512\.png/);
   assert.match(pwaInit, /navigator\.serviceWorker\.register\("\/service-worker\.js"/);
-  assert.match(serviceWorker, /game-garden-shell-v4/);
-  assert.match(serviceWorker, /"\/startup-loader\.js\?v=1"/);
+  assert.match(serviceWorker, /game-garden-shell-v5/);
+  assert.match(serviceWorker, /"\/startup-loader\.js\?v=2"/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
   const themeBootstrap = await readFile(new URL("../public/theme-init.js", import.meta.url), "utf8");
   assert.match(themeBootstrap, /savedTheme === "sakura" \|\| savedTheme === "gold"/);
@@ -439,8 +439,9 @@ test("routes every game through a start menu", async () => {
   assert.match(themeBootstrap, /classList\.add\("startup-active"\)/);
   assert.match(themeBootstrap, /startup-controller-ready/);
   assert.match(startupLoader, /game-garden:ready/);
-  assert.match(startupLoader, /minimumDisplayMs = 900/);
-  assert.match(startupLoader, /window\.setTimeout\(exitLoader, 5000\)/);
+  assert.match(startupLoader, /minimumDisplayMs = 220/);
+  assert.match(startupLoader, /exitTransitionMs[^\n]*180/);
+  assert.match(startupLoader, /window\.setTimeout\(exitLoader, 2500\)/);
   assert.match(source, /document\.dispatchEvent\(new Event\("game-garden:ready"\)\)/);
   assert.match(styles, /\.startup-loader\{[^}]*overflow:hidden/);
   assert.match(styles, /\.startup-progress-fill\{[^}]*width:var\(--startup-progress\)/);

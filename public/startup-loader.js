@@ -3,7 +3,8 @@
   var loader = document.getElementById("game-garden-startup");
   var startedAt = Date.now();
   var finished = false;
-  var minimumDisplayMs = 900;
+  var minimumDisplayMs = 220;
+  var exitTransitionMs = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180;
   root.classList.add("startup-controller-ready");
 
   if (!loader) {
@@ -31,7 +32,7 @@
         root.classList.remove("startup-active");
         root.classList.remove("startup-controller-ready");
         loader.setAttribute("aria-hidden", "true");
-      }, 520);
+      }, exitTransitionMs);
     }, remaining);
   }
 
@@ -47,7 +48,7 @@
 
   window.addEventListener("load", function onWindowLoad() {
     setProgress(86);
-    window.setTimeout(exitLoader, 260);
+    exitLoader();
   }, { once: true });
 
   document.addEventListener("game-garden:ready", function onGardenReady() {
@@ -55,5 +56,5 @@
     exitLoader();
   }, { once: true });
 
-  window.setTimeout(exitLoader, 5000);
+  window.setTimeout(exitLoader, 2500);
 })();

@@ -61,7 +61,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <meta id="game-garden-theme-color" name="theme-color" content="#e60012" />
         <script src="/theme-init.js?v=4" />
-        <script src="/startup-loader.js?v=1" defer />
+        <script src="/startup-loader.js?v=2" defer />
         <script src="/pwa-init.js?v=2" defer />
       </head>
       <body className={japanese.variable}>
