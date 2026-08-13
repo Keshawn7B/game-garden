@@ -320,6 +320,9 @@ test("routes every game through a start menu", async () => {
   assert.match(queensLogic, /export function isQueensSolved/);
   assert.match(styles, /\.queens-board/);
   assert.match(styles, /\.art-queens/);
+  assert.match(styles, /\.art-queens\{[^}]*url\('\/game-queens\.png'\)/);
+  assert.match(styles, /\.queens-board\{[^}]*grid-template-rows:repeat\(var\(--queens-size\),minmax\(0,1fr\)\)/);
+  assert.match(styles, /\.queens-cell\{[^}]*width:100%;height:100%[^}]*contain:layout paint/);
   assert.match(styles, /\.queens-shell\{[^}]*overflow-x:hidden/);
   assert.match(firestoreRules, /'queens'/);
   assert.match(source, /function chooseBarricadeCpuAction/);
