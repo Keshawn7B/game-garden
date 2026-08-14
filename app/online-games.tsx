@@ -14,8 +14,10 @@ import { DotsBoxesBoard } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
 import { AIR_HOCKEY_CENTER, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, type AirHockeyPlayer } from "./air-hockey";
 import { OnlineAirHockeyRink } from "./online-air-hockey";
+import { GraphWarBoard, type GraphShot } from "./graph-war-game";
+import { decodeGraphPoint, encodeGraphPoint, formatGraphFunction, graphLineHitsPoint, graphPlacementAllowed, type GraphPoint } from "./graph-war-logic";
 
-export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey";
+export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "graphwar";
 
 type Room = {
   code: string;
@@ -119,7 +121,7 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     players,
     names,
     turnUid: room.hostUid,
-    phase: gameId === "battleship" ? "placing" : "playing",
+    phase: gameId === "battleship" || gameId === "graphwar" ? "placing" : "playing",
     round: 1,
     moves: 0,
     scores: [0, 0],
@@ -134,7 +136,7 @@ function emptyState(gameId: OnlineGameId, room: Room): OnlineState {
     open: [],
     matched: gameId === "dotsboxes" ? Array(DOTS_BOX_COUNT).fill(0) : [],
     choices: gameId === "rps" ? ["", ""] : [],
-    positions: gameId === "barricade" ? [76, 4] : [0, 0],
+    positions: gameId === "barricade" ? [76, 4] : gameId === "graphwar" ? [-1, -1] : [0, 0],
     faces: [0, 0],
     barricades: [],
     wallsLeft: [10, 10],
@@ -317,6 +319,8 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const [lastCheckersMove, setLastCheckersMove] = useState<CheckersMove | null>(null);
   const [battleshipFleet, setBattleshipFleet] = useState<BattleshipFleet>(() => randomBattleshipFleet());
   const [clockNow, setClockNow] = useState(() => Date.now());
+  const [graphSlope, setGraphSlope] = useState("0");
+  const [graphIntercept, setGraphIntercept] = useState("0");
   const barricadeBoardRef = useRef<HTMLDivElement>(null);
   const latestState = useRef<OnlineState | null>(null);
   const stateRef = useMemo(() => doc(db, "rooms", room.code, "game", "state"), [room.code]);
@@ -674,7 +678,69 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     setBarricadeWallSnap(row >= 0 && row <= 7 && column >= 0 && column <= 7 ? { row, column, orientation } : null);
   };
 
+  const graphPositions: [GraphPoint | null, GraphPoint | null] = state.gameId === "graphwar"
+    ? [decodeGraphPoint(state.positions[0]), decodeGraphPoint(state.positions[1])]
+    : [null, null];
+  const graphShots: GraphShot[] = state.gameId === "graphwar" ? Array.from({ length: Math.floor(state.open.length / 3) }, (_, index) => {
+    const player = state.open[index * 3] as 0 | 1;
+    const slope = state.open[index * 3 + 1] / 100;
+    const intercept = state.open[index * 3 + 2] / 100;
+    const target = graphPositions[player === 0 ? 1 : 0];
+    return { id: index + 1, player, slope, intercept, hit: Boolean(target && graphLineHitsPoint(target, slope, intercept)) };
+  }) : [];
+  const graphPlacingPlayer: 0 | 1 | null = state.gameId === "graphwar" && state.phase === "placing" ? state.ready[0] ? 1 : 0 : null;
+  const parsedGraphSlope = Number(graphSlope);
+  const parsedGraphIntercept = Number(graphIntercept);
+  const validGraphFunction = Number.isFinite(parsedGraphSlope) && Number.isFinite(parsedGraphIntercept) && Math.abs(parsedGraphSlope) <= 6 && Math.abs(parsedGraphIntercept) <= 12;
+
+  const placeGraphPoint = (point: GraphPoint) => void mutate((current) => {
+    if (current.gameId !== "graphwar" || current.phase !== "placing" || current.turnUid !== user.uid) return null;
+    const placingPlayer: 0 | 1 = current.ready[0] ? 1 : 0;
+    if (placingPlayer !== playerIndex || !graphPlacementAllowed(playerIndex, point)) return null;
+    const positions: [number, number] = [...current.positions];
+    const ready: [boolean, boolean] = [...current.ready];
+    positions[playerIndex] = encodeGraphPoint(point);
+    ready[playerIndex] = true;
+    const readyToPlay = ready[0] && ready[1];
+    return { positions, ready, phase: readyToPlay ? "playing" : "placing", turnUid: readyToPlay ? current.players[0] : current.players[1] };
+  });
+
+  const fireGraphLine = () => {
+    if (!validGraphFunction) return setError("Use a slope from −6 to 6 and an intercept from −12 to 12.");
+    setError("");
+    void mutate((current) => {
+      if (current.gameId !== "graphwar" || current.phase !== "playing" || current.turnUid !== user.uid || current.open.length >= 180) return null;
+      const target = decodeGraphPoint(current.positions[otherIndex]);
+      if (!target) return null;
+      const hit = graphLineHitsPoint(target, parsedGraphSlope, parsedGraphIntercept);
+      return {
+        open: [...current.open, playerIndex, Math.round(parsedGraphSlope * 100), Math.round(parsedGraphIntercept * 100)],
+        moves: current.moves + 1,
+        phase: hit ? "complete" : "playing",
+        winnerUid: hit ? user.uid : "",
+        turnUid: hit ? user.uid : current.players[otherIndex],
+      };
+    });
+  };
+
   let gameView = null;
+  if (state.gameId === "graphwar") {
+    const canPlace = state.phase === "placing" && state.turnUid === user.uid && graphPlacingPlayer === playerIndex;
+    const visiblePositions: [GraphPoint | null, GraphPoint | null] = state.phase === "placing"
+      ? [playerIndex === 0 ? graphPositions[0] : null, playerIndex === 1 ? graphPositions[1] : null]
+      : graphPositions;
+    const graphStatus = state.phase === "placing"
+      ? canPlace ? `Tap a point in your ${playerIndex === 0 ? "red left" : "gold right"} home zone.` : `Waiting for ${state.names[graphPlacingPlayer ?? otherIndex]} to choose a dot…`
+      : status;
+    gameView = <section className="online-game graph-war-game online-graph-war">
+      <div className="graph-war-heading"><div><p className="eyebrow">FUNCTION BATTLE · LIVE ONLINE</p><h1>Graph War</h1><p>Choose a dot, then take turns firing linear functions.</p></div><span aria-hidden="true">関</span></div>
+      <PlayerStrip state={state} user={user} />
+      <div className="online-turn-status">{graphStatus}</div>
+      <GraphWarBoard positions={visiblePositions} shots={graphShots} currentPlayer={state.players.indexOf(state.turnUid) as 0 | 1} placingPlayer={graphPlacingPlayer} preview={myTurn && validGraphFunction ? { slope: parsedGraphSlope, intercept: parsedGraphIntercept } : null} onPlace={canPlace ? placeGraphPoint : undefined} labels={[state.names[0].slice(0, 7).toUpperCase(), state.names[1].slice(0, 7).toUpperCase()]} />
+      {(state.phase === "playing" || state.phase === "complete") && <div className="graph-war-console"><div className="graph-online-controls"><div className="graph-function-readout"><small>YOUR FUNCTION</small><strong>{validGraphFunction ? formatGraphFunction(parsedGraphSlope, parsedGraphIntercept) : "Check your values"}</strong></div><label><span>SLOPE · m</span><input type="number" min="-6" max="6" step="0.25" value={graphSlope} onChange={(event) => setGraphSlope(event.target.value)} inputMode="decimal" disabled={!myTurn} /></label><label><span>INTERCEPT · b</span><input type="number" min="-12" max="12" step="0.25" value={graphIntercept} onChange={(event) => setGraphIntercept(event.target.value)} inputMode="decimal" disabled={!myTurn} /></label><button className="primary-button graph-fire" type="button" disabled={!myTurn || !validGraphFunction} onClick={fireGraphLine}>FIRE LINE <b>→</b></button></div><div className="graph-shot-log"><small>SHOT HISTORY</small>{graphShots.length ? graphShots.slice(-4).reverse().map((shot) => <span key={shot.id} className={`player-${shot.player + 1}`}><b>{shot.player === playerIndex ? "YOU" : "RIVAL"}</b>{formatGraphFunction(shot.slope, shot.intercept)}<em>{shot.hit ? "HIT" : "MISS"}</em></span>) : <p>No lines fired yet.</p>}</div></div>}
+      {state.phase === "complete" && finish}
+    </section>;
+  }
   if (state.gameId === "codebreaker") gameView = <section className="online-game codebreaker-online"><p className="eyebrow">LOGIC · LIVE ONLINE</p><h1>Crack the shared code.</h1><PlayerStrip state={state} user={user} /><div className="online-turn-status">{status}</div><div className="secret-row"><span>SECRET CODE</span><div className="peg-row">{state.secret.map((color, index) => <Peg key={index} color={color} hidden={state.phase !== "complete"} />)}</div></div><div className="online-code-history">{state.guesses.map((guess, index) => <div key={index}><b>{guess.uid === user.uid ? "YOU" : state.names[otherIndex]}</b><span>{guess.colors.map((color, peg) => <Peg key={peg} color={color} />)}</span><em>● {guess.exact} exact · ○ {guess.close} close</em></div>)}</div>{state.phase === "complete" ? finish : <div className="picker-panel"><p>{myTurn ? "Choose four colors" : "Opponent is choosing"}<span>{colors.length}/4</span></p><div className="color-picker">{COLORS.map((color) => <button key={color.id} className="color-choice" style={{ backgroundColor: color.hex }} disabled={!myTurn || colors.length >= 4} onClick={() => setColors((current) => [...current, color.id])} aria-label={`Add ${color.label}`} />)}</div><div className="picker-actions"><button className="text-button" disabled={!myTurn || !colors.length} onClick={() => setColors((current) => current.slice(0, -1))}>Undo</button><button className="primary-button" disabled={!myTurn || colors.length !== 4} onClick={submitCode}>Send guess</button></div></div>}</section>;
 
   if (state.gameId === "order") {

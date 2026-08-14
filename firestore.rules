@@ -692,7 +692,7 @@ service cloud.firestore {
     function validOnlineGameState(roomCode, state) {
       let room = get(/databases/$(database)/documents/rooms/$(roomCode)).data;
       return state.keys().hasOnly(['gameId', 'roomCode', 'players', 'names', 'turnUid', 'phase', 'round', 'moves', 'scores', 'winnerUid', 'board', 'secret', 'guesses', 'target', 'objects', 'checks', 'deck', 'open', 'matched', 'choices', 'positions', 'faces', 'barricades', 'wallsLeft', 'fleets', 'shots', 'ready', 'lastShots', 'airEndsAt', 'createdAt', 'updatedAt'])
-        && state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey']
+        && state.gameId in ['codebreaker', 'order', 'memory', 'tictactoe', 'connect4', 'rps', 'dice', 'barricade', 'checkers', 'battleship', 'dotsboxes', 'airhockey', 'graphwar']
         && state.roomCode == roomCode
         && state.gameId == room.gameId
         && state.players == [room.hostUid, room.guestUid]
@@ -783,7 +783,8 @@ service cloud.firestore {
         && (state.gameId != 'memory' || (state.deck.size() == 16 && state.open.size() <= 2 && state.matched.size() <= 16))
         && (state.gameId != 'checkers' || (state.board.size() == 64 && state.open.size() <= 1))
         && (state.gameId != 'dotsboxes' || (state.board.size() == 40 && state.matched.size() == 16 && state.open.size() <= 1 && state.moves <= 40 && state.scores[0] + state.scores[1] <= 16))
-        && (state.gameId != 'airhockey' || (state.board.size() == 2 && state.scores[0] <= 3 && state.scores[1] <= 3));
+        && (state.gameId != 'airhockey' || (state.board.size() == 2 && state.scores[0] <= 3 && state.scores[1] <= 3))
+        && (state.gameId != 'graphwar' || (state.board.size() == 0 && state.open.size() <= 180 && state.positions[0] is int && state.positions[1] is int && state.positions[0] >= -1 && state.positions[0] <= 288 && state.positions[1] >= -1 && state.positions[1] <= 288));
     }
 
     function validOnlineGameTransition(roomCode) {
@@ -864,7 +865,8 @@ service cloud.firestore {
         || (gameId == 'checkers' && gameName == 'Checkers')
         || (gameId == 'battleship' && gameName == 'Battleship')
         || (gameId == 'dotsboxes' && gameName == 'Dots & Boxes')
-        || (gameId == 'airhockey' && gameName == 'Air Hockey');
+        || (gameId == 'airhockey' && gameName == 'Air Hockey')
+        || (gameId == 'graphwar' && gameName == 'Graph War');
     }
 
     function validAvatar(avatarId) {

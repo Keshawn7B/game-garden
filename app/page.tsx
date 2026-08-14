@@ -18,8 +18,8 @@ import { Blackjack } from "./blackjack-game";
 import { Queens } from "./queens-game";
 import { GraphWar } from "./graph-war-game";
 
-type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "2048" | "wordgarden" | "blackjack" | "queens";
-type LibraryGameId = PlayableGameId | "graphwar";
+type PlayableGameId = "codebreaker" | "order" | "number" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "2048" | "wordgarden" | "blackjack" | "queens" | "graphwar";
+type LibraryGameId = PlayableGameId;
 type AppTab = "games" | "leaderboard" | "friends" | "store" | "profile" | "addons";
 type ThemeMode = "classic" | "sakura" | "gold";
 type GameMode = "solo" | "multi";
@@ -2168,11 +2168,11 @@ const GAME_MENUS: Record<LibraryGameId, {
     category: "Math strategy",
     glyph: "ƒ",
     color: "graphwar",
-    players: "2 Players · Local",
+    players: "1–2 Players",
     rules: [
-      "Player 1 places a dot in the red zone, then Player 2 places one in the gold zone.",
-      "Take turns entering a linear function in the form y = mx + b.",
-      "Fire the graphed line. The first function to intersect the rival dot wins.",
+      "Choose Easy, Medium, or Hard to battle a solo bot, or open an online room.",
+      "Each player hides a dot in their home zone, then fires y = mx + b lines in turn.",
+      "The first graphed function to intersect the rival dot wins the match.",
     ],
   },
 };
@@ -2180,7 +2180,7 @@ const GAME_MENUS: Record<LibraryGameId, {
 function GameMenu({ game, onPlay, onBack }: { game: LibraryGameId; onPlay: (mode: GameMode) => void; onBack: () => void }) {
   const details = GAME_MENUS[game];
   const [selectedMode, setSelectedMode] = useState<GameMode>("solo");
-  const soloOnly = game === "2048" || game === "wordgarden" || game === "blackjack" || game === "queens" || game === "graphwar";
+  const soloOnly = game === "2048" || game === "wordgarden" || game === "blackjack" || game === "queens";
 
   return (
     <main className="game-menu-shell">
@@ -2357,11 +2357,11 @@ const GAMES: { id: LibraryGameId; number: string; name: string; japanese: string
   { id: "wordgarden", number: "15", name: "Word Garden", japanese: "言葉庭園", meta: "WORD", scoreGame: "wordgarden" },
   { id: "blackjack", number: "16", name: "Blackjack", japanese: "ブラックジャック", meta: "CASINO", scoreGame: "blackjack" },
   { id: "queens", number: "17", name: "Queens", japanese: "女王", meta: "LOGIC", scoreGame: "queens" },
-  { id: "graphwar", number: "18", name: "Graph War", japanese: "関数戦", meta: "MATH · 2P" },
+  { id: "graphwar", number: "18", name: "Graph War", japanese: "関数戦", meta: "MATH · 1–2P" },
 ];
 
 const SCORE_GAME_IDS: PlayableGameId[] = ["codebreaker", "order", "number", "memory", "tictactoe", "connect4", "rps", "dice", "barricade", "checkers", "battleship", "dotsboxes", "airhockey", "2048", "wordgarden", "blackjack", "queens"];
-const MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS.filter((gameId) => gameId !== "2048" && gameId !== "wordgarden" && gameId !== "blackjack" && gameId !== "queens");
+const MULTIPLAYER_GAME_IDS: PlayableGameId[] = [...SCORE_GAME_IDS.filter((gameId) => gameId !== "2048" && gameId !== "wordgarden" && gameId !== "blackjack" && gameId !== "queens"), "graphwar"];
 
 function formatScore(game: PlayableGameId, score?: number) {
   if (score == null) return "—";
@@ -4316,7 +4316,7 @@ export default function Home() {
     if (game === "wordgarden-menu") return <GameMenu game="wordgarden" onPlay={(mode) => playFromMenu("wordgarden", mode)} onBack={() => selectGame("games")} />;
     if (game === "blackjack-menu") return <GameMenu game="blackjack" onPlay={(mode) => playFromMenu("blackjack", mode)} onBack={() => selectGame("games")} />;
     if (game === "queens-menu") return <GameMenu game="queens" onPlay={(mode) => playFromMenu("queens", mode)} onBack={() => selectGame("games")} />;
-    if (game === "graphwar-menu") return <GameMenu game="graphwar" onPlay={() => selectGame("graphwar")} onBack={() => selectGame("games")} />;
+    if (game === "graphwar-menu") return <GameMenu game="graphwar" onPlay={(mode) => playFromMenu("graphwar", mode)} onBack={() => selectGame("games")} />;
     if (gameMode === "multi" && firebaseUser && activeRoom?.status === "playing" && activeRoom.gameId === game && game !== "number" && MULTIPLAYER_GAME_IDS.includes(game as PlayableGameId)) return <OnlineVersusGame room={activeRoom as GameRoom & { gameId: OnlineGameId }} user={firebaseUser} onLeave={leaveRoom} />;
     if (game === "codebreaker") return <Codebreaker mode="solo" onBack={() => selectGame("codebreaker-menu")} onScore={(score) => recordScore("codebreaker", score)} />;
     if (game === "order") return <OrderMatch mode="solo" onBack={() => selectGame("order-menu")} onScore={(score) => recordScore("order", score)} />;

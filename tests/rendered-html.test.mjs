@@ -272,8 +272,8 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /game-air-hockey\.png/);
   assert.match(source, /<GameMenu game="2048"/);
   assert.match(source, /recordScore\("2048", score\)/);
-  assert.match(source, /const soloOnly = game === "2048" \|\| game === "wordgarden" \|\| game === "blackjack" \|\| game === "queens" \|\| game === "graphwar"/);
-  assert.match(source, /MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS\.filter\(\(gameId\) => gameId !== "2048" && gameId !== "wordgarden" && gameId !== "blackjack" && gameId !== "queens"\)/);
+  assert.match(source, /const soloOnly = game === "2048" \|\| game === "wordgarden" \|\| game === "blackjack" \|\| game === "queens"/);
+  assert.match(source, /MULTIPLAYER_GAME_IDS: PlayableGameId\[\].*"graphwar"/);
   assert.match(source, /orderBy\("score", gameId === "2048" \|\| gameId === "blackjack" \? "desc" : "asc"\)/);
   assert.match(source, /higherIsBetter = gameId === "2048" \|\| gameId === "blackjack"/);
   assert.match(game2048Source, /export function Game2048/);
@@ -342,7 +342,7 @@ test("routes every game through a start menu", async () => {
   assert.match(firestoreRules, /'queens'/);
   assert.match(source, /<GameMenu game="graphwar"/);
   assert.match(source, /<GraphWar onBack=/);
-  assert.match(source, /name: "Graph War", japanese: "関数戦", meta: "MATH · 2P"/);
+  assert.match(source, /name: "Graph War", japanese: "関数戦", meta: "MATH · 1–2P"/);
   assert.match(graphWarSource, /export function GraphWar/);
   assert.match(graphWarSource, /linear function and fire/);
   assert.match(graphWarSource, /FIRE LINE/);
@@ -446,13 +446,13 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /aria-label=\{`Change color mode\. Current mode:[^>]*><span>MODE<\/span><\/button>/);
   assert.match(source, /game-garden-theme/);
   assert.match(layoutSource, /suppressHydrationWarning/);
-  assert.match(layoutSource, /<script src="\/theme-init\.js\?v=4"/);
-  assert.match(layoutSource, /<script src="\/startup-loader\.js\?v=2" defer/);
-  assert.match(layoutSource, /id="game-garden-startup" className="startup-loader" role="status"/);
+  assert.match(layoutSource, /<script suppressHydrationWarning src="\/theme-init\.js\?v=4"/);
+  assert.match(layoutSource, /<script suppressHydrationWarning src="\/startup-loader\.js\?v=2" defer/);
+  assert.match(layoutSource, /suppressHydrationWarning id="game-garden-startup" className="startup-loader" role="status"/);
   assert.match(layoutSource, /manifest: "\/manifest\.webmanifest"/);
   assert.match(layoutSource, /id="game-garden-theme-color" name="theme-color" content="#e60012"/);
   assert.match(layoutSource, /appleWebApp:/);
-  assert.match(layoutSource, /<script src="\/pwa-init\.js\?v=2" defer/);
+  assert.match(layoutSource, /<script suppressHydrationWarning src="\/pwa-init\.js\?v=2" defer/);
   assert.equal(JSON.parse(pwaManifest).display, "standalone");
   assert.match(pwaManifest, /app-icon-512\.png/);
   assert.match(pwaInit, /navigator\.serviceWorker\.register\("\/service-worker\.js"/);

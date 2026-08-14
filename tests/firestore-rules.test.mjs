@@ -558,6 +558,40 @@ test("a joined room can start and play an online game without exposing it to out
   await assertFails(getDoc(doc(outsider, "rooms", "DEF567", "game", "state")));
 });
 
+test("Graph War supports private online placement and alternating function shots", async () => {
+  const host = testEnv.authenticatedContext("graph-host", anonymousClaims).firestore();
+  const guest = testEnv.authenticatedContext("graph-guest", anonymousClaims).firestore();
+  const outsider = testEnv.authenticatedContext("graph-outsider", anonymousClaims).firestore();
+  const roomRef = doc(host, "rooms", "GRF234");
+  await assertSucceeds(setDoc(roomRef, {
+    code: "GRF234", gameId: "graphwar", gameName: "Graph War",
+    hostUid: "graph-host", hostName: "Graph Host", hostAvatar: "play", hostBanner: "torii",
+    status: "open", createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+  }));
+  await assertSucceeds(updateDoc(doc(guest, "rooms", "GRF234"), {
+    guestUid: "graph-guest", guestName: "Graph Guest", guestAvatar: "play", guestBanner: "koi-current",
+    status: "ready", updatedAt: serverTimestamp(),
+  }));
+
+  const stateRef = doc(host, "rooms", "GRF234", "game", "state");
+  const start = writeBatch(host);
+  start.set(stateRef, {
+    gameId: "graphwar", roomCode: "GRF234", players: ["graph-host", "graph-guest"], names: ["Graph Host", "Graph Guest"],
+    turnUid: "graph-host", phase: "placing", round: 1, moves: 0, scores: [0, 0], winnerUid: "", board: [],
+    secret: [], guesses: [], target: [], objects: [], checks: [], deck: [], open: [], matched: [], choices: [],
+    positions: [-1, -1], faces: [0, 0], barricades: [], wallsLeft: [10, 10], fleets: { p0: [], p1: [] },
+    shots: { p0: [], p1: [] }, ready: [false, false], lastShots: [-1, -1], airEndsAt: 0,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  start.update(roomRef, { status: "playing", updatedAt: serverTimestamp() });
+  await assertSucceeds(start.commit());
+  await assertSucceeds(updateDoc(stateRef, { positions: [58, -1], ready: [true, false], turnUid: "graph-guest", updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(guest, "rooms", "GRF234", "game", "state"), { positions: [58, 230], ready: [true, true], phase: "playing", turnUid: "graph-host", updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(stateRef, { open: [0, 100, 0], moves: 1, turnUid: "graph-guest", updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(outsider, "rooms", "GRF234", "game", "state"), { open: [0, 100, 0, 1, 0, 0], moves: 2, updatedAt: serverTimestamp() }));
+});
+
 test("nonparticipants cannot read a direct chat", async () => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), "directChats", "alice--bob"), {
