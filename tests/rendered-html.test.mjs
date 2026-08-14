@@ -40,6 +40,7 @@ test("server-renders the Game Garden hub", async () => {
   assert.match(html, /Dots &amp; Boxes/);
   assert.match(html, /Air Hockey/);
   assert.match(html, /Blackjack/);
+  assert.match(html, /Graph War/);
   assert.doesNotMatch(html, /Meducktion|Deducktion/);
   assert.match(html, /App navigation/);
   assert.match(html, /Ranks/);
@@ -77,6 +78,8 @@ test("routes every game through a start menu", async () => {
   const blackjackLogic = await readFile(new URL("../app/blackjack-logic.ts", import.meta.url), "utf8");
   const queensSource = await readFile(new URL("../app/queens-game.tsx", import.meta.url), "utf8");
   const queensLogic = await readFile(new URL("../app/queens-logic.ts", import.meta.url), "utf8");
+  const graphWarSource = await readFile(new URL("../app/graph-war-game.tsx", import.meta.url), "utf8");
+  const graphWarLogic = await readFile(new URL("../app/graph-war-logic.ts", import.meta.url), "utf8");
   assert.match(source, /codebreaker-menu/);
   assert.match(source, /order-menu/);
   assert.match(source, /number-menu/);
@@ -91,6 +94,7 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /2048-menu/);
   assert.match(source, /blackjack-menu/);
   assert.match(source, /queens-menu/);
+  assert.match(source, /graphwar-menu/);
   assert.match(source, /appShellRef\.current\?\.scrollTo/);
   assert.match(styles, /\.app-shell \{ height:100vh;height:100dvh;min-height:0;[^}]*overflow-y:auto/);
   assert.match(styles, /\.profile-panel::after,\.store-panel::after/);
@@ -268,7 +272,7 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /game-air-hockey\.png/);
   assert.match(source, /<GameMenu game="2048"/);
   assert.match(source, /recordScore\("2048", score\)/);
-  assert.match(source, /const soloOnly = game === "2048" \|\| game === "wordgarden" \|\| game === "blackjack" \|\| game === "queens"/);
+  assert.match(source, /const soloOnly = game === "2048" \|\| game === "wordgarden" \|\| game === "blackjack" \|\| game === "queens" \|\| game === "graphwar"/);
   assert.match(source, /MULTIPLAYER_GAME_IDS = SCORE_GAME_IDS\.filter\(\(gameId\) => gameId !== "2048" && gameId !== "wordgarden" && gameId !== "blackjack" && gameId !== "queens"\)/);
   assert.match(source, /orderBy\("score", gameId === "2048" \|\| gameId === "blackjack" \? "desc" : "asc"\)/);
   assert.match(source, /higherIsBetter = gameId === "2048" \|\| gameId === "blackjack"/);
@@ -336,6 +340,16 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.queens-cell\.region-0\{--queens-cell-color:color-mix\(in srgb,var\(--red\) 48%,#ffd9df\)\}/);
   assert.match(styles, /\.queens-shell\{[^}]*overflow-x:hidden/);
   assert.match(firestoreRules, /'queens'/);
+  assert.match(source, /<GameMenu game="graphwar"/);
+  assert.match(source, /<GraphWar onBack=/);
+  assert.match(source, /name: "Graph War", japanese: "関数戦", meta: "MATH · 2P"/);
+  assert.match(graphWarSource, /export function GraphWar/);
+  assert.match(graphWarSource, /linear function and fire/);
+  assert.match(graphWarSource, /FIRE LINE/);
+  assert.match(graphWarLogic, /export function graphLineHitsPoint/);
+  assert.match(styles, /\.art-graphwar/);
+  assert.match(styles, /\.graph-war-board\{/);
+  assert.match(styles, /@media\(max-width:720px\)\{\.graph-war-game/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);
   assert.match(source, /blocksWin \? 120/);
