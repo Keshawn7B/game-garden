@@ -9,7 +9,7 @@ type GraphPhase = "difficulty" | "place-one" | "battle" | "won";
 export type GraphShot = GraphFunctionShot & { id: number; points: GraphPoint[]; hit: boolean; exploded: boolean };
 
 const GRAPH_SPAN = GRAPH_MAX - GRAPH_MIN;
-const VIEW_SIZE = 640;
+const VIEW_SIZE = GRAPH_SPAN * 40;
 const coordinates = Array.from({ length: GRAPH_SPAN + 1 }, (_, index) => GRAPH_MIN + index);
 const modeDetails: { id: GraphFunctionMode; label: string; sub: string }[] = [
   { id: "normal", label: "y = f(x)", sub: "Function" },
@@ -41,15 +41,15 @@ export function GraphWarBoard({ positions, shots, obstacles, currentPlayer, plac
     onPlace(snapGraphPoint(GRAPH_MIN + ((event.clientX - bounds.left) / bounds.width) * GRAPH_SPAN, GRAPH_MAX - ((event.clientY - bounds.top) / bounds.height) * GRAPH_SPAN));
   };
   return <div className={`graph-war-board-wrap ${placingPlayer != null ? "is-placing" : ""}`}>
-    <svg className="graph-war-board" viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} onClick={placeDot} role="img" aria-label="Coordinate battlefield from negative eight to eight on both axes">
+    <svg className="graph-war-board" viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} onClick={placeDot} role="img" aria-label={`Coordinate battlefield from ${GRAPH_MIN} to ${GRAPH_MAX} on both axes`}>
       <defs><pattern id="graph-war-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" /></pattern><clipPath id="graph-war-clip"><rect width={VIEW_SIZE} height={VIEW_SIZE} rx="18" /></clipPath></defs>
       <g clipPath="url(#graph-war-clip)">
         <rect className="graph-war-field" width={VIEW_SIZE} height={VIEW_SIZE} />
-        {placingPlayer != null && <><rect className="graph-home-zone player-one" x="40" y="40" width="200" height="560" /><rect className="graph-home-zone player-two" x="400" y="40" width="200" height="560" /></>}
+        {placingPlayer != null && <><rect className="graph-home-zone player-one" x={graphX(GRAPH_MIN + 1)} y={graphY(GRAPH_MAX - 1)} width={graphX(-2) - graphX(GRAPH_MIN + 1)} height={graphY(GRAPH_MIN + 1) - graphY(GRAPH_MAX - 1)} /><rect className="graph-home-zone player-two" x={graphX(2)} y={graphY(GRAPH_MAX - 1)} width={graphX(GRAPH_MAX - 1) - graphX(2)} height={graphY(GRAPH_MIN + 1) - graphY(GRAPH_MAX - 1)} /></>}
         <rect className="graph-grid-lines" width={VIEW_SIZE} height={VIEW_SIZE} fill="url(#graph-war-grid)" />
         <line className="graph-axis" x1={0} y1={graphY(0)} x2={VIEW_SIZE} y2={graphY(0)} /><line className="graph-axis" x1={graphX(0)} y1={0} x2={graphX(0)} y2={VIEW_SIZE} />
-        {coordinates.filter((value) => value !== 0 && value % 2 === 0).map((value) => <g key={value} className="graph-ticks"><text x={graphX(value)} y={graphY(0) + 19} textAnchor="middle">{value}</text><text x={graphX(0) - 10} y={graphY(value) + 4} textAnchor="end">{value}</text></g>)}
-        {obstacles.map((obstacle, index) => <g className="graph-obstacle" key={index} transform={`translate(${graphX(obstacle.x)} ${graphY(obstacle.y)})`}><circle r={obstacle.radius * 40} /><path d="M-14-9 14 9M-13 12 10-13" /></g>)}
+        {coordinates.filter((value) => value !== 0 && value % 2 === 0 && value > GRAPH_MIN && value < GRAPH_MAX).map((value) => <g key={value} className="graph-ticks"><text x={graphX(value)} y={graphY(0) + 19} textAnchor="middle">{value}</text><text x={graphX(0) - 10} y={graphY(value) + 4} textAnchor="end">{value}</text></g>)}
+        {obstacles.map((obstacle, index) => <g className="graph-obstacle" key={index} transform={`translate(${graphX(obstacle.x)} ${graphY(obstacle.y)})`}><circle r={obstacle.radius * 40} /><path transform={`scale(${obstacle.radius / 0.7})`} d="M-14-9 14 9M-13 12 10-13" /></g>)}
         {shots.slice(-1).map((shot) => <g className="graph-shot-visual" key={shot.id}><polyline className={`graph-shot player-${shot.player + 1} ${shot.hit ? "is-hit" : ""}`} points={graphPath(shot.points)} />{shot.exploded && <circle className="graph-explosion" cx={graphX(shot.points.at(-1)?.x ?? 0)} cy={graphY(shot.points.at(-1)?.y ?? 0)} r="15" />}</g>)}
         {preview && preview.length > 1 && <polyline className={`graph-preview player-${currentPlayer + 1}`} points={graphPath(preview)} />}
         {positions.map((point, player) => point && <g key={player} className={`graph-player-dot player-${player + 1}`} transform={`translate(${graphX(point.x)} ${graphY(point.y)})`}><circle r="17" /><circle r="6" /><text y="-25" textAnchor="middle">{labels[player]}</text></g>)}

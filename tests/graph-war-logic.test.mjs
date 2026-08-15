@@ -16,7 +16,7 @@ test("Graph War detects direct hits and nearby misses", () => {
 });
 
 test("Graph War snaps placements inside the graph and keeps home zones separate", () => {
-  assert.deepEqual(snapGraphPoint(-9, 8.8), { x: -7, y: 7 });
+  assert.deepEqual(snapGraphPoint(-11, 10.8), { x: -9, y: 9 });
   assert.equal(graphPlacementAllowed(0, { x: -2, y: 4 }), true);
   assert.equal(graphPlacementAllowed(0, { x: 2, y: 4 }), false);
   assert.equal(graphPlacementAllowed(1, { x: 2, y: -4 }), true);
@@ -27,7 +27,7 @@ test("Graph War encodes online positions without losing graph coordinates", () =
   const point = { x: -5, y: 6 };
   assert.deepEqual(decodeGraphPoint(encodeGraphPoint(point)), point);
   assert.equal(decodeGraphPoint(-1), null);
-  assert.equal(decodeGraphPoint(289), null);
+  assert.equal(decodeGraphPoint(441), null);
 });
 
 test("Graph War bot difficulty changes its chance to land a shot", () => {
@@ -82,6 +82,10 @@ test("Graph War online function shots round-trip and seeded obstacles stay deter
   assert.equal(decodeGraphFunctionShot({ player: 0 }), null);
   assert.deepEqual(graphObstaclesForSeed("ROOM42"), graphObstaclesForSeed("ROOM42"));
   assert.notDeepEqual(graphObstaclesForSeed("ROOM42"), graphObstaclesForSeed("ROOM43"));
+  const variedObstacles = Array.from({ length: 30 }, (_, index) => graphObstaclesForSeed(`ROOM${index}`));
+  assert.ok(new Set(variedObstacles.map((obstacles) => obstacles.length)).size > 1);
+  assert.ok(variedObstacles.every((obstacles) => obstacles.length >= 2 && obstacles.length <= 6));
+  assert.ok(variedObstacles.flat().every((obstacle) => obstacle.radius >= 0.45 && obstacle.radius <= 1.2 && Math.abs(obstacle.x) <= 8 && Math.abs(obstacle.y) <= 8));
 });
 
 test("Graph War bot plans with normal, first-order, second-order, sine, cosine, and polynomial functions", () => {

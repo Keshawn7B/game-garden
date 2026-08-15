@@ -5,8 +5,8 @@ export type GraphObstacle = GraphPoint & { radius: number };
 export type GraphTrajectory = { points: GraphPoint[]; exploded: boolean; hit: boolean };
 export type GraphFunctionShot = { player: 0 | 1; mode: GraphFunctionMode; expression: string; angle: number };
 
-export const GRAPH_MIN = -8;
-export const GRAPH_MAX = 8;
+export const GRAPH_MIN = -10;
+export const GRAPH_MAX = 10;
 export const GRAPH_HIT_RADIUS = 0.42;
 
 export function graphLineY(slope: number, intercept: number, x: number) {
@@ -50,11 +50,14 @@ export function decodeGraphPoint(value: number): GraphPoint | null {
 }
 
 export function randomGraphBotPoint(random = Math.random, obstacles: GraphObstacle[] = []): GraphPoint {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const point = { x: 2 + Math.floor(random() * 6), y: -7 + Math.floor(random() * 15) };
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const point = { x: 2 + Math.floor(random() * (GRAPH_MAX - 2)), y: GRAPH_MIN + 1 + Math.floor(random() * (GRAPH_MAX - GRAPH_MIN - 1)) };
     if (!obstacles.some((obstacle) => Math.hypot(point.x - obstacle.x, point.y - obstacle.y) <= obstacle.radius + 0.5)) return point;
   }
-  return { x: 7, y: 7 };
+  for (let x = GRAPH_MAX - 1; x >= 2; x -= 1) for (let y = GRAPH_MAX - 1; y > GRAPH_MIN; y -= 1) {
+    if (!obstacles.some((obstacle) => Math.hypot(x - obstacle.x, y - obstacle.y) <= obstacle.radius + 0.5)) return { x, y };
+  }
+  return { x: GRAPH_MAX - 1, y: GRAPH_MAX - 1 };
 }
 
 export function chooseGraphBotShot(target: GraphPoint, difficulty: GraphBotDifficulty, random = Math.random, previousShots = 0) {
@@ -226,7 +229,20 @@ export function graphObstaclesForSeed(seed: string): GraphObstacle[] {
   let hash = 2166136261;
   for (const character of seed) { hash ^= character.charCodeAt(0); hash = Math.imul(hash, 16777619); }
   const random = () => { hash = Math.imul(hash ^ (hash >>> 15), 2246822519); return ((hash >>> 0) % 10000) / 10000; };
-  return [-1.1, 0, 1.1].map((x) => ({ x: x + (random() - 0.5) * 0.5, y: -4.5 + random() * 9, radius: 0.5 + random() * 0.2 }));
+  const count = 2 + Math.floor(random() * 5);
+  const obstacles: GraphObstacle[] = [];
+  const positionLimit = GRAPH_MAX - 2;
+  for (let attempt = 0; obstacles.length < count && attempt < 80; attempt += 1) {
+    const radius = 0.45 + random() * 0.75;
+    const obstacle = {
+      x: -positionLimit + random() * positionLimit * 2,
+      y: -positionLimit + random() * positionLimit * 2,
+      radius,
+    };
+    if (obstacles.some((current) => pointDistance(current, obstacle) <= current.radius + obstacle.radius + 0.45)) continue;
+    obstacles.push({ x: Math.round(obstacle.x * 100) / 100, y: Math.round(obstacle.y * 100) / 100, radius: Math.round(radius * 100) / 100 });
+  }
+  return obstacles;
 }
 
 type GraphBotCandidate = { centeredShot: Omit<GraphFunctionShot, "player">; withOffset: (offset: number) => Omit<GraphFunctionShot, "player"> };
