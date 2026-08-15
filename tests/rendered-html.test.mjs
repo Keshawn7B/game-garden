@@ -361,9 +361,11 @@ test("routes every game through a start menu", async () => {
   assert.match(styles, /\.graph-guide-plot\{/);
   assert.match(graphWarSource, /shots\.slice\(-1\).*graph-shot-visual/);
   assert.match(graphWarSource, /difficulty !== "easy".*return null/);
+  assert.match(graphWarSource, /graph-war-result-popup.*role="dialog".*aria-modal="true"/);
   assert.match(onlineSource, /const graphPreview = null/);
   assert.match(onlineSource, /GraphFunctionGuide compact/);
   assert.match(onlineSource, /shotLimitReached/);
+  assert.match(onlineSource, /graph-war-result-popup.*role="dialog".*aria-modal="true"/);
   assert.match(onlineSource, /graphObstaclesForSeed\(`\$\{room\.code\}-\$\{state\.round\}`\)/);
   assert.match(firestoreRules, /state\.positions\[0\] <= 440/);
   assert.match(graphWarLogic, /export function graphLineHitsPoint/);
@@ -371,6 +373,7 @@ test("routes every game through a start menu", async () => {
   assert.match(graphWarLogic, /export function traceGraphFunction/);
   assert.match(styles, /\.art-graphwar\{[^}]*url\('\/game-graph-war\.png'\)/);
   assert.match(styles, /\.graph-war-board\{/);
+  assert.match(styles, /\.graph-war-result-popup\{[^}]*position:fixed[^}]*z-index:80/);
   assert.match(styles, /\.graph-shot-visual\{animation:graphShotVanish/);
   assert.match(styles, /@media\(max-width:720px\)\{\.graph-war-game/);
   assert.match(source, /function chooseBarricadeCpuAction/);

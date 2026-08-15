@@ -178,7 +178,7 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
         <p className="graph-war-message" role="status" aria-live="polite">{message}</p>
         <GraphWarBoard positions={positions} shots={shots} obstacles={obstacles} currentPlayer={currentPlayer} placingPlayer={phase === "place-one" ? 0 : null} preview={preview} onPlace={placeDot} />
         {(phase === "battle" || phase === "won") && <GraphFunctionConsole mode={mode} expression={expression} angle={angle} disabled={phase === "won" || currentPlayer === 1} history={shots} onMode={setMode} onExpression={setExpression} onAngle={setAngle} onFire={fire} />}
-        {winner != null && <GameResult outcome={winner === 0 ? "You Win!" : "Bot Wins"} detail={`${graphShotText(shots.at(-1) ?? { mode: "normal", expression: "0" })} landed the hit after ${shots.length} ${shots.length === 1 ? "shot" : "shots"}.`} onPlayAgain={() => begin(difficulty)} />}
+        {winner != null && <div className="graph-war-result-popup" role="dialog" aria-modal="true" aria-label="Graph War result"><button type="button" className="graph-war-result-exit" onClick={onBack} aria-label="Exit Graph War">×</button><GameResult outcome={winner === 0 ? "You Win!" : "Bot Wins"} detail={`${graphShotText(shots.at(-1) ?? { mode: "normal", expression: "0" })} landed the hit after ${shots.length} ${shots.length === 1 ? "shot" : "shots"}.`} onPlayAgain={() => begin(difficulty)} /></div>}
       </>}
     </section>
   </main>;
