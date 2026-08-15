@@ -350,6 +350,10 @@ test("routes every game through a start menu", async () => {
   assert.match(graphWarSource, /y = 2x/);
   assert.match(graphWarSource, /y′ = 1/);
   assert.match(graphWarSource, /y″ = −0\.2/);
+  assert.match(graphWarSource, /graph-guide-plot is-function/);
+  assert.match(graphWarSource, /graph-guide-plot is-first-order/);
+  assert.match(graphWarSource, /graph-guide-plot is-second-order/);
+  assert.match(styles, /\.graph-guide-plot\{/);
   assert.match(graphWarSource, /shots\.slice\(-1\).*graph-shot-visual/);
   assert.match(graphWarSource, /difficulty !== "easy".*return null/);
   assert.match(onlineSource, /const graphPreview = null/);

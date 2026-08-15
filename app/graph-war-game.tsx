@@ -144,9 +144,9 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
       {phase === "difficulty" ? <div className="graph-difficulty">
         <p>QUICK FUNCTION GUIDE</p>
         <div className="graph-function-guide" aria-label="Basic examples of each Graph War function type">
-          <article><span>FUNCTION</span><strong>y = 2x</strong><small>A straight line</small></article>
-          <article><span>1ST ORDER</span><strong>y′ = 1</strong><small>A constant slope</small></article>
-          <article><span>2ND ORDER</span><strong>y″ = −0.2</strong><small>A downward curve</small></article>
+          <article><div className="graph-guide-plot is-function" aria-hidden="true"><i /></div><span>FUNCTION</span><strong>y = 2x</strong><small>A straight line</small></article>
+          <article><div className="graph-guide-plot is-first-order" aria-hidden="true"><i /></div><span>1ST ORDER</span><strong>y′ = 1</strong><small>A constant slope</small></article>
+          <article><div className="graph-guide-plot is-second-order" aria-hidden="true"><i /></div><span>2ND ORDER</span><strong>y″ = −0.2</strong><small>A downward curve</small></article>
         </div>
         <p>SELECT BOT LEVEL</p>
         <div className="graph-difficulty-levels">{difficultyDetails.map((item) => <button key={item.id} onClick={() => begin(item.id)}><b>{item.glyph}</b><strong>{item.label}</strong><span>{item.hint}</span></button>)}</div>
