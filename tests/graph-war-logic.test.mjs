@@ -90,3 +90,26 @@ test("Graph War bots can select every supported function mode", () => {
   assert.equal(chooseGraphBotFunction(origin, target, "hard", () => 0.6).mode, "first");
   assert.equal(chooseGraphBotFunction(origin, target, "hard", () => 0.9).mode, "second");
 });
+
+test("Graph War bot randomizes around the correct function with less range on harder levels", () => {
+  const origin = { x: 6, y: -3 };
+  const target = { x: -6, y: 3 };
+  const idealSlope = (target.y - origin.y) / (target.x - origin.x);
+  const edgePick = () => { const values = [0.1, 0.999]; let index = 0; return () => values[index++]; };
+  const easy = chooseGraphBotFunction(origin, target, "easy", edgePick(), 0);
+  const medium = chooseGraphBotFunction(origin, target, "medium", edgePick(), 0);
+  const hard = chooseGraphBotFunction(origin, target, "hard", edgePick(), 0);
+  const errors = [easy, medium, hard].map((shot) => Math.abs(Number(shot.expression.replace("*x", "")) - idealSlope));
+  assert.ok(errors[1] < errors[0]);
+  assert.ok(errors[2] < errors[1]);
+});
+
+test("Graph War bot centers its range on the correct answer and eventually reaches it", () => {
+  const origin = { x: 6, y: -3 };
+  const target = { x: -6, y: 3 };
+  const centered = (() => { const values = [0.1, 0.5]; let index = 0; return () => values[index++]; })();
+  const middle = chooseGraphBotFunction(origin, target, "easy", centered, 0);
+  const converged = chooseGraphBotFunction(origin, target, "easy", () => 0.999, 9);
+  assert.equal(middle.expression, "-0.5*x");
+  assert.equal(converged.expression, "-0.5*x");
+});

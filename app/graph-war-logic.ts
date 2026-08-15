@@ -232,10 +232,15 @@ export function graphObstaclesForSeed(seed: string): GraphObstacle[] {
 export function chooseGraphBotFunction(origin: GraphPoint, target: GraphPoint, difficulty: GraphBotDifficulty, random = Math.random, previousShots = 0): Omit<GraphFunctionShot, "player"> {
   const modeRoll = random();
   const mode: GraphFunctionMode = difficulty === "easy" ? "normal" : modeRoll < 0.5 ? "normal" : modeRoll < 0.78 ? "first" : "second";
-  const accuracy = Math.min(0.96, { easy: 0.22, medium: 0.52, hard: 0.78 }[difficulty] + previousShots * 0.055);
-  const exact = random() < accuracy;
-  const error = exact ? 0 : (random() < 0.5 ? -1 : 1) * ({ easy: 0.42, medium: 0.2, hard: 0.1 }[difficulty] + random() * 0.18);
-  const slope = (target.y - origin.y) / (target.x - origin.x) + error;
+  const correctSlope = (target.y - origin.y) / (target.x - origin.x);
+  const range = {
+    easy: { initialSteps: 10, decay: 0.7 },
+    medium: { initialSteps: 5, decay: 0.58 },
+    hard: { initialSteps: 2, decay: 0.45 },
+  }[difficulty];
+  const rangeSteps = Math.max(0, Math.round(range.initialSteps * range.decay ** previousShots));
+  const offsetSteps = rangeSteps ? Math.floor(random() * (rangeSteps * 2 + 1)) - rangeSteps : 0;
+  const slope = correctSlope + offsetSteps * 0.08;
   if (mode === "second") return { mode, expression: "0", angle: Math.atan(slope) * 180 / Math.PI };
   const roundedSlope = String(Math.round(slope * 1000) / 1000);
   return { mode, expression: mode === "normal" ? `${roundedSlope}*x` : roundedSlope, angle: 0 };
