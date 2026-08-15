@@ -97,10 +97,10 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
   const [matchNumber, setMatchNumber] = useState(0);
 
   const preview = useMemo(() => {
-    if (phase !== "battle" || currentPlayer !== 0 || !positions[0]) return null;
+    if (difficulty !== "easy" || phase !== "battle" || currentPlayer !== 0 || !positions[0]) return null;
     const result = traceGraphFunction({ player: 0, mode, expression, angle }, positions[0], null, obstacles);
     return result.exploded && result.points.length === 1 ? null : result.points;
-  }, [angle, currentPlayer, expression, mode, obstacles, phase, positions]);
+  }, [angle, currentPlayer, difficulty, expression, mode, obstacles, phase, positions]);
 
   const begin = (nextDifficulty = difficulty) => {
     const nextMatch = matchNumber + 1;

@@ -347,6 +347,8 @@ test("routes every game through a start menu", async () => {
   assert.match(graphWarSource, /GraphFunctionConsole/);
   assert.match(graphWarSource, /differential equations, obstacles/);
   assert.match(graphWarSource, /shots\.slice\(-1\).*graph-shot-visual/);
+  assert.match(graphWarSource, /difficulty !== "easy".*return null/);
+  assert.match(onlineSource, /const graphPreview = null/);
   assert.match(graphWarLogic, /export function graphLineHitsPoint/);
   assert.match(graphWarLogic, /export function compileGraphExpression/);
   assert.match(graphWarLogic, /export function traceGraphFunction/);

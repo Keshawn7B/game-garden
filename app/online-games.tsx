@@ -693,9 +693,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const graphPlacingPlayer: 0 | 1 | null = state.gameId === "graphwar" && state.phase === "placing" ? state.ready[0] ? 1 : 0 : null;
   let validGraphFunction = true;
   try { compileGraphExpression(graphExpression); } catch { validGraphFunction = false; }
-  const graphPreview = state.gameId === "graphwar" && myTurn && graphPositions[playerIndex] && validGraphFunction
-    ? traceGraphFunction({ player: playerIndex, mode: graphMode, expression: graphExpression, angle: graphAngle }, graphPositions[playerIndex]!, null, graphObstacles).points
-    : null;
+  const graphPreview = null;
 
   const placeGraphPoint = (point: GraphPoint) => void mutate((current) => {
     if (current.gameId !== "graphwar" || current.phase !== "placing" || current.turnUid !== user.uid) return null;
