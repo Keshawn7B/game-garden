@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseGraphBotFunction, chooseGraphBotShot, compileGraphExpression, decodeGraphFunctionShot, decodeGraphPoint, encodeGraphFunctionShot, encodeGraphPoint, formatGraphFunction, graphLineDistance, graphLineHitsPoint, graphLineY, graphObstaclesForSeed, graphPlacementAllowed, randomGraphBotPoint, snapGraphPoint, traceGraphFunction } from "../app/graph-war-logic.ts";
+import { chooseGraphBotFunction, chooseGraphBotShot, compileGraphExpression, decodeGraphFunctionShot, decodeGraphPoint, encodeGraphFunctionShot, encodeGraphPoint, formatGraphFunction, graphBotRangeSteps, graphLineDistance, graphLineHitsPoint, graphLineY, graphObstaclesForSeed, graphPlacementAllowed, randomGraphBotPoint, snapGraphPoint, traceGraphFunction } from "../app/graph-war-logic.ts";
 
 test("Graph War evaluates linear functions", () => {
   assert.equal(graphLineY(2, -1, 3), 5);
@@ -83,33 +83,32 @@ test("Graph War online function shots round-trip and seeded obstacles stay deter
   assert.notDeepEqual(graphObstaclesForSeed("ROOM42"), graphObstaclesForSeed("ROOM43"));
 });
 
-test("Graph War bots can select every supported function mode", () => {
-  const origin = { x: 5, y: 2 };
+test("Graph War bot plans with normal, first-order, second-order, sine, cosine, and polynomial functions", () => {
+  const origin = { x: 6, y: 2 };
   const target = { x: -5, y: -1 };
-  assert.equal(chooseGraphBotFunction(origin, target, "easy", () => 0.1).mode, "normal");
-  assert.equal(chooseGraphBotFunction(origin, target, "hard", () => 0.6).mode, "first");
-  assert.equal(chooseGraphBotFunction(origin, target, "hard", () => 0.9).mode, "second");
+  const shots = Array.from({ length: 21 }, (_, index) => chooseGraphBotFunction(origin, target, "hard", () => index / 20, 9));
+  const modes = new Set(shots.map((shot) => shot.mode));
+  assert.deepEqual(modes, new Set(["normal", "first", "second"]));
+  assert.ok(shots.some((shot) => shot.expression.includes("sin(")));
+  assert.ok(shots.some((shot) => shot.expression.includes("cos(")));
+  assert.ok(shots.some((shot) => shot.expression.includes("x^2")));
 });
 
-test("Graph War bot randomizes around the correct function with less range on harder levels", () => {
-  const origin = { x: 6, y: -3 };
-  const target = { x: -6, y: 3 };
-  const idealSlope = (target.y - origin.y) / (target.x - origin.x);
-  const edgePick = () => { const values = [0.1, 0.999]; let index = 0; return () => values[index++]; };
-  const easy = chooseGraphBotFunction(origin, target, "easy", edgePick(), 0);
-  const medium = chooseGraphBotFunction(origin, target, "medium", edgePick(), 0);
-  const hard = chooseGraphBotFunction(origin, target, "hard", edgePick(), 0);
-  const errors = [easy, medium, hard].map((shot) => Math.abs(Number(shot.expression.replace("*x", "")) - idealSlope));
-  assert.ok(errors[1] < errors[0]);
-  assert.ok(errors[2] < errors[1]);
+test("Graph War bot uses less centered randomness on harder levels and converges", () => {
+  assert.deepEqual([graphBotRangeSteps("easy", 0), graphBotRangeSteps("medium", 0), graphBotRangeSteps("hard", 0)], [10, 5, 2]);
+  assert.ok(graphBotRangeSteps("easy", 1) < graphBotRangeSteps("easy", 0));
+  assert.equal(graphBotRangeSteps("easy", 9), 0);
+  assert.equal(graphBotRangeSteps("medium", 5), 0);
+  assert.equal(graphBotRangeSteps("hard", 2), 0);
 });
 
-test("Graph War bot centers its range on the correct answer and eventually reaches it", () => {
-  const origin = { x: 6, y: -3 };
-  const target = { x: -6, y: 3 };
-  const centered = (() => { const values = [0.1, 0.5]; let index = 0; return () => values[index++]; })();
-  const middle = chooseGraphBotFunction(origin, target, "easy", centered, 0);
-  const converged = chooseGraphBotFunction(origin, target, "easy", () => 0.999, 9);
-  assert.equal(middle.expression, "-0.5*x");
-  assert.equal(converged.expression, "-0.5*x");
+test("Graph War bot solves around obstacles before centering its random range", () => {
+  const origin = { x: 6, y: 0 };
+  const target = { x: -6, y: 0 };
+  const obstacles = [{ x: 0, y: 0, radius: 1 }];
+  const shot = chooseGraphBotFunction(origin, target, "hard", () => 0, 9, obstacles);
+  const result = traceGraphFunction({ player: 1, ...shot }, origin, target, obstacles);
+  assert.match(`${shot.mode} ${shot.expression}`, /x\^2|sin\(|cos\(|first|second/);
+  assert.equal(result.exploded, false);
+  assert.equal(result.hit, true);
 });

@@ -127,7 +127,7 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (phase !== "battle" || currentPlayer !== 1 || !positions[0] || !positions[1]) return;
     const timer = window.setTimeout(() => {
-      const botFunction = chooseGraphBotFunction(positions[1]!, positions[0]!, difficulty, Math.random, shots.filter((shot) => shot.player === 1).length);
+      const botFunction = chooseGraphBotFunction(positions[1]!, positions[0]!, difficulty, Math.random, shots.filter((shot) => shot.player === 1).length, obstacles);
       const functionShot: GraphFunctionShot = { player: 1, ...botFunction };
       const result = traceGraphFunction(functionShot, positions[1]!, positions[0]!, obstacles);
       setShots((current) => [...current, { id: current.length + 1, ...functionShot, ...result }]);

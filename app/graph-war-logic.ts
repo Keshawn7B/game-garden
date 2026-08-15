@@ -229,21 +229,69 @@ export function graphObstaclesForSeed(seed: string): GraphObstacle[] {
   return [-1.1, 0, 1.1].map((x) => ({ x: x + (random() - 0.5) * 0.5, y: -4.5 + random() * 9, radius: 0.5 + random() * 0.2 }));
 }
 
-export function chooseGraphBotFunction(origin: GraphPoint, target: GraphPoint, difficulty: GraphBotDifficulty, random = Math.random, previousShots = 0): Omit<GraphFunctionShot, "player"> {
-  const modeRoll = random();
-  const mode: GraphFunctionMode = difficulty === "easy" ? "normal" : modeRoll < 0.5 ? "normal" : modeRoll < 0.78 ? "first" : "second";
-  const correctSlope = (target.y - origin.y) / (target.x - origin.x);
-  const range = {
-    easy: { initialSteps: 10, decay: 0.7 },
-    medium: { initialSteps: 5, decay: 0.58 },
-    hard: { initialSteps: 2, decay: 0.45 },
-  }[difficulty];
-  const rangeSteps = Math.max(0, Math.round(range.initialSteps * range.decay ** previousShots));
+type GraphBotCandidate = { centeredShot: Omit<GraphFunctionShot, "player">; withOffset: (offset: number) => Omit<GraphFunctionShot, "player"> };
+const GRAPH_BOT_RANGES = {
+  easy: { initialSteps: 10, decay: 0.7 },
+  medium: { initialSteps: 5, decay: 0.58 },
+  hard: { initialSteps: 2, decay: 0.45 },
+} as const;
+
+function graphNumber(value: number) { return String(Math.round(value * 1000) / 1000); }
+export function graphBotRangeSteps(difficulty: GraphBotDifficulty, previousShots: number) {
+  const range = GRAPH_BOT_RANGES[difficulty];
+  return Math.max(0, Math.round(range.initialSteps * range.decay ** previousShots));
+}
+
+function graphBotCandidates(origin: GraphPoint, target: GraphPoint): GraphBotCandidate[] {
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  const candidates: GraphBotCandidate[] = [];
+  const normalCurve = (curveExpression: string, curveDelta: number) => {
+    const centeredSlope = (dy - curveDelta) / dx;
+    const make = (offset: number) => ({ mode: "normal" as const, expression: `${graphNumber(centeredSlope + offset)}*x${curveExpression}`, angle: 0 });
+    candidates.push({ centeredShot: make(0), withOffset: make });
+  };
+  normalCurve("", 0);
+  for (const curve of [-0.14, -0.08, 0.08, 0.14]) normalCurve(`${curve < 0 ? " - " : " + "}${graphNumber(Math.abs(curve))}*x^2`, curve * (target.x ** 2 - origin.x ** 2));
+  for (const amplitude of [-3, -1.8, 1.8, 3]) {
+    const frequency = 0.55;
+    normalCurve(`${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}*sin(${frequency}*x)`, amplitude * (Math.sin(frequency * target.x) - Math.sin(frequency * origin.x)));
+  }
+  for (const amplitude of [-2.4, 2.4]) {
+    const frequency = 0.45;
+    normalCurve(`${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}*cos(${frequency}*x)`, amplitude * (Math.cos(frequency * target.x) - Math.cos(frequency * origin.x)));
+  }
+  for (const amplitude of [-1.8, 1.8]) {
+    const frequency = 0.5;
+    const centeredSlope = (dy - (amplitude / frequency) * (Math.sin(frequency * target.x) - Math.sin(frequency * origin.x))) / dx;
+    const make = (offset: number) => ({ mode: "first" as const, expression: `${graphNumber(centeredSlope + offset)}${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}*cos(${frequency}*x)`, angle: 0 });
+    candidates.push({ centeredShot: make(0), withOffset: make });
+  }
+  for (const acceleration of [-0.16, -0.08, 0.08, 0.16]) {
+    const centeredVelocity = (dy - 0.5 * acceleration * dx ** 2) / dx;
+    const make = (offset: number) => ({ mode: "second" as const, expression: graphNumber(acceleration), angle: Math.atan(centeredVelocity + offset) * 180 / Math.PI });
+    candidates.push({ centeredShot: make(0), withOffset: make });
+  }
+  return candidates;
+}
+
+export function chooseGraphBotFunction(origin: GraphPoint, target: GraphPoint, difficulty: GraphBotDifficulty, random = Math.random, previousShots = 0, obstacles: GraphObstacle[] = []): Omit<GraphFunctionShot, "player"> {
+  const player: 0 | 1 = origin.x < target.x ? 0 : 1;
+  const rankedCandidates = graphBotCandidates(origin, target).map((candidate) => {
+    const shot = { player, ...candidate.centeredShot };
+    const result = traceGraphFunction(shot, origin, target, obstacles);
+    const clearance = obstacles.length && result.points.length
+      ? Math.min(...result.points.flatMap((point) => obstacles.map((obstacle) => pointDistance(point, obstacle) - obstacle.radius)))
+      : 4;
+    const closest = result.points.length ? Math.min(...result.points.map((point) => pointDistance(point, target))) : 99;
+    return { candidate, safe: result.hit && !result.exploded, score: (result.hit ? 100 : 0) - (result.exploded ? 100 : 0) + Math.min(clearance, 4) - closest };
+  }).sort((left, right) => right.score - left.score);
+  const safeCandidates = rankedCandidates.filter((item) => item.safe);
+  const candidatePool = (safeCandidates.length ? safeCandidates : rankedCandidates).slice(0, difficulty === "easy" ? 3 : difficulty === "medium" ? 6 : 9);
+  const selected = candidatePool[Math.min(candidatePool.length - 1, Math.floor(random() * candidatePool.length))].candidate;
+  const rangeSteps = graphBotRangeSteps(difficulty, previousShots);
   const offsetSteps = rangeSteps ? Math.floor(random() * (rangeSteps * 2 + 1)) - rangeSteps : 0;
-  const slope = correctSlope + offsetSteps * 0.08;
-  if (mode === "second") return { mode, expression: "0", angle: Math.atan(slope) * 180 / Math.PI };
-  const roundedSlope = String(Math.round(slope * 1000) / 1000);
-  return { mode, expression: mode === "normal" ? `${roundedSlope}*x` : roundedSlope, angle: 0 };
+  return selected.withOffset(offsetSteps * 0.08);
 }
 
 export function encodeGraphFunctionShot(shot: GraphFunctionShot) { return `${shot.player}~${shot.mode}~${Math.round(shot.angle * 10) / 10}~${encodeURIComponent(shot.expression)}`; }
