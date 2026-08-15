@@ -43,6 +43,7 @@ test("Graph War safely evaluates arithmetic, constants, functions, and implicit 
   const evaluate = compileGraphExpression("2sin(pi/2) + sqrt(abs(-4)) + ln(e)");
   assert.ok(Math.abs(evaluate({ x: 0, y: 0, v: 0 }) - 5) < 1e-9);
   assert.equal(compileGraphExpression("2x + 3(x + 1)")({ x: 2, y: 0, v: 0 }), 13);
+  assert.equal(compileGraphExpression("2×x + 1")({ x: 3, y: 0, v: 0 }), 7);
   assert.equal(compileGraphExpression("min(8, x^2) + max(1, y)")({ x: 3, y: -2, v: 0 }), 9);
   assert.throws(() => compileGraphExpression("alert(1)"), /Unknown/);
   assert.throws(() => compileGraphExpression("x +"), /Expected/);
@@ -92,6 +93,7 @@ test("Graph War bot plans with normal, first-order, second-order, sine, cosine, 
   assert.ok(shots.some((shot) => shot.expression.includes("sin(")));
   assert.ok(shots.some((shot) => shot.expression.includes("cos(")));
   assert.ok(shots.some((shot) => shot.expression.includes("x^2")));
+  assert.ok(shots.every((shot) => !shot.expression.includes("*")));
 });
 
 test("Graph War bot uses less centered randomness on harder levels and converges", () => {

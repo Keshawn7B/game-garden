@@ -17,10 +17,10 @@ const modeDetails: { id: GraphFunctionMode; label: string; sub: string }[] = [
   { id: "second", label: "y″ = f(x,y,y′)", sub: "2nd order" },
 ];
 const examples: { mode: GraphFunctionMode; expression: string; label: string }[] = [
-  { mode: "normal", expression: "2*x", label: "LINE" },
+  { mode: "normal", expression: "2x", label: "LINE" },
   { mode: "normal", expression: "(x^2)/8", label: "PARABOLA" },
-  { mode: "normal", expression: "5*sin(x/2)", label: "SINE" },
-  { mode: "normal", expression: "sqrt(abs(x))*2", label: "ROOT" },
+  { mode: "normal", expression: "5sin(x/2)", label: "SINE" },
+  { mode: "normal", expression: "2sqrt(abs(x))", label: "ROOT" },
   { mode: "normal", expression: "ln(abs(x)+1)", label: "LOG" },
   { mode: "first", expression: "-y/3", label: "1ST ODE" },
   { mode: "second", expression: "-y", label: "2ND ODE" },
@@ -29,7 +29,7 @@ const examples: { mode: GraphFunctionMode; expression: string; label: string }[]
 function graphX(value: number) { return ((value - GRAPH_MIN) / GRAPH_SPAN) * VIEW_SIZE; }
 function graphY(value: number) { return ((GRAPH_MAX - value) / GRAPH_SPAN) * VIEW_SIZE; }
 function graphPath(points: GraphPoint[]) { return points.map((point) => `${graphX(point.x)},${graphY(point.y)}`).join(" "); }
-export function graphShotText(shot: Pick<GraphFunctionShot, "mode" | "expression">) { return `${graphModeLabel(shot.mode)} = ${shot.expression}`; }
+export function graphShotText(shot: Pick<GraphFunctionShot, "mode" | "expression">) { return `${graphModeLabel(shot.mode)} = ${shot.expression.replaceAll("*", "×")}`; }
 
 export function GraphWarBoard({ positions, shots, obstacles, currentPlayer, placingPlayer, preview, onPlace, labels = ["YOU", "BOT"] }: {
   positions: [GraphPoint | null, GraphPoint | null]; shots: GraphShot[]; obstacles: GraphObstacle[]; currentPlayer: 0 | 1;
@@ -67,7 +67,7 @@ export function GraphFunctionConsole({ mode, expression, angle, disabled, histor
   return <div className="graph-war-console graph-war-console-full">
     <div className="graph-function-panel">
       <div className="graph-mode-picker">{modeDetails.map((item) => <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => onMode(item.id)} disabled={disabled}><strong>{item.label}</strong><span>{item.sub}</span></button>)}</div>
-      <div className="graph-equation-row"><span>{graphModeLabel(mode)} =</span><input aria-label="Graph War function" value={expression} onChange={(event) => onExpression(event.target.value)} disabled={disabled} autoComplete="off" spellCheck={false} placeholder={mode === "normal" ? "5*sin(x/2)" : mode === "first" ? "-y/3" : "-y + 2*x"} /><button className="primary-button graph-fire" type="button" disabled={disabled || Boolean(error)} onClick={onFire}>FIRE <b>→</b></button></div>
+      <div className="graph-equation-row"><span>{graphModeLabel(mode)} =</span><input aria-label="Graph War function" value={expression} onChange={(event) => onExpression(event.target.value.replaceAll("**", "^").replaceAll("*", "×"))} disabled={disabled} autoComplete="off" spellCheck={false} placeholder={mode === "normal" ? "5sin(x/2)" : mode === "first" ? "-y/3" : "-y + 2x"} /><button className="primary-button graph-fire" type="button" disabled={disabled || Boolean(error)} onClick={onFire}>FIRE <b>→</b></button></div>
       {mode === "second" && <label className="graph-angle"><span>FIRING ANGLE <b>{angle}°</b></span><input type="range" min="-70" max="70" step="1" value={angle} onChange={(event) => onAngle(Number(event.target.value))} disabled={disabled} /></label>}
       <div className="graph-example-row" aria-label="Function examples">{examples.map((example) => <button type="button" key={`${example.mode}-${example.label}`} onClick={() => { onMode(example.mode); onExpression(example.expression); }} disabled={disabled}>{example.label}</button>)}</div>
       <p className={error ? "graph-function-help is-error" : "graph-function-help"}>{error || "Use x, y, y′ · + − × ÷ ^ · sin cos tan sqrt log ln abs exp min max"}</p>
@@ -88,7 +88,7 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
   const [positions, setPositions] = useState<[GraphPoint | null, GraphPoint | null]>([null, null]);
   const [currentPlayer, setCurrentPlayer] = useState<0 | 1>(0);
   const [mode, setMode] = useState<GraphFunctionMode>("normal");
-  const [expression, setExpression] = useState("2*x");
+  const [expression, setExpression] = useState("2x");
   const [angle, setAngle] = useState(0);
   const [shots, setShots] = useState<GraphShot[]>([]);
   const [obstacles, setObstacles] = useState<GraphObstacle[]>([]);
@@ -105,7 +105,7 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
   const begin = (nextDifficulty = difficulty) => {
     const nextMatch = matchNumber + 1;
     const nextObstacles = graphObstaclesForSeed(`${nextDifficulty}-${nextMatch}`);
-    setMatchNumber(nextMatch); setDifficulty(nextDifficulty); setPhase("place-one"); setPositions([null, randomGraphBotPoint(Math.random, nextObstacles)]); setCurrentPlayer(0); setMode("normal"); setExpression("2*x"); setAngle(0); setShots([]); setObstacles(nextObstacles); setWinner(null); setMessage("Tap a point in the red home zone to deploy your soldier.");
+    setMatchNumber(nextMatch); setDifficulty(nextDifficulty); setPhase("place-one"); setPositions([null, randomGraphBotPoint(Math.random, nextObstacles)]); setCurrentPlayer(0); setMode("normal"); setExpression("2x"); setAngle(0); setShots([]); setObstacles(nextObstacles); setWinner(null); setMessage("Tap a point in the red home zone to deploy your soldier.");
   };
   const reset = () => { setPhase("difficulty"); setPositions([null, null]); setShots([]); setObstacles([]); setWinner(null); setMessage("Choose how sharp the rival bot should be."); };
   const placeDot = (point: GraphPoint) => {

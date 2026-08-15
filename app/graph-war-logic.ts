@@ -88,7 +88,7 @@ const GRAPH_FUNCTIONS: Record<string, (...values: number[]) => number> = {
 };
 
 function tokenizeGraphExpression(raw: string) {
-  const source = raw.toLowerCase().replaceAll("π", "pi").replaceAll("y'", "v").replaceAll("**", "^");
+  const source = raw.toLowerCase().replaceAll("π", "pi").replaceAll("y'", "v").replaceAll("×", "*").replaceAll("·", "*").replaceAll("**", "^");
   if (!source.trim() || source.length > 96) throw new Error("Enter a function up to 96 characters.");
   const tokens: Token[] = [];
   let index = 0;
@@ -248,23 +248,23 @@ function graphBotCandidates(origin: GraphPoint, target: GraphPoint): GraphBotCan
   const candidates: GraphBotCandidate[] = [];
   const normalCurve = (curveExpression: string, curveDelta: number) => {
     const centeredSlope = (dy - curveDelta) / dx;
-    const make = (offset: number) => ({ mode: "normal" as const, expression: `${graphNumber(centeredSlope + offset)}*x${curveExpression}`, angle: 0 });
+    const make = (offset: number) => ({ mode: "normal" as const, expression: `${graphNumber(centeredSlope + offset)}x${curveExpression}`, angle: 0 });
     candidates.push({ centeredShot: make(0), withOffset: make });
   };
   normalCurve("", 0);
-  for (const curve of [-0.14, -0.08, 0.08, 0.14]) normalCurve(`${curve < 0 ? " - " : " + "}${graphNumber(Math.abs(curve))}*x^2`, curve * (target.x ** 2 - origin.x ** 2));
+  for (const curve of [-0.14, -0.08, 0.08, 0.14]) normalCurve(`${curve < 0 ? " - " : " + "}${graphNumber(Math.abs(curve))}x^2`, curve * (target.x ** 2 - origin.x ** 2));
   for (const amplitude of [-3, -1.8, 1.8, 3]) {
     const frequency = 0.55;
-    normalCurve(`${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}*sin(${frequency}*x)`, amplitude * (Math.sin(frequency * target.x) - Math.sin(frequency * origin.x)));
+    normalCurve(`${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}sin(${frequency}x)`, amplitude * (Math.sin(frequency * target.x) - Math.sin(frequency * origin.x)));
   }
   for (const amplitude of [-2.4, 2.4]) {
     const frequency = 0.45;
-    normalCurve(`${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}*cos(${frequency}*x)`, amplitude * (Math.cos(frequency * target.x) - Math.cos(frequency * origin.x)));
+    normalCurve(`${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}cos(${frequency}x)`, amplitude * (Math.cos(frequency * target.x) - Math.cos(frequency * origin.x)));
   }
   for (const amplitude of [-1.8, 1.8]) {
     const frequency = 0.5;
     const centeredSlope = (dy - (amplitude / frequency) * (Math.sin(frequency * target.x) - Math.sin(frequency * origin.x))) / dx;
-    const make = (offset: number) => ({ mode: "first" as const, expression: `${graphNumber(centeredSlope + offset)}${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}*cos(${frequency}*x)`, angle: 0 });
+    const make = (offset: number) => ({ mode: "first" as const, expression: `${graphNumber(centeredSlope + offset)}${amplitude < 0 ? " - " : " + "}${graphNumber(Math.abs(amplitude))}cos(${frequency}x)`, angle: 0 });
     candidates.push({ centeredShot: make(0), withOffset: make });
   }
   for (const acceleration of [-0.16, -0.08, 0.08, 0.16]) {

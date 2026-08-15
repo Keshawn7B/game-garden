@@ -320,7 +320,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const [battleshipFleet, setBattleshipFleet] = useState<BattleshipFleet>(() => randomBattleshipFleet());
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [graphMode, setGraphMode] = useState<GraphFunctionMode>("normal");
-  const [graphExpression, setGraphExpression] = useState("2*x");
+  const [graphExpression, setGraphExpression] = useState("2x");
   const [graphAngle, setGraphAngle] = useState(0);
   const barricadeBoardRef = useRef<HTMLDivElement>(null);
   const latestState = useRef<OnlineState | null>(null);
