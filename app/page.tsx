@@ -2171,8 +2171,8 @@ const GAME_MENUS: Record<LibraryGameId, {
     players: "1–2 Players",
     rules: [
       "Choose Easy, Medium, or Hard to battle a solo bot, or open an online room.",
-      "Each player hides a dot in their home zone, then fires y = mx + b lines in turn.",
-      "The first graphed function to intersect the rival dot wins the match.",
+      "Deploy a soldier, then fire normal functions, first-order ODEs, or second-order ODEs.",
+      "Shape each trajectory around the obstacles. Invalid math explodes; the first hit wins.",
     ],
   },
 };

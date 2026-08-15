@@ -588,8 +588,8 @@ test("Graph War supports private online placement and alternating function shots
   await assertSucceeds(start.commit());
   await assertSucceeds(updateDoc(stateRef, { positions: [58, -1], ready: [true, false], turnUid: "graph-guest", updatedAt: serverTimestamp() }));
   await assertSucceeds(updateDoc(doc(guest, "rooms", "GRF234", "game", "state"), { positions: [58, 230], ready: [true, true], phase: "playing", turnUid: "graph-host", updatedAt: serverTimestamp() }));
-  await assertSucceeds(updateDoc(stateRef, { open: [0, 100, 0], moves: 1, turnUid: "graph-guest", updatedAt: serverTimestamp() }));
-  await assertFails(updateDoc(doc(outsider, "rooms", "GRF234", "game", "state"), { open: [0, 100, 0, 1, 0, 0], moves: 2, updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(stateRef, { barricades: ["0~normal~0~1*x"], moves: 1, turnUid: "graph-guest", updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(outsider, "rooms", "GRF234", "game", "state"), { barricades: ["0~normal~0~1*x", "1~first~0~0.5"], moves: 2, updatedAt: serverTimestamp() }));
 });
 
 test("nonparticipants cannot read a direct chat", async () => {

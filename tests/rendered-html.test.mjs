@@ -344,9 +344,11 @@ test("routes every game through a start menu", async () => {
   assert.match(source, /<GraphWar onBack=/);
   assert.match(source, /name: "Graph War", japanese: "関数戦", meta: "MATH · 1–2P"/);
   assert.match(graphWarSource, /export function GraphWar/);
-  assert.match(graphWarSource, /linear function and fire/);
-  assert.match(graphWarSource, /FIRE LINE/);
+  assert.match(graphWarSource, /GraphFunctionConsole/);
+  assert.match(graphWarSource, /differential equations, obstacles/);
   assert.match(graphWarLogic, /export function graphLineHitsPoint/);
+  assert.match(graphWarLogic, /export function compileGraphExpression/);
+  assert.match(graphWarLogic, /export function traceGraphFunction/);
   assert.match(styles, /\.art-graphwar/);
   assert.match(styles, /\.graph-war-board\{/);
   assert.match(styles, /@media\(max-width:720px\)\{\.graph-war-game/);

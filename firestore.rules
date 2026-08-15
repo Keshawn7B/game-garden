@@ -784,7 +784,7 @@ service cloud.firestore {
         && (state.gameId != 'checkers' || (state.board.size() == 64 && state.open.size() <= 1))
         && (state.gameId != 'dotsboxes' || (state.board.size() == 40 && state.matched.size() == 16 && state.open.size() <= 1 && state.moves <= 40 && state.scores[0] + state.scores[1] <= 16))
         && (state.gameId != 'airhockey' || (state.board.size() == 2 && state.scores[0] <= 3 && state.scores[1] <= 3))
-        && (state.gameId != 'graphwar' || (state.board.size() == 0 && state.open.size() <= 180 && state.positions[0] is int && state.positions[1] is int && state.positions[0] >= -1 && state.positions[0] <= 288 && state.positions[1] >= -1 && state.positions[1] <= 288));
+        && (state.gameId != 'graphwar' || (state.board.size() == 0 && state.open.size() == 0 && state.barricades.size() <= 20 && state.positions[0] is int && state.positions[1] is int && state.positions[0] >= -1 && state.positions[0] <= 288 && state.positions[1] >= -1 && state.positions[1] <= 288));
     }
 
     function validOnlineGameTransition(roomCode) {

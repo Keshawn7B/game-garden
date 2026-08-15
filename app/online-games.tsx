@@ -14,8 +14,8 @@ import { DotsBoxesBoard } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
 import { AIR_HOCKEY_CENTER, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, type AirHockeyPlayer } from "./air-hockey";
 import { OnlineAirHockeyRink } from "./online-air-hockey";
-import { GraphWarBoard, type GraphShot } from "./graph-war-game";
-import { decodeGraphPoint, encodeGraphPoint, formatGraphFunction, graphLineHitsPoint, graphPlacementAllowed, type GraphPoint } from "./graph-war-logic";
+import { GraphFunctionConsole, GraphWarBoard, type GraphShot } from "./graph-war-game";
+import { compileGraphExpression, decodeGraphFunctionShot, decodeGraphPoint, encodeGraphFunctionShot, encodeGraphPoint, graphObstaclesForSeed, graphPlacementAllowed, traceGraphFunction, type GraphFunctionMode, type GraphPoint } from "./graph-war-logic";
 
 export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "graphwar";
 
@@ -319,8 +319,9 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const [lastCheckersMove, setLastCheckersMove] = useState<CheckersMove | null>(null);
   const [battleshipFleet, setBattleshipFleet] = useState<BattleshipFleet>(() => randomBattleshipFleet());
   const [clockNow, setClockNow] = useState(() => Date.now());
-  const [graphSlope, setGraphSlope] = useState("0");
-  const [graphIntercept, setGraphIntercept] = useState("0");
+  const [graphMode, setGraphMode] = useState<GraphFunctionMode>("normal");
+  const [graphExpression, setGraphExpression] = useState("2*x");
+  const [graphAngle, setGraphAngle] = useState(0);
   const barricadeBoardRef = useRef<HTMLDivElement>(null);
   const latestState = useRef<OnlineState | null>(null);
   const stateRef = useMemo(() => doc(db, "rooms", room.code, "game", "state"), [room.code]);
@@ -681,22 +682,25 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const graphPositions: [GraphPoint | null, GraphPoint | null] = state.gameId === "graphwar"
     ? [decodeGraphPoint(state.positions[0]), decodeGraphPoint(state.positions[1])]
     : [null, null];
-  const graphShots: GraphShot[] = state.gameId === "graphwar" ? Array.from({ length: Math.floor(state.open.length / 3) }, (_, index) => {
-    const player = state.open[index * 3] as 0 | 1;
-    const slope = state.open[index * 3 + 1] / 100;
-    const intercept = state.open[index * 3 + 2] / 100;
-    const target = graphPositions[player === 0 ? 1 : 0];
-    return { id: index + 1, player, slope, intercept, hit: Boolean(target && graphLineHitsPoint(target, slope, intercept)) };
+  const graphObstacles = state.gameId === "graphwar" ? graphObstaclesForSeed(room.code) : [];
+  const graphShots: GraphShot[] = state.gameId === "graphwar" ? state.barricades.flatMap((encoded, index) => {
+    const shot = decodeGraphFunctionShot(encoded);
+    if (!shot) return [];
+    const origin = graphPositions[shot.player]; const target = graphPositions[shot.player === 0 ? 1 : 0];
+    if (!origin || !target) return [];
+    return [{ id: index + 1, ...shot, ...traceGraphFunction(shot, origin, target, graphObstacles) }];
   }) : [];
   const graphPlacingPlayer: 0 | 1 | null = state.gameId === "graphwar" && state.phase === "placing" ? state.ready[0] ? 1 : 0 : null;
-  const parsedGraphSlope = Number(graphSlope);
-  const parsedGraphIntercept = Number(graphIntercept);
-  const validGraphFunction = Number.isFinite(parsedGraphSlope) && Number.isFinite(parsedGraphIntercept) && Math.abs(parsedGraphSlope) <= 6 && Math.abs(parsedGraphIntercept) <= 12;
+  let validGraphFunction = true;
+  try { compileGraphExpression(graphExpression); } catch { validGraphFunction = false; }
+  const graphPreview = state.gameId === "graphwar" && myTurn && graphPositions[playerIndex] && validGraphFunction
+    ? traceGraphFunction({ player: playerIndex, mode: graphMode, expression: graphExpression, angle: graphAngle }, graphPositions[playerIndex]!, null, graphObstacles).points
+    : null;
 
   const placeGraphPoint = (point: GraphPoint) => void mutate((current) => {
     if (current.gameId !== "graphwar" || current.phase !== "placing" || current.turnUid !== user.uid) return null;
     const placingPlayer: 0 | 1 = current.ready[0] ? 1 : 0;
-    if (placingPlayer !== playerIndex || !graphPlacementAllowed(playerIndex, point)) return null;
+    if (placingPlayer !== playerIndex || !graphPlacementAllowed(playerIndex, point) || graphObstacles.some((obstacle) => Math.hypot(point.x - obstacle.x, point.y - obstacle.y) <= obstacle.radius + 0.5)) return null;
     const positions: [number, number] = [...current.positions];
     const ready: [boolean, boolean] = [...current.ready];
     positions[playerIndex] = encodeGraphPoint(point);
@@ -705,20 +709,23 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
     return { positions, ready, phase: readyToPlay ? "playing" : "placing", turnUid: readyToPlay ? current.players[0] : current.players[1] };
   });
 
-  const fireGraphLine = () => {
-    if (!validGraphFunction) return setError("Use a slope from −6 to 6 and an intercept from −12 to 12.");
+  const fireGraphFunction = () => {
+    if (!validGraphFunction) return setError("Check the function syntax before firing.");
     setError("");
     void mutate((current) => {
-      if (current.gameId !== "graphwar" || current.phase !== "playing" || current.turnUid !== user.uid || current.open.length >= 180) return null;
+      if (current.gameId !== "graphwar" || current.phase !== "playing" || current.turnUid !== user.uid || current.barricades.length >= 20) return null;
+      const origin = decodeGraphPoint(current.positions[playerIndex]);
       const target = decodeGraphPoint(current.positions[otherIndex]);
-      if (!target) return null;
-      const hit = graphLineHitsPoint(target, parsedGraphSlope, parsedGraphIntercept);
+      if (!origin || !target) return null;
+      const shot = { player: playerIndex, mode: graphMode, expression: graphExpression.trim(), angle: graphAngle } as const;
+      const result = traceGraphFunction(shot, origin, target, graphObstacles);
+      if (result.points.length === 1 && result.exploded) { setError("Invalid function—the shot exploded at launch."); return null; }
       return {
-        open: [...current.open, playerIndex, Math.round(parsedGraphSlope * 100), Math.round(parsedGraphIntercept * 100)],
+        barricades: [...current.barricades, encodeGraphFunctionShot(shot)],
         moves: current.moves + 1,
-        phase: hit ? "complete" : "playing",
-        winnerUid: hit ? user.uid : "",
-        turnUid: hit ? user.uid : current.players[otherIndex],
+        phase: result.hit ? "complete" : "playing",
+        winnerUid: result.hit ? user.uid : "",
+        turnUid: result.hit ? user.uid : current.players[otherIndex],
       };
     });
   };
@@ -733,11 +740,11 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
       ? canPlace ? `Tap a point in your ${playerIndex === 0 ? "red left" : "gold right"} home zone.` : `Waiting for ${state.names[graphPlacingPlayer ?? otherIndex]} to choose a dot…`
       : status;
     gameView = <section className="online-game graph-war-game online-graph-war">
-      <div className="graph-war-heading"><div><p className="eyebrow">FUNCTION BATTLE · LIVE ONLINE</p><h1>Graph War</h1><p>Choose a dot, then take turns firing linear functions.</p></div><span aria-hidden="true">関</span></div>
+      <div className="graph-war-heading"><div><p className="eyebrow">MATHEMATICAL ARTILLERY · LIVE ONLINE</p><h1>Graph War</h1><p>Fire functions and differential equations around shared obstacles.</p></div><span aria-hidden="true">関</span></div>
       <PlayerStrip state={state} user={user} />
       <div className="online-turn-status">{graphStatus}</div>
-      <GraphWarBoard positions={visiblePositions} shots={graphShots} currentPlayer={state.players.indexOf(state.turnUid) as 0 | 1} placingPlayer={graphPlacingPlayer} preview={myTurn && validGraphFunction ? { slope: parsedGraphSlope, intercept: parsedGraphIntercept } : null} onPlace={canPlace ? placeGraphPoint : undefined} labels={[state.names[0].slice(0, 7).toUpperCase(), state.names[1].slice(0, 7).toUpperCase()]} />
-      {(state.phase === "playing" || state.phase === "complete") && <div className="graph-war-console"><div className="graph-online-controls"><div className="graph-function-readout"><small>YOUR FUNCTION</small><strong>{validGraphFunction ? formatGraphFunction(parsedGraphSlope, parsedGraphIntercept) : "Check your values"}</strong></div><label><span>SLOPE · m</span><input type="number" min="-6" max="6" step="0.25" value={graphSlope} onChange={(event) => setGraphSlope(event.target.value)} inputMode="decimal" disabled={!myTurn} /></label><label><span>INTERCEPT · b</span><input type="number" min="-12" max="12" step="0.25" value={graphIntercept} onChange={(event) => setGraphIntercept(event.target.value)} inputMode="decimal" disabled={!myTurn} /></label><button className="primary-button graph-fire" type="button" disabled={!myTurn || !validGraphFunction} onClick={fireGraphLine}>FIRE LINE <b>→</b></button></div><div className="graph-shot-log"><small>SHOT HISTORY</small>{graphShots.length ? graphShots.slice(-4).reverse().map((shot) => <span key={shot.id} className={`player-${shot.player + 1}`}><b>{shot.player === playerIndex ? "YOU" : "RIVAL"}</b>{formatGraphFunction(shot.slope, shot.intercept)}<em>{shot.hit ? "HIT" : "MISS"}</em></span>) : <p>No lines fired yet.</p>}</div></div>}
+      <GraphWarBoard positions={visiblePositions} shots={graphShots} obstacles={graphObstacles} currentPlayer={state.players.indexOf(state.turnUid) as 0 | 1} placingPlayer={graphPlacingPlayer} preview={graphPreview} onPlace={canPlace ? placeGraphPoint : undefined} labels={[state.names[0].slice(0, 7).toUpperCase(), state.names[1].slice(0, 7).toUpperCase()]} />
+      {(state.phase === "playing" || state.phase === "complete") && <GraphFunctionConsole mode={graphMode} expression={graphExpression} angle={graphAngle} disabled={!myTurn} history={graphShots} playerIndex={playerIndex} onMode={setGraphMode} onExpression={setGraphExpression} onAngle={setGraphAngle} onFire={fireGraphFunction} />}
       {state.phase === "complete" && finish}
     </section>;
   }

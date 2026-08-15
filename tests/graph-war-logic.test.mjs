@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseGraphBotShot, decodeGraphPoint, encodeGraphPoint, formatGraphFunction, graphLineDistance, graphLineHitsPoint, graphLineY, graphPlacementAllowed, randomGraphBotPoint, snapGraphPoint } from "../app/graph-war-logic.ts";
+import { chooseGraphBotFunction, chooseGraphBotShot, compileGraphExpression, decodeGraphFunctionShot, decodeGraphPoint, encodeGraphFunctionShot, encodeGraphPoint, formatGraphFunction, graphLineDistance, graphLineHitsPoint, graphLineY, graphObstaclesForSeed, graphPlacementAllowed, randomGraphBotPoint, snapGraphPoint, traceGraphFunction } from "../app/graph-war-logic.ts";
 
 test("Graph War evaluates linear functions", () => {
   assert.equal(graphLineY(2, -1, 3), 5);
@@ -37,4 +37,56 @@ test("Graph War bot difficulty changes its chance to land a shot", () => {
   assert.equal(graphLineHitsPoint(target, hard.slope, hard.intercept), true);
   assert.equal(graphLineHitsPoint(target, easy.slope, easy.intercept), false);
   assert.equal(graphPlacementAllowed(1, randomGraphBotPoint(() => 0.5)), true);
+});
+
+test("Graph War safely evaluates arithmetic, constants, functions, and implicit multiplication", () => {
+  const evaluate = compileGraphExpression("2sin(pi/2) + sqrt(abs(-4)) + ln(e)");
+  assert.ok(Math.abs(evaluate({ x: 0, y: 0, v: 0 }) - 5) < 1e-9);
+  assert.equal(compileGraphExpression("2x + 3(x + 1)")({ x: 2, y: 0, v: 0 }), 13);
+  assert.equal(compileGraphExpression("min(8, x^2) + max(1, y)")({ x: 3, y: -2, v: 0 }), 9);
+  assert.throws(() => compileGraphExpression("alert(1)"), /Unknown/);
+  assert.throws(() => compileGraphExpression("x +"), /Expected/);
+});
+
+test("Graph War traces normal, first-order, and second-order shots from the soldier", () => {
+  const origin = { x: -6, y: 0 };
+  const target = { x: 6, y: 6 };
+  const normal = traceGraphFunction({ player: 0, mode: "normal", expression: "0.5*x", angle: 0 }, origin, target);
+  const first = traceGraphFunction({ player: 0, mode: "first", expression: "0.5", angle: 0 }, origin, target);
+  const second = traceGraphFunction({ player: 0, mode: "second", expression: "0", angle: Math.atan(0.5) * 180 / Math.PI }, origin, target);
+  assert.equal(normal.hit, true);
+  assert.equal(first.hit, true);
+  assert.equal(second.hit, true);
+  assert.ok(normal.points.length > 20);
+});
+
+test("Graph War obstacles and invalid values explode a trajectory", () => {
+  const origin = { x: -6, y: 0 };
+  const target = { x: 6, y: 6 };
+  const blocked = traceGraphFunction(
+    { player: 0, mode: "normal", expression: "0.5*x", angle: 0 },
+    origin,
+    target,
+    [{ x: 0, y: 3, radius: 0.7 }],
+  );
+  const invalid = traceGraphFunction({ player: 0, mode: "normal", expression: "sqrt(x)", angle: 0 }, origin);
+  assert.equal(blocked.exploded, true);
+  assert.equal(blocked.hit, false);
+  assert.equal(invalid.exploded, true);
+});
+
+test("Graph War online function shots round-trip and seeded obstacles stay deterministic", () => {
+  const shot = { player: 1, mode: "second", expression: "-y + 2*x", angle: -12.34 };
+  assert.deepEqual(decodeGraphFunctionShot(encodeGraphFunctionShot(shot)), { ...shot, angle: -12.3 });
+  assert.equal(decodeGraphFunctionShot({ player: 0 }), null);
+  assert.deepEqual(graphObstaclesForSeed("ROOM42"), graphObstaclesForSeed("ROOM42"));
+  assert.notDeepEqual(graphObstaclesForSeed("ROOM42"), graphObstaclesForSeed("ROOM43"));
+});
+
+test("Graph War bots can select every supported function mode", () => {
+  const origin = { x: 5, y: 2 };
+  const target = { x: -5, y: -1 };
+  assert.equal(chooseGraphBotFunction(origin, target, "easy", () => 0.1).mode, "normal");
+  assert.equal(chooseGraphBotFunction(origin, target, "hard", () => 0.6).mode, "first");
+  assert.equal(chooseGraphBotFunction(origin, target, "hard", () => 0.9).mode, "second");
 });
