@@ -14,7 +14,7 @@ import { DotsBoxesBoard } from "./dots-boxes-game";
 import { GameResult } from "./game-result";
 import { AIR_HOCKEY_CENTER, AIR_HOCKEY_MATCH_SECONDS, AIR_HOCKEY_WIN_SCORE, type AirHockeyPlayer } from "./air-hockey";
 import { OnlineAirHockeyRink } from "./online-air-hockey";
-import { GraphFunctionConsole, GraphWarBoard, type GraphShot } from "./graph-war-game";
+import { GraphFunctionConsole, GraphFunctionGuide, GraphWarBoard, type GraphShot } from "./graph-war-game";
 import { compileGraphExpression, decodeGraphFunctionShot, decodeGraphPoint, encodeGraphFunctionShot, encodeGraphPoint, graphObstaclesForSeed, graphPlacementAllowed, traceGraphFunction, type GraphFunctionMode, type GraphPoint } from "./graph-war-logic";
 
 export type OnlineGameId = "codebreaker" | "order" | "memory" | "tictactoe" | "connect4" | "rps" | "dice" | "barricade" | "checkers" | "battleship" | "dotsboxes" | "airhockey" | "graphwar";
@@ -331,6 +331,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
       const next = snapshot.data() as OnlineState;
       const previous = latestState.current;
       if (previous?.gameId === "battleship" && next.gameId === "battleship" && previous.phase === "complete" && next.phase === "placing") setBattleshipFleet(randomBattleshipFleet());
+      if (previous?.gameId === "graphwar" && next.gameId === "graphwar" && previous.phase === "complete" && next.phase === "placing") { setGraphMode("normal"); setGraphExpression("2x"); setGraphAngle(0); }
       if (previous?.gameId === "checkers" && next.gameId === "checkers" && next.moves < previous.moves) {
         setLastCheckersMove(null);
         setSelected(null);
@@ -417,9 +418,11 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
 
   const reset = useCallback(async () => {
     if (user.uid !== room.hostUid || room.gameId === "number") return;
-    try { await setDoc(stateRef, { ...emptyState(room.gameId, room), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); }
+    const next = emptyState(room.gameId, room);
+    next.round = Math.min(100, (state?.round ?? 0) + 1);
+    try { await setDoc(stateRef, { ...next, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); }
     catch { setError("Could not start the rematch."); }
-  }, [room, stateRef, user.uid]);
+  }, [room, state, stateRef, user.uid]);
 
   useEffect(() => {
     if (!state || state.gameId !== "memory" || state.phase !== "revealing" || user.uid !== room.hostUid || state.open.length !== 2) return;
@@ -682,7 +685,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
   const graphPositions: [GraphPoint | null, GraphPoint | null] = state.gameId === "graphwar"
     ? [decodeGraphPoint(state.positions[0]), decodeGraphPoint(state.positions[1])]
     : [null, null];
-  const graphObstacles = state.gameId === "graphwar" ? graphObstaclesForSeed(room.code) : [];
+  const graphObstacles = state.gameId === "graphwar" ? graphObstaclesForSeed(`${room.code}-${state.round}`) : [];
   const graphShots: GraphShot[] = state.gameId === "graphwar" ? state.barricades.flatMap((encoded, index) => {
     const shot = decodeGraphFunctionShot(encoded);
     if (!shot) return [];
@@ -718,12 +721,13 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
       const shot = { player: playerIndex, mode: graphMode, expression: graphExpression.trim(), angle: graphAngle } as const;
       const result = traceGraphFunction(shot, origin, target, graphObstacles);
       if (result.points.length === 1 && result.exploded) { setError("Invalid function—the shot exploded at launch."); return null; }
+      const shotLimitReached = current.barricades.length + 1 >= 20;
       return {
         barricades: [...current.barricades, encodeGraphFunctionShot(shot)],
         moves: current.moves + 1,
-        phase: result.hit ? "complete" : "playing",
-        winnerUid: result.hit ? user.uid : "",
-        turnUid: result.hit ? user.uid : current.players[otherIndex],
+        phase: result.hit || shotLimitReached ? "complete" : "playing",
+        winnerUid: result.hit ? user.uid : shotLimitReached ? "draw" : "",
+        turnUid: result.hit || shotLimitReached ? user.uid : current.players[otherIndex],
       };
     });
   };
@@ -741,6 +745,7 @@ export function OnlineVersusGame({ room, user, onLeave }: { room: Room; user: Us
       <div className="graph-war-heading"><div><p className="eyebrow">MATHEMATICAL ARTILLERY · LIVE ONLINE</p><h1>Graph War</h1><p>Fire functions and differential equations around shared obstacles.</p></div><span aria-hidden="true">関</span></div>
       <PlayerStrip state={state} user={user} />
       <div className="online-turn-status">{graphStatus}</div>
+      {state.phase === "placing" && <GraphFunctionGuide compact />}
       <GraphWarBoard positions={visiblePositions} shots={graphShots} obstacles={graphObstacles} currentPlayer={state.players.indexOf(state.turnUid) as 0 | 1} placingPlayer={graphPlacingPlayer} preview={graphPreview} onPlace={canPlace ? placeGraphPoint : undefined} labels={[state.names[0].slice(0, 7).toUpperCase(), state.names[1].slice(0, 7).toUpperCase()]} />
       {(state.phase === "playing" || state.phase === "complete") && <GraphFunctionConsole mode={graphMode} expression={graphExpression} angle={graphAngle} disabled={!myTurn} history={graphShots} playerIndex={playerIndex} onMode={setGraphMode} onExpression={setGraphExpression} onAngle={setGraphAngle} onFire={fireGraphFunction} />}
       {state.phase === "complete" && finish}

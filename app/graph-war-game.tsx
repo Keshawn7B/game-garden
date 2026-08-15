@@ -47,6 +47,12 @@ function GraphGuidePlot({ kind, evaluate }: { kind: string; evaluate: (x: number
   })}</div>;
 }
 
+export function GraphFunctionGuide({ compact = false }: { compact?: boolean }) {
+  return <div className={`graph-function-guide ${compact ? "is-compact" : ""}`} aria-label="Visual examples of Graph War function types">
+    {graphGuideDetails.map((guide) => <article key={guide.kind}><GraphGuidePlot kind={guide.kind} evaluate={guide.evaluate} /><span>{guide.label}</span><strong>{guide.equation}</strong><small>{guide.hint}</small></article>)}
+  </div>;
+}
+
 function graphX(value: number) { return ((value - GRAPH_MIN) / GRAPH_SPAN) * VIEW_SIZE; }
 function graphY(value: number) { return ((GRAPH_MAX - value) / GRAPH_SPAN) * VIEW_SIZE; }
 function graphPath(points: GraphPoint[]) { return points.map((point) => `${graphX(point.x)},${graphY(point.y)}`).join(" "); }
@@ -164,9 +170,7 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
       <div className="graph-war-heading"><div><p className="eyebrow">MATHEMATICAL ARTILLERY · SOLO BOT</p><h1>Graph War</h1><p>Functions, differential equations, obstacles, and precision shots.</p></div><span aria-hidden="true">関</span></div>
       {phase === "difficulty" ? <div className="graph-difficulty">
         <p>QUICK FUNCTION GUIDE</p>
-        <div className="graph-function-guide" aria-label="Basic examples of each Graph War function type">
-          {graphGuideDetails.map((guide) => <article key={guide.kind}><GraphGuidePlot kind={guide.kind} evaluate={guide.evaluate} /><span>{guide.label}</span><strong>{guide.equation}</strong><small>{guide.hint}</small></article>)}
-        </div>
+        <GraphFunctionGuide />
         <p>SELECT BOT LEVEL</p>
         <div className="graph-difficulty-levels">{difficultyDetails.map((item) => <button key={item.id} onClick={() => begin(item.id)}><b>{item.glyph}</b><strong>{item.label}</strong><span>{item.hint}</span></button>)}</div>
       </div> : <>
