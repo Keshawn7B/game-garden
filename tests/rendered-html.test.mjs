@@ -350,9 +350,14 @@ test("routes every game through a start menu", async () => {
   assert.match(graphWarSource, /y = 2x/);
   assert.match(graphWarSource, /y′ = 1/);
   assert.match(graphWarSource, /y″ = −0\.2/);
-  assert.match(graphWarSource, /graph-guide-plot is-function/);
-  assert.match(graphWarSource, /graph-guide-plot is-first-order/);
-  assert.match(graphWarSource, /graph-guide-plot is-second-order/);
+  assert.match(graphWarSource, /graphGuideDetails/);
+  assert.match(graphWarSource, /equation: "y = log\(\|x\|\+1\)"/);
+  assert.match(graphWarSource, /equation: "y = sin\(x\)"/);
+  assert.match(graphWarSource, /equation: "y = 2√\|x\|"/);
+  assert.match(graphWarSource, /equation: "y = cos\(x\)"/);
+  assert.match(graphWarSource, /equation: "y = tan\(x\)"/);
+  assert.match(graphWarSource, /label: "COSINE"/);
+  assert.match(graphWarSource, /label: "TANGENT"/);
   assert.match(styles, /\.graph-guide-plot\{/);
   assert.match(graphWarSource, /shots\.slice\(-1\).*graph-shot-visual/);
   assert.match(graphWarSource, /difficulty !== "easy".*return null/);

@@ -20,11 +20,32 @@ const examples: { mode: GraphFunctionMode; expression: string; label: string }[]
   { mode: "normal", expression: "2x", label: "LINE" },
   { mode: "normal", expression: "(x^2)/8", label: "PARABOLA" },
   { mode: "normal", expression: "5sin(x/2)", label: "SINE" },
+  { mode: "normal", expression: "5cos(x/2)", label: "COSINE" },
+  { mode: "normal", expression: "tan(x/3)", label: "TANGENT" },
   { mode: "normal", expression: "2sqrt(abs(x))", label: "ROOT" },
-  { mode: "normal", expression: "ln(abs(x)+1)", label: "LOG" },
+  { mode: "normal", expression: "log(abs(x)+1)", label: "LOG" },
   { mode: "first", expression: "-y/3", label: "1ST ODE" },
   { mode: "second", expression: "-y", label: "2ND ODE" },
 ];
+const graphGuideXs = Array.from({ length: 49 }, (_, index) => -1 + index / 24);
+const graphGuideDetails = [
+  { kind: "function", label: "FUNCTION", equation: "y = 2x", hint: "A straight line", evaluate: (x: number) => 0.82 * x },
+  { kind: "first-order", label: "1ST ORDER", equation: "y′ = 1", hint: "A constant slope", evaluate: (x: number) => 0.58 * x },
+  { kind: "second-order", label: "2ND ORDER", equation: "y″ = −0.2", hint: "A downward curve", evaluate: (x: number) => 0.65 - 1.15 * x ** 2 },
+  { kind: "log", label: "LOG", equation: "y = log(|x|+1)", hint: "Slow mirrored growth", evaluate: (x: number) => 1.4 * Math.log10(Math.abs(x) * 9 + 1) - 0.65 },
+  { kind: "sine", label: "SINE", equation: "y = sin(x)", hint: "A wave from zero", evaluate: (x: number) => 0.75 * Math.sin(x * Math.PI * 1.35) },
+  { kind: "root", label: "ROOT", equation: "y = 2√|x|", hint: "A curved valley", evaluate: (x: number) => 0.9 * Math.sqrt(Math.abs(x)) - 0.68 },
+  { kind: "cosine", label: "COSINE", equation: "y = cos(x)", hint: "A wave from one", evaluate: (x: number) => 0.75 * Math.cos(x * Math.PI * 1.35) },
+  { kind: "tangent", label: "TANGENT", equation: "y = tan(x)", hint: "Separated branches", evaluate: (x: number) => 0.3 * Math.tan(x * Math.PI * 0.72) },
+] as const;
+
+function GraphGuidePlot({ kind, evaluate }: { kind: string; evaluate: (x: number) => number }) {
+  return <div className={`graph-guide-plot is-${kind}`} aria-hidden="true">{graphGuideXs.map((x, index) => {
+    const y = evaluate(x);
+    if (!Number.isFinite(y) || Math.abs(y) > 1.04) return null;
+    return <i key={index} style={{ left: `${(x + 1) * 50}%`, top: `${(1 - y) * 50}%` }} />;
+  })}</div>;
+}
 
 function graphX(value: number) { return ((value - GRAPH_MIN) / GRAPH_SPAN) * VIEW_SIZE; }
 function graphY(value: number) { return ((GRAPH_MAX - value) / GRAPH_SPAN) * VIEW_SIZE; }
@@ -144,9 +165,7 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
       {phase === "difficulty" ? <div className="graph-difficulty">
         <p>QUICK FUNCTION GUIDE</p>
         <div className="graph-function-guide" aria-label="Basic examples of each Graph War function type">
-          <article><div className="graph-guide-plot is-function" aria-hidden="true"><i /></div><span>FUNCTION</span><strong>y = 2x</strong><small>A straight line</small></article>
-          <article><div className="graph-guide-plot is-first-order" aria-hidden="true"><i /></div><span>1ST ORDER</span><strong>y′ = 1</strong><small>A constant slope</small></article>
-          <article><div className="graph-guide-plot is-second-order" aria-hidden="true"><i /></div><span>2ND ORDER</span><strong>y″ = −0.2</strong><small>A downward curve</small></article>
+          {graphGuideDetails.map((guide) => <article key={guide.kind}><GraphGuidePlot kind={guide.kind} evaluate={guide.evaluate} /><span>{guide.label}</span><strong>{guide.equation}</strong><small>{guide.hint}</small></article>)}
         </div>
         <p>SELECT BOT LEVEL</p>
         <div className="graph-difficulty-levels">{difficultyDetails.map((item) => <button key={item.id} onClick={() => begin(item.id)}><b>{item.glyph}</b><strong>{item.label}</strong><span>{item.hint}</span></button>)}</div>
