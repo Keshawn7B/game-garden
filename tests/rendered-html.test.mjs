@@ -346,11 +346,13 @@ test("routes every game through a start menu", async () => {
   assert.match(graphWarSource, /export function GraphWar/);
   assert.match(graphWarSource, /GraphFunctionConsole/);
   assert.match(graphWarSource, /differential equations, obstacles/);
+  assert.match(graphWarSource, /shots\.slice\(-1\).*graph-shot-visual/);
   assert.match(graphWarLogic, /export function graphLineHitsPoint/);
   assert.match(graphWarLogic, /export function compileGraphExpression/);
   assert.match(graphWarLogic, /export function traceGraphFunction/);
   assert.match(styles, /\.art-graphwar/);
   assert.match(styles, /\.graph-war-board\{/);
+  assert.match(styles, /\.graph-shot-visual\{animation:graphShotVanish/);
   assert.match(styles, /@media\(max-width:720px\)\{\.graph-war-game/);
   assert.match(source, /function chooseBarricadeCpuAction/);
   assert.match(source, /playerCanWinNext/);
