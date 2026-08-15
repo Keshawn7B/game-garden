@@ -346,6 +346,10 @@ test("routes every game through a start menu", async () => {
   assert.match(graphWarSource, /export function GraphWar/);
   assert.match(graphWarSource, /GraphFunctionConsole/);
   assert.match(graphWarSource, /differential equations, obstacles/);
+  assert.match(graphWarSource, /QUICK FUNCTION GUIDE/);
+  assert.match(graphWarSource, /y = 2x/);
+  assert.match(graphWarSource, /y′ = 1/);
+  assert.match(graphWarSource, /y″ = −0\.2/);
   assert.match(graphWarSource, /shots\.slice\(-1\).*graph-shot-visual/);
   assert.match(graphWarSource, /difficulty !== "easy".*return null/);
   assert.match(onlineSource, /const graphPreview = null/);

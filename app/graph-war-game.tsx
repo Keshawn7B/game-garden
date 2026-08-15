@@ -141,7 +141,16 @@ export function GraphWar({ onBack }: { onBack: () => void }) {
     <header className="game-topbar"><button className="back-button" onClick={onBack}>← Game menu</button><span className="header-title-logo game-header-logo" role="img" aria-label="Game Garden" /><div className="game-header-actions"><HeaderChatButton inGame /><button className="icon-button" onClick={reset} aria-label="Restart Graph War">↻</button></div></header>
     <section className="graph-war-game">
       <div className="graph-war-heading"><div><p className="eyebrow">MATHEMATICAL ARTILLERY · SOLO BOT</p><h1>Graph War</h1><p>Functions, differential equations, obstacles, and precision shots.</p></div><span aria-hidden="true">関</span></div>
-      {phase === "difficulty" ? <div className="graph-difficulty"><p>SELECT BOT LEVEL</p><div>{difficultyDetails.map((item) => <button key={item.id} onClick={() => begin(item.id)}><b>{item.glyph}</b><strong>{item.label}</strong><span>{item.hint}</span></button>)}</div></div> : <>
+      {phase === "difficulty" ? <div className="graph-difficulty">
+        <p>QUICK FUNCTION GUIDE</p>
+        <div className="graph-function-guide" aria-label="Basic examples of each Graph War function type">
+          <article><span>FUNCTION</span><strong>y = 2x</strong><small>A straight line</small></article>
+          <article><span>1ST ORDER</span><strong>y′ = 1</strong><small>A constant slope</small></article>
+          <article><span>2ND ORDER</span><strong>y″ = −0.2</strong><small>A downward curve</small></article>
+        </div>
+        <p>SELECT BOT LEVEL</p>
+        <div className="graph-difficulty-levels">{difficultyDetails.map((item) => <button key={item.id} onClick={() => begin(item.id)}><b>{item.glyph}</b><strong>{item.label}</strong><span>{item.hint}</span></button>)}</div>
+      </div> : <>
         <div className="graph-war-turnbar" aria-label="Graph War status"><div className={currentPlayer === 0 && phase === "battle" ? "active" : ""}><small>RED TEAM</small><strong>YOU</strong><span>{positions[0] ? `(${positions[0].x}, ${positions[0].y})` : "DEPLOY"}</span></div><b>{phase === "battle" ? `TURN ${shots.length + 1}` : phase === "won" ? "HIT" : "SETUP"}</b><div className={currentPlayer === 1 && phase === "battle" ? "active" : ""}><small>{difficulty.toUpperCase()}</small><strong>BOT</strong><span>{positions[1] ? `(${positions[1].x}, ${positions[1].y})` : "DEPLOY"}</span></div></div>
         <p className="graph-war-message" role="status" aria-live="polite">{message}</p>
         <GraphWarBoard positions={positions} shots={shots} obstacles={obstacles} currentPlayer={currentPlayer} placingPlayer={phase === "place-one" ? 0 : null} preview={preview} onPlace={placeDot} />
